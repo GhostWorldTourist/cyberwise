@@ -231,12 +231,14 @@ h1 span{color:var(--text);text-shadow:none}
 #q::placeholder{color:#4c4c60}
 #hits{font-family:var(--mono);font-size:calc(var(--fs)*.55);color:var(--dim);white-space:nowrap}
 
-/* No fixed count - let it take as many columns as the monitor allows. */
-.cols{columns:560px;column-gap:16px}
-.panel{background:var(--panel);border:1px solid var(--line);padding:13px 16px 6px;margin:0 0 14px;
-  break-inside:avoid;display:inline-block;width:100%;
+/* Flex rather than CSS multi-column. Multicol balances content across a count
+   it derives itself, and on a wide monitor it decided two columns were enough
+   and left two thirds of the screen empty. Flex just fills the row. */
+.cols{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);padding:13px 16px 6px;
+  flex:1 1 400px; min-width:0;
   clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
-.panel.wide{columns:auto}
+.panel.wide{flex-basis:100%;margin-top:14px}
 h2{font-family:var(--mono);font-size:calc(var(--fs)*.6);letter-spacing:.2em;text-transform:uppercase;
   margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:10px;color:var(--text)}
@@ -307,9 +309,8 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
   body{background:#fff;color:#000;--fs:12pt;background-image:none}
   .bar,footer,header::after{display:none}
   h1{color:#000;text-shadow:none}
-  .panel{border:1px solid #999;background:#fff;clip-path:none;break-inside:avoid}
+  .panel{border:1px solid #999;background:#fff;clip-path:none;break-inside:avoid;flex-basis:45%}
   kbd.k{color:#000;background:#eee;border-color:#999}
-  .cols{columns:2}
   .act em,.mvia,.foot{color:#555}
 }
 </style>
@@ -367,7 +368,7 @@ q.addEventListener('input', () => {
 </html>
 "@
 
-$html = $html.Replace('__FS__', [string][math]::Round(27 * $Scale, 1))
+$html = $html.Replace('__FS__', [string][math]::Round(30 * $Scale, 1))
 
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
