@@ -158,7 +158,14 @@ to compare against wherever your installed copies live. Never prune its entry as
 stale - and note it still needs a permanent slot in `modlist.txt`, because an
 unlisted archive sorts last and loses.
 
-## Included tool
+## Included tools
+
+- `tools/New-ModManifest.ps1` - inventory of an installed load order (below).
+- `tools/Get-Hotkeys.ps1` - every keybind on an install, from all five stores
+  that hold them. `tools/New-HotkeySheet.ps1` renders it as a cheatsheet.
+  `references/input-bindings.md`.
+- `tools/Measure-PageFit.ps1` - does a generated page fit a given viewport.
+- `tools/NexusCredential.ps1` - Nexus API key in Windows Credential Manager.
 
 `tools/New-ModManifest.ps1` generates a readable inventory of an installed load
 order - what every mod is, what it deploys, and (with a Nexus API key) what it
@@ -182,6 +189,43 @@ Two things worth knowing before trusting its NSFW filter:
 
 The generated report contains the user's actual mod list. Treat it as personal:
 write it outside any repo, and never commit it.
+
+## Building an HTML deliverable? Measure it, do not eyeball it
+
+Any generated page a user will actually live with - a cheatsheet on a second
+monitor, a manifest, a report - has a fit requirement, and **you cannot judge it
+from a screenshot.** Screenshots arrive downscaled by an unknown factor, so the
+viewport you are sizing for is a guess. Guessing it wrong looks exactly like a
+styling problem and produces rounds of "still too small".
+
+**Run `tools/Measure-PageFit.ps1` after every layout change.** It renders the
+page headless at a stated viewport and returns the document height, the viewport
+height, and the class of anything overflowing horizontally:
+
+```powershell
+.\Measure-PageFit.ps1 -Path page.html -Width 3057 -Height 1640 -Screenshot -ShotPath shot.png
+```
+
+Get the real viewport first rather than inferring it - `[System.Windows.Forms.Screen]::AllScreens`
+plus the `LogPixels` registry value for DPI scaling.
+
+Two failure modes a screenshot cannot show you:
+
+- **An element pushed clean off the page.** A long inline label with
+  `white-space:nowrap` forced its row wider than the container and shoved a
+  keycap past the right edge - not clipped, not squeezed, *absent*. Only the
+  overflow probe named it.
+- **A layout that "fits" because the flag was ignored.** In PowerShell,
+  `--window-size=$W,$H` unquoted parses as an **array**, passing two arguments,
+  so the browser silently renders at its 800x600 default. Quote it.
+
+Also: **CSS multi-column is not a way to fill a wide screen.** It derives its own
+column count and balances into it; given a 3000px container it may settle on two
+columns and leave two thirds empty. Flex with `flex-wrap` fills the row.
+
+And when testing a page that restores its own state on load, drive the real
+control - a class forced onto `<body>` is stripped by the page's restore logic
+before anything is measured, which reads as a feature that does nothing.
 
 ## Reference material
 

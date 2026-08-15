@@ -163,10 +163,12 @@ if ($n.gestures) {
         $gmod = if ($g.mod -and -not $oneMod) { "<em>$(esc $g.mod)</em>" } else { '' }
         "<div class=""ggroup""><h3>$(esc $g.group)$gmod</h3>$($items -join '')</div>"
     }
-    $credit = if ($oneMod) { "<b>$(esc $oneMod)</b>" } else { '<b>tap &middot; hold &middot; multi-tap</b>' }
+    # When one mod owns every gesture, it IS the section - so name the section
+    # after it rather than captioning it off to one side.
+    $gtitle = if ($oneMod) { "$(esc $oneMod) gestures" } else { 'Vehicle gestures<b>tap &middot; hold &middot; multi-tap</b>' }
     $gestHtml = @"
   <section class="panel wide">
-    <h2><span class="dot cyan"></span>Vehicle gestures$credit</h2>
+    <h2><span class="dot cyan"></span>$gtitle</h2>
     <div class="ggrid">$($groups -join '')</div>
   </section>
 "@
@@ -189,8 +191,9 @@ if ($collisions -and $ShowSharedKeys) {
 }
 
 $stamp   = Get-Date -Format 'yyyy-MM-dd HH:mm'
-$yours   = @($binds | Where-Object Source -eq 'your setting').Count
-$subline = "$($binds.Count) BOUND KEYS &nbsp;//&nbsp; $yours FROM YOUR SETTINGS &nbsp;//&nbsp; READ FROM DISK $stamp"
+# No key counts here. How many bindings exist is not something you look up, and
+# the one fact this line has to carry is how stale the sheet is.
+$subline = "READ FROM DISK $stamp"
 
 $html = @"
 <!doctype html>
@@ -341,8 +344,12 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
   color:var(--dim);font-weight:400;margin-right:7px}
 .cw em{font-style:normal;color:var(--dim);font-size:calc(var(--fs)*.55);font-family:var(--mono)}
 
+/* Spread across the full width instead of stacking into a cramped block in the
+   corner - there is a whole empty page width down here to use. */
 footer{margin-top:14px;padding-top:9px;border-top:1px solid var(--line);
-  font-family:var(--mono);font-size:calc(var(--fs)*.5);color:#4c4c60;line-height:1.5}
+  font-family:var(--mono);font-size:calc(var(--fs)*.5);color:#4c4c60;line-height:1.5;
+  display:flex;flex-wrap:wrap;gap:10px 34px;align-items:baseline}
+footer span:last-child{margin-left:auto}
 .hide{display:none !important}
 
 @media print{
@@ -378,9 +385,9 @@ $gestHtml
 $colHtml
 
 <footer>
-  Keys read from r6\input\*.xml, r6\cache\inputUserMappings.xml, red4ext\plugins\mod_settings\user.ini<br>
-  and bin\x64\plugins\cyber_engine_tweaks\bindings.json. &#9679; marks a mod default you have not rebound.<br>
-  Generated $stamp // CYBERWISE
+  <span>Keys read from r6\input\*.xml &middot; r6\cache\inputUserMappings.xml &middot; red4ext\plugins\mod_settings\user.ini &middot; cyber_engine_tweaks\bindings.json &middot; cyber_engine_tweaks\mods\*\*.json</span>
+  <span>&#9679; mod default you have not rebound</span>
+  <span>Generated $stamp // CYBERWISE</span>
 </footer>
 </div>
 
