@@ -46,6 +46,11 @@ param(
     [string] $Html = "$env:USERPROFILE\Downloads\cp2077-system-profile.html",
     [switch] $NoHtml,
 
+    # Every type size in the HTML derives from one base, so this moves the whole
+    # report together. Size it for the window it will be read in - see
+    # Show-ViewportProbe.ps1 and references/report-design.md.
+    [double] $Scale = 1.0,
+
     # Paths and machine identity are stripped by default, because the whole
     # point of the markdown output is that it gets pasted somewhere public.
     [switch] $NoRedact
@@ -225,9 +230,15 @@ $modlist   = Join-Path $archDir 'modlist.txt'
 $hasList   = Test-Path -LiteralPath $modlist
 $listed    = @()
 if ($hasList) {
+    # NO COMMENT STRIPPING. modlist.txt has no comment syntax - every non-blank
+    # line is an archive filename - and '#' is a legitimate LEADING CHARACTER in
+    # those filenames, used by mods to sort themselves early. Treating '#' as a
+    # comment marker silently discarded 61 real entries on the install this was
+    # written against and reported all 61 as "on disk but unlisted", which reads
+    # as a serious load-order fault and is entirely fabricated.
     $listed = @(Get-Content -LiteralPath $modlist |
         ForEach-Object { $_.Trim() } |
-        Where-Object { $_ -and -not $_.StartsWith('#') })
+        Where-Object { $_ })
 }
 $onDisk    = @($archives | ForEach-Object { $_.Name })
 $unlisted  = @($onDisk | Where-Object { $listed -notcontains $_ })
@@ -255,54 +266,66 @@ if (Test-Path -LiteralPath $xlog) { $xlErrors = @(Select-String -LiteralPath $xl
 # Each flag names the symptom AND the reason, because "you have 6 GB of VRAM" is
 # not advice. Ordered by how likely it is to be the actual problem.
 
-$flags = [System.Collections.Generic.List[string]]::new()
+$flags = [System.Collections.Generic.List[object]]::new()
+
+# A flag that names a count should be able to name the things it counted -
+# "60 archives are unlisted" is unactionable until you know which 60, and
+# seeing the list is also how a wrong flag gets caught.
+function Add-Flag {
+    param([string]$Text, [string[]]$Items = @(), [ValidateSet('warn','info')][string]$Level = 'warn')
+    $flags.Add([pscustomobject]@{ Text = $Text; Items = @($Items | Sort-Object); Level = $Level })
+}
 
 if ($vram -gt 0 -and $archBytes -gt 0) {
     $vramGB = $vram / 1GB
     $arcGB  = $archBytes / 1GB
     if ($vramGB -lt 8 -and $arcGB -gt 15) {
-        $flags.Add("**VRAM $([math]::Round($vramGB)) GB against $([math]::Round($arcGB)) GB of archives.** High-res texture packs do not stream gracefully once VRAM is exhausted - expect stutter, muddy textures that never sharpen, or hard crashes in dense areas. This is the first thing to suspect with 4K/8K retextures.")
+        Add-Flag "**VRAM $([math]::Round($vramGB)) GB against $([math]::Round($arcGB)) GB of archives.** High-res texture packs do not stream gracefully once VRAM is exhausted - expect stutter, muddy textures that never sharpen, or hard crashes in dense areas. This is the first thing to suspect with 4K/8K retextures."
     } elseif ($vramGB -lt 12 -and $arcGB -gt 60) {
-        $flags.Add("**$([math]::Round($arcGB)) GB of archives on $([math]::Round($vramGB)) GB of VRAM.** Workable, but you are near the edge; a single 8K pack can tip it. Suspect VRAM before load order if the symptom is stutter or blurry textures.")
+        Add-Flag "**$([math]::Round($arcGB)) GB of archives on $([math]::Round($vramGB)) GB of VRAM.** Workable, but you are near the edge; a single 8K pack can tip it. Suspect VRAM before load order if the symptom is stutter or blurry textures."
     }
 }
 if ($ramBytes -gt 0 -and $ramBytes -lt 16GB) {
-    $flags.Add("**System RAM $(GB $ramBytes).** A heavily modded install regularly exceeds this; the shortfall lands on the pagefile and shows up as stutter or out-of-memory crashes.")
+    Add-Flag "**System RAM $(GB $ramBytes).** A heavily modded install regularly exceeds this; the shortfall lands on the pagefile and shows up as stutter or out-of-memory crashes."
 }
 if (-not $pfAuto -and $pfBytes -gt 0 -and $pfBytes -lt 8GB) {
-    $flags.Add("**Fixed pagefile of $(GB $pfBytes).** Modded CP2077 commits far more than it resident-uses. A small fixed pagefile produces crashes that look random and are not - let Windows manage it, or set 16 GB+.")
+    Add-Flag "**Fixed pagefile of $(GB $pfBytes).** Modded CP2077 commits far more than it resident-uses. A small fixed pagefile produces crashes that look random and are not - let Windows manage it, or set 16 GB+."
 } elseif ($pfBytes -eq 0) {
-    $flags.Add('**No pagefile detected.** Modded CP2077 will crash under commit pressure. Enable a system-managed pagefile before diagnosing anything else.')
+    Add-Flag '**No pagefile detected.** Modded CP2077 will crash under commit pressure. Enable a system-managed pagefile before diagnosing anything else.'
 }
 if ($media -eq 'HDD') {
-    $flags.Add('**Game is on a mechanical drive.** CP2077 streams assets constantly; mods add more. Expect texture pop-in and long hitches that no load-order change will fix.')
+    Add-Flag '**Game is on a mechanical drive.** CP2077 streams assets constantly; mods add more. Expect texture pop-in and long hitches that no load-order change will fix.'
 }
 if ($freeBytes -gt 0 -and $freeBytes -lt 20GB) {
-    $flags.Add("**Only $(GB $freeBytes) free on the game drive.** Shader cache, logs and the pagefile all need room; low space causes failures that look like mod bugs.")
+    Add-Flag "**Only $(GB $freeBytes) free on the game drive.** Shader cache, logs and the pagefile all need room; low space causes failures that look like mod bugs."
 }
 if ($hasList -and $unlisted.Count -gt 0) {
-    $flags.Add("**$($unlisted.Count) archive(s) on disk but absent from modlist.txt.** Unlisted archives sort last, so they lose every file they contest - installed, enabled, and quite possibly doing nothing. See references/load-order.md.")
+    Add-Flag "**$($unlisted.Count) archive(s) on disk but absent from modlist.txt.** Unlisted archives sort last, so they lose every file they contest - installed, enabled, and quite possibly doing nothing. See references/load-order.md." -Items $unlisted
 }
 if ($missing.Count -gt 0) {
-    $flags.Add("**$($missing.Count) modlist.txt entr(ies) with no file on disk.** Usually a disabled or removed mod. Harmless in itself, but it means the list and the folder disagree.")
+    # Informational, not a fault. Two entirely normal causes: a mod disabled on
+    # purpose, whose line is correctly holding its slot for when it comes back;
+    # and an archive written at runtime by an ASI plugin, which simply is not on
+    # disk with the game closed. Only worth pruning on a genuine uninstall.
+    Add-Flag "**$($missing.Count) modlist.txt entr(ies) with no file on disk.** Normal for a mod you disabled on purpose - the line holds its slot - and for archives an ASI writes at runtime. Only prune on a real uninstall." -Items $missing -Level info
 }
 if ($redscriptState -like 'FAILED*') {
-    $flags.Add('**redscript failed to compile.** When this happens EVERY .reds mod on the install is silently off, with no in-game sign. Fix this before investigating any individual mod.')
+    Add-Flag '**redscript failed to compile.** When this happens EVERY .reds mod on the install is silently off, with no in-game sign. Fix this before investigating any individual mod.'
 }
 if ($payload['.xl'] -gt 0 -and -not $frameworks['ArchiveXL']) {
-    $flags.Add("**$($payload['.xl']) .xl file(s) present but ArchiveXL is not installed.** Those mods cannot work at all.")
+    Add-Flag "**$($payload['.xl']) .xl file(s) present but ArchiveXL is not installed.** Those mods cannot work at all."
 }
 if ($payload['tweaks'] -gt 0 -and -not $frameworks['TweakXL']) {
-    $flags.Add("**$($payload['tweaks']) tweak file(s) present but TweakXL is not installed.** Those edits are being ignored.")
+    Add-Flag "**$($payload['tweaks']) tweak file(s) present but TweakXL is not installed.** Those edits are being ignored."
 }
 if ($payload['CET mods'] -gt 0 -and -not $frameworks['CET']) {
-    $flags.Add("**$($payload['CET mods']) CET mod(s) present but Cyber Engine Tweaks is not installed.** None of them are running.")
+    Add-Flag "**$($payload['CET mods']) CET mod(s) present but Cyber Engine Tweaks is not installed.** None of them are running."
 }
 if ($xlErrors -gt 0) {
-    $flags.Add("**$xlErrors error(s) in the ArchiveXL log.** Usually a mod referencing something the current patch moved or renamed.")
+    Add-Flag "**$xlErrors error(s) in the ArchiveXL log.** Usually a mod referencing something the current patch moved or renamed."
 }
 if (-not $hasList -and $archives.Count -gt 1) {
-    $flags.Add("**No modlist.txt.** The game falls back to alphabetical order, so filenames alone decide every conflict across $($archives.Count) archives.")
+    Add-Flag "**No modlist.txt.** The game falls back to alphabetical order, so filenames alone decide every conflict across $($archives.Count) archives."
 }
 
 # =================================================================== output ==
@@ -347,8 +370,21 @@ $payloadLines = foreach ($k in $payload.Keys)    { Pad $k $payload[$k] }
 
 # ---- markdown (Discord) ----
 # Fenced blocks, never tables: Discord does not render markdown tables.
+#
+# Items are listed inline but capped - Discord allows 2000 characters per
+# message and a flag naming 60 archives would eat the whole budget on its own.
+# The HTML has no such limit and lists everything.
+$mdCap = 8
 $mdFlags = if ($flags.Count) {
-    (@($flags | ForEach-Object { "- $_" }) -join "`n")
+    (@($flags | ForEach-Object {
+        $line = "- $($_.Text)"
+        if ($_.Items.Count) {
+            $shown = @($_.Items | Select-Object -First $mdCap)
+            $line += "`n" + (($shown | ForEach-Object { "  - ``$_``" }) -join "`n")
+            if ($_.Items.Count -gt $mdCap) { $line += "`n  - *...and $($_.Items.Count - $mdCap) more (see the HTML report)*" }
+        }
+        $line
+    }) -join "`n")
 } else {
     '- Nothing obviously wrong. If something is misbehaving it is specific to a mod, not the machine.'
 }
@@ -401,8 +437,19 @@ if (-not $NoHtml) {
     # Markdown bold survives into the flag text; render it rather than show it.
     function HtmlBold { param([string]$s) [regex]::Replace((HtmlEsc $s), '\*\*(.+?)\*\*', '<b>$1</b>') }
 
+    # A flag that counted things can name them, behind a <details> so the list
+    # never competes with the flag itself for attention. No script needed - the
+    # element is its own disclosure widget.
     $flagHtml = if ($flags.Count) {
-        (@($flags | ForEach-Object { "<li>$(HtmlBold $_)</li>" }) -join '')
+        (@($flags | ForEach-Object {
+            $cls  = if ($_.Level -eq 'info') { ' class="info"' } else { '' }
+            $body = HtmlBold $_.Text
+            if ($_.Items.Count) {
+                $lis  = (@($_.Items | ForEach-Object { "<li>$(HtmlEsc $_)</li>" }) -join '')
+                $body += "<details><summary>show the $($_.Items.Count)</summary><ul class=""items"">$lis</ul></details>"
+            }
+            "<li$cls>$body</li>"
+        }) -join '')
     } else {
         '<li class="ok">Nothing obviously wrong. If something is misbehaving it is specific to a mod, not the machine.</li>'
     }
@@ -414,41 +461,74 @@ if (-not $NoHtml) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cyberpunk 2077 System Profile</title>
 <style>
+/* House style, same as every other artefact: one type base so -Scale moves the
+   whole thing together, flex panels rather than a centred column, and no width
+   cap - this gets read on whatever window the user actually has open.
+   See references/report-design.md. */
 :root{--yellow:#fcee0a;--cyan:#00f0ff;--red:#ff003c;--green:#39ff88;
   --bg:#07070a;--panel:#101018;--line:#26263a;--text:#e4e4ee;--dim:#8a8aa2;
-  --mono:'Consolas','SF Mono','DejaVu Sans Mono',monospace;--sans:'Segoe UI',system-ui,sans-serif}
+  --mono:'Consolas','SF Mono','DejaVu Sans Mono',monospace;--sans:'Segoe UI',system-ui,sans-serif;
+  --fs:__FS__px}
 *{box-sizing:border-box}html,body{margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.5}
-.wrap{max-width:1100px;margin:0 auto;padding:0 22px 60px}
-header{position:relative;padding:26px 0 14px;border-bottom:1px solid var(--line);overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:var(--fs);line-height:1.45;
+  background-image:linear-gradient(rgba(252,238,10,.02) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(252,238,10,.02) 1px,transparent 1px);background-size:46px 46px}
+.wrap{margin:0 auto;padding:0 22px 30px}
+header{position:relative;padding:18px 0 11px;border-bottom:1px solid var(--line);overflow:hidden}
 header::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:repeating-linear-gradient(0deg,rgba(0,0,0,.34) 0 1px,transparent 1px 3px)}
-h1{font-family:var(--mono);font-size:clamp(24px,4vw,40px);margin:0;letter-spacing:.08em;
+h1{font-family:var(--mono);font-size:calc(var(--fs)*1.7);margin:0;letter-spacing:.08em;
   text-transform:uppercase;color:var(--yellow);text-shadow:2px 0 var(--red),-2px 0 var(--cyan)}
 h1 span{color:var(--text);text-shadow:none}
-.sub{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--dim);margin-top:8px}
-h2{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan);
-  margin:28px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.sub{font-family:var(--mono);font-size:calc(var(--fs)*.56);letter-spacing:.14em;color:var(--dim);margin-top:7px}
+h2{font-family:var(--mono);font-size:calc(var(--fs)*.6);letter-spacing:.2em;text-transform:uppercase;color:var(--cyan);
+  margin:0 0 9px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+/* Flags full width - they are the answer. Evidence panels share a flex row. */
+section{margin-top:16px}
+.cols{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px;margin-top:16px}
+/* Panels size to their own content rather than taking an equal share. These
+   hold aligned monospace tables of very different widths - the machine block
+   carries a full GPU name and driver string, the payload block carries
+   two-digit counts - so an equal split clipped the widest one behind its own
+   scrollbar while the narrowest sat half empty. flex-basis:auto uses the
+   intrinsic width; min-width:0 still lets them shrink on a narrow window. */
+.col{flex:1 1 auto;min-width:0}
+.col pre{width:100%}
 ul{list-style:none;padding:0;margin:0}
 li{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--red);
-  padding:12px 15px;margin-bottom:9px;font-size:15px}
+  padding:11px 15px;margin-bottom:9px;font-size:calc(var(--fs)*.8);line-height:1.4}
 li.ok{border-left-color:var(--green);color:var(--dim)}
+li.info{border-left-color:var(--cyan)}
 li b{color:var(--yellow);font-weight:600}
-pre{background:var(--panel);border:1px solid var(--line);padding:14px 16px;margin:0;
-  font-family:var(--mono);font-size:14px;color:#c8c8da;overflow-x:auto}
-footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);
-  font-family:var(--mono);font-size:11px;color:#4c4c60;line-height:1.7}
+/* <details> is its own disclosure widget - no script, works offline. */
+details{margin-top:9px}
+summary{cursor:pointer;font-family:var(--mono);font-size:calc(var(--fs)*.55);letter-spacing:.1em;
+  text-transform:uppercase;color:var(--cyan);width:fit-content}
+summary:hover{color:var(--yellow)}
+ul.items{margin-top:9px;columns:280px;column-gap:20px}
+ul.items li{background:none;border:0;border-left:2px solid var(--line);margin:0 0 3px;
+  padding:1px 0 1px 10px;font-family:var(--mono);font-size:calc(var(--fs)*.56);
+  color:#a8a8bd;break-inside:avoid;word-break:break-all}
+pre{background:var(--panel);border:1px solid var(--line);padding:13px 16px;margin:0;
+  font-family:var(--mono);font-size:calc(var(--fs)*.6);color:#c8c8da;overflow-x:auto}
+footer{margin-top:20px;padding-top:12px;border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:calc(var(--fs)*.5);color:#4c4c60;
+  display:flex;flex-wrap:wrap;gap:8px 30px}
+footer span:last-child{margin-left:auto}
 </style></head><body><div class="wrap">
 <header><h1>System <span>Profile</span></h1>
-<div class="sub">CYBERPUNK 2077 $(HtmlEsc $gameVer) &nbsp;//&nbsp; $(HtmlEsc $store) &nbsp;//&nbsp; $stamp</div></header>
-<h2>Flags</h2><ul>$flagHtml</ul>
-<h2>Machine</h2>$(Block $machineLines)
-<h2>Install</h2>$(Block $gameLines)
-<h2>Frameworks</h2>$(Block $fwLines)
-<h2>Mod payload</h2>$(Block $payloadLines)
-<footer>$(HtmlEsc $rootOut)<br>Generated $stamp // CYBERWISE. Only fields that change a diagnosis are collected.</footer>
+<div class="sub">CYBERPUNK 2077 $(HtmlEsc $gameVer) &nbsp;//&nbsp; $(HtmlEsc $store) &nbsp;//&nbsp; $(HtmlEsc $manager) &nbsp;//&nbsp; $stamp</div></header>
+<section><h2>Flags</h2><ul>$flagHtml</ul></section>
+<div class="cols">
+  <div class="col"><h2>Machine</h2>$(Block $machineLines)</div>
+  <div class="col"><h2>Install</h2>$(Block $gameLines)</div>
+  <div class="col"><h2>Frameworks</h2>$(Block $fwLines)</div>
+  <div class="col"><h2>Mod payload</h2>$(Block $payloadLines)</div>
+</div>
+<footer><span>$(HtmlEsc $rootOut)</span><span>Only fields that change a diagnosis are collected</span><span>Generated $stamp // CYBERWISE</span></footer>
 </div></body></html>
 "@
+    $htmlText = $htmlText.Replace('__FS__', [string][math]::Round(22 * $Scale, 1))
     $hdir = Split-Path -Parent $Html
     if ($hdir -and -not (Test-Path -LiteralPath $hdir)) { New-Item -ItemType Directory -Path $hdir -Force | Out-Null }
     Set-Content -LiteralPath $Html -Value $htmlText -Encoding UTF8
