@@ -126,6 +126,22 @@ might supply it.
 **Version matters and the folder lies about it** - see the Vortex note above.
 Report the version from the RED4ext log or the download archive, not the folder.
 
+### File timestamps do not tell you when a mod was installed
+
+Managers preserve the timestamps inside the mod archive, so a deployed file's mtime
+is the **mod author's build date**, not the install date. "Find everything newer
+than last Tuesday" will therefore miss most of a fresh deploy and is not a reliable
+way to answer "what changed".
+
+What is reliable: diff the archive list against a known-good `modlist.txt`, or read
+the manager's own install dates. Vortex staging folder names carry an install
+timestamp as their trailing number.
+
+The exception that misleads further: logs and caches under `red4ext\plugins\*` *do*
+update on every run, so a timestamp sweep will surface those and make it look like
+framework plugins were updated when only their logs moved. Check the DLL's own date
+before concluding a framework changed.
+
 ### What to give the user
 
 Display name, Nexus ID, and where it deployed. That is enough to find it in a

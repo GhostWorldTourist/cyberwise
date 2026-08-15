@@ -62,6 +62,60 @@ problems drown in noise.
 - Swapping a mod variant produces **both at once**: a stale entry for the old
   filename and an unlisted archive for the new one.
 
+## What reordering can and cannot fix
+
+Three situations produce an identical-looking conflict report, and **only one of
+them is a load-order problem.** Work out which you have before promising anything.
+
+### 1. A lost fight - fixable by order
+
+Both mods ship the same resource; the later one loses. Reorder and it wins. This is
+the only case where load order is the answer.
+
+### 2. A coverage gap - NOT fixable by order
+
+Only one mod ships that resource. The other never contested it, so there is nothing
+to win. No amount of reordering conjures content that isn't in the archive.
+
+This is the one most often misdiagnosed, because the *symptom* looks like a
+conflict. A skin-tone patch covering torso and arms but shipping no leg textures
+leaves the legs mismatched forever - and a conflict checker shows **zero conflicts**,
+because there is no contested file. Extract the archive and read its file list; if
+the path isn't there, stop looking at load order.
+
+The tell: the user reports a visual mismatch, and the scanner reports nothing wrong.
+
+### 3. Mutually exclusive claims - not fixable at all
+
+Two mods ship the same single resource and the user wants both to apply. That is
+arithmetically impossible, and shuffling the order just moves which one is dead.
+
+**Say so plainly rather than reordering and hoping.** Two billboard mods each
+carrying one texture for the same surface is an either/or, and the useful response
+is "these replace the same file, pick one" - not three rounds of load-order changes
+that each silently kill the other mod.
+
+Check that a request is *satisfiable* before you start satisfying it.
+
+## A precedence change can create new casualties
+
+Making X win means something else stops winning, and that something may be a third
+party the user never mentioned.
+
+A real sequence: a skin mod was promoted to beat two others, which was correct and
+what the user asked for. The next scan showed a **fourth** archive had become
+completely inert - all 17 of its files were now owned by the newly promoted mod.
+Nobody asked for that mod to die; it was collateral.
+
+**So: after applying a precedence rule, re-run the collision scan and diff the inert
+list.** Anything newly inert is a consequence of your change and needs surfacing,
+because the user may want to uninstall it, may want the rule reversed, or may not
+have realised the two mods overlapped that heavily.
+
+The same check catches the opposite case, where a mod you expected to die turns out
+to still own files the winner doesn't ship - which is a coverage gap wearing a
+conflict's clothing, and means both mods should stay installed.
+
 ## Standing precedence rules
 
 When a conflict is settled by hand, record it as a machine-checkable rule

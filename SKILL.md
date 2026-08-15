@@ -115,6 +115,14 @@ A conflict checker showing zero conflicts does not mean two mods agree. Cases se
 When a body part looks wrong, resolve *which file actually supplies it* before
 touching load order. See `references/archives.md`.
 
+**And before you promise a reorder, check the problem is one reordering can solve.**
+Three situations look identical in a conflict report: a lost fight (fixable), a
+coverage gap where only one mod ships the file at all (not fixable - no ordering
+conjures content), and two mods claiming the same single resource where the user
+wants both (impossible; say so instead of shuffling). Afterwards, **re-scan for
+newly inert archives** - promoting one mod can silently kill a third party nobody
+mentioned. `references/load-order.md`.
+
 ## Know where each kind of mod lives
 
 Not everything deploys to `archive\pc\mod`. A mod "missing" from there may simply

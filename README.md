@@ -11,7 +11,7 @@ getting it wrong first on a real ~700-archive load order.
 
 | topic | examples of what's in there |
 |---|---|
-| **Load order** | why earlier-in-list wins and `zzz_` advice is backwards; why every newly installed mod starts inert; how to test override direction without fooling yourself |
+| **Load order** | why earlier-in-list wins and `zzz_` advice is backwards; why every newly installed mod starts inert; what reordering can and cannot fix; how to test override direction without fooling yourself |
 | **Archives** | reading the RDAR index with no tooling; FNV1a-64 path hashing; which hash dictionaries exist and how incomplete they are |
 | **Diagnosis** | which log answers which question; why a failed ArchiveXL patch looks like total mod failure; why you must locate a visual symptom before theorising |
 | **Bisecting** | where to park files and why not `%TEMP%`; searching by layer before by file; why automated hang detection cannot work |
