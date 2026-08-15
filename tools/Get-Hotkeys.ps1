@@ -192,7 +192,10 @@ $actionNames = @{
     'Vehicle CycleWindow'='Cycle windows'; 'Vehicle HeadlightsCall'='Flash headlights'
     'Vehicle ToggleCustomLights'='Toggle individual lights'
     'immersive time skip'='Skip time'
-    'LHUD Global'='Toggle whole HUD'; 'LHUD Minimap'='Toggle minimap'; 'LHUD Toggle'='Toggle HUD'
+    # Three separate toggles with near-identical names. LHUD_Toggle ships in an
+    # optional second input file and is the one still on its mod default.
+    'LHUD Global'='Toggle whole HUD'; 'LHUD Minimap'='Toggle minimap'
+    'LHUD Toggle'='Simple HUD toggle'
     'mark to sell'='Mark item to sell'; 'mark similar to sell'='Mark all similar to sell'
     'revised nav up'='Backpack: nav up'; 'revised nav down'='Backpack: nav down'
     'revised use equip'='Backpack: use / equip'

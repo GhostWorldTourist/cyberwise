@@ -22,7 +22,13 @@ param(
     # Every type size on the sheet derives from one base, so this scales the
     # whole thing without disturbing the proportions. 1.0 is sized for reading
     # from normal seating distance; go up for a TV or a glance across the desk.
-    [double] $Scale = 1.0
+    [double] $Scale = 1.0,
+
+    # Both off by default. The mouse pad and the shared-key list are reference
+    # material, not things you glance at mid-fight, and every row they add is a
+    # row competing with the ones you actually came to look up.
+    [switch] $ShowMousePad,
+    [switch] $ShowSharedKeys
 )
 
 $ErrorActionPreference = 'Stop'
@@ -61,9 +67,16 @@ $collisions = $binds | Group-Object Key | Where-Object Count -gt 1 | Sort-Object
 $sb = [Text.StringBuilder]::new()
 function w { param([string]$s) [void]$sb.AppendLine($s) }
 
+# Which thumb button sends a given key. The mouse panel listed every one of
+# these a second time - "Next consumable / ]" as a mouse cell and again as an
+# Advanced Control row - so instead the button rides along on the row it
+# duplicates, as a badge next to the keycap.
+$mouseFor = @{}
+foreach ($m in $n.mouse) { if (-not $mouseFor.ContainsKey($m.sends)) { $mouseFor[$m.sends] = $m.button } }
+
 # ---- mouse panel ----
 $mouseHtml = ''
-if ($n.mouse) {
+if ($n.mouse -and $ShowMousePad) {
     $cells = foreach ($m in $n.mouse) {
         # Resolve what this key actually does from the harvested data, so a
         # rebind in game shows up here without editing the notes file.
@@ -102,11 +115,14 @@ $catHtml = foreach ($c in $order) {
     if (-not $set) { continue }
     $rows = foreach ($b in $set) {
         $keys = ($b.Key -split ' / ' | ForEach-Object { "<kbd class=""k"">$(esc $_)</kbd>" }) -join '<i>/</i>'
+        $mb   = if ($mouseFor.ContainsKey($b.Key)) {
+            "<b class=""ms"" title=""$(esc $n.device) thumb button"">M$($mouseFor[$b.Key])</b>"
+        } else { '' }
         $mark = if ($b.Source -eq 'your setting') { '' } else { '<span class="def" title="mod default - not rebound by you">&#9679;</span>' }
         @"
       <div class="row" data-s="$(esc "$($b.Action) $($b.Mod) $($b.Key)".ToLower())">
         <span class="act">$(esc $b.Action)<em>$(esc $b.Mod)$mark</em></span>
-        <span class="keys">$keys</span>
+        <span class="keys">$mb$keys</span>
       </div>
 "@
     }
@@ -145,7 +161,7 @@ if ($n.gestures) {
 
 # ---- collision panel ----
 $colHtml = ''
-if ($collisions) {
+if ($collisions -and $ShowSharedKeys) {
     $items = foreach ($g in $collisions) {
         $who = ($g.Group | ForEach-Object { "<span class=""cw""><b>$(esc $_.Context)</b>$(esc $_.Action) <em>$(esc $_.Mod)</em></span>" }) -join ''
         "<div class=""crow""><kbd class=""k"">$(esc $g.Name)</kbd><div class=""cwho"">$who</div></div>"
@@ -184,26 +200,29 @@ $html = @"
 html,body{margin:0;padding:0}
 body{
   background:var(--bg); color:var(--text); font-family:var(--sans);
-  font-size:var(--fs); line-height:1.45;
+  font-size:var(--fs); line-height:1.3;
   background-image:
     linear-gradient(rgba(252,238,10,.02) 1px,transparent 1px),
     linear-gradient(90deg,rgba(252,238,10,.02) 1px,transparent 1px);
   background-size:46px 46px;
 }
-.wrap{max-width:1800px;margin:0 auto;padding:0 22px 70px}
+/* No max-width. This is meant to be parked on a second monitor, so a centred
+   column on an ultrawide wastes the whole point - spreading wide buys more
+   columns, which buys a shorter page, which is what "at a glance" means. */
+.wrap{margin:0 auto;padding:0 22px 40px}
 
-header{position:relative;padding:32px 0 18px;overflow:hidden;border-bottom:1px solid var(--line)}
+header{position:relative;padding:20px 0 12px;overflow:hidden;border-bottom:1px solid var(--line)}
 /* Scanlines are confined to the masthead. Over a page you actually read from,
    they fight the text; over a title block they just set the tone. */
 header::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:repeating-linear-gradient(0deg,rgba(0,0,0,.34) 0 1px,transparent 1px 3px)}
-h1{font-family:var(--mono);font-size:clamp(28px,5vw,54px);font-weight:700;margin:0;
+h1{font-family:var(--mono);font-size:calc(var(--fs)*1.7);font-weight:700;margin:0;
   letter-spacing:.09em;text-transform:uppercase;color:var(--yellow);
   text-shadow:2px 0 var(--red),-2px 0 var(--cyan)}
 h1 span{color:var(--text);text-shadow:none}
 .sub{font-family:var(--mono);font-size:calc(var(--fs)*.56);letter-spacing:.15em;color:var(--dim);margin-top:9px}
 
-.bar{position:sticky;top:0;z-index:9;padding:13px 0;
+.bar{position:sticky;top:0;z-index:9;padding:10px 0;
   background:linear-gradient(180deg,var(--bg) 76%,transparent);display:flex;gap:12px;align-items:center}
 #q{flex:1 1 auto;background:var(--panel);color:var(--text);border:1px solid var(--line);
   border-left:3px solid var(--yellow);padding:13px 16px;font-family:var(--mono);
@@ -212,13 +231,14 @@ h1 span{color:var(--text);text-shadow:none}
 #q::placeholder{color:#4c4c60}
 #hits{font-family:var(--mono);font-size:calc(var(--fs)*.55);color:var(--dim);white-space:nowrap}
 
-.cols{columns:3 520px;column-gap:18px}
-.panel{background:var(--panel);border:1px solid var(--line);padding:16px 18px 9px;margin:0 0 18px;
+/* No fixed count - let it take as many columns as the monitor allows. */
+.cols{columns:560px;column-gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);padding:13px 16px 6px;margin:0 0 14px;
   break-inside:avoid;display:inline-block;width:100%;
   clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
 .panel.wide{columns:auto}
-h2{font-family:var(--mono);font-size:calc(var(--fs)*.63);letter-spacing:.2em;text-transform:uppercase;
-  margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--line);
+h2{font-family:var(--mono);font-size:calc(var(--fs)*.6);letter-spacing:.2em;text-transform:uppercase;
+  margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:10px;color:var(--text)}
 h2 b{margin-left:auto;color:var(--dim);font-weight:400;font-size:calc(var(--fs)*.52);letter-spacing:.12em}
 .dot{width:10px;height:10px;flex:0 0 10px;transform:rotate(45deg)}
@@ -231,14 +251,21 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
   background:#1b1b26;border:1px solid #3a3a52;border-bottom-width:3px;border-radius:4px;
   padding:5px 12px;min-width:calc(var(--fs)*2);display:inline-block;text-align:center;white-space:nowrap}
 
-.row{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid #191926}
+/* One line per binding. The mod name used to sit on its own line under every
+   action, which doubled the height of the entire sheet for information you
+   only want when you go to change something. Inline and dimmed, it costs
+   nothing and the row stays scannable. */
+.row{display:flex;align-items:baseline;gap:12px;padding:5px 2px;border-bottom:1px solid #191926}
 .row:last-child{border-bottom:0}
 .act{flex:1;font-size:calc(var(--fs)*.84);line-height:1.25}
-.act em{display:block;font-style:normal;font-size:calc(var(--fs)*.58);color:var(--dim);
-  font-family:var(--mono);letter-spacing:.04em;margin-top:3px}
-.def{color:#4c4c60;margin-left:6px;font-size:calc(var(--fs)*.45);vertical-align:1px}
-.keys{white-space:nowrap;flex:0 0 auto}
-.keys i{color:#4c4c60;font-style:normal;padding:0 4px;font-size:calc(var(--fs)*.62)}
+.act em{font-style:normal;font-size:calc(var(--fs)*.5);color:#6a6a80;
+  font-family:var(--mono);letter-spacing:.03em;margin-left:9px;white-space:nowrap}
+.def{color:#4c4c60;margin-left:5px;font-size:calc(var(--fs)*.42);vertical-align:1px}
+.keys{white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:6px}
+.keys i{color:#4c4c60;font-style:normal;padding:0 2px;font-size:calc(var(--fs)*.62)}
+/* Thumb-button badge, replacing the mouse panel that repeated these rows. */
+.ms{font-family:var(--mono);font-size:calc(var(--fs)*.5);font-weight:700;color:var(--bg);
+  background:#5a5a72;border-radius:3px;padding:2px 5px;letter-spacing:.02em}
 
 /* ---- mouse ---- */
 .mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -340,7 +367,7 @@ q.addEventListener('input', () => {
 </html>
 "@
 
-$html = $html.Replace('__FS__', [string][math]::Round(22 * $Scale, 1))
+$html = $html.Replace('__FS__', [string][math]::Round(27 * $Scale, 1))
 
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
