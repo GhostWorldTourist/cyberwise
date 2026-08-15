@@ -47,6 +47,7 @@ param(
     [switch] $HideNSFW,
     [string] $Out         = "$PSScriptRoot\mod-manifest.md",
     [string] $CachePath   = "$PSScriptRoot\.nexus-cache.json",
+    [string] $OverridePath = (Join-Path $PSScriptRoot 'nsfw-overrides.json'),
     [int]    $ThrottleMs  = 120
 )
 
@@ -193,15 +194,52 @@ foreach ($m in $mods) {
 
 # Fallback only. Deliberately conservative in what it claims: it is a name
 # match, it will miss mods whose names are innocuous, and the report says so.
+#
+# Two lessons are baked into this list. Adult mods are often named for a place
+# or a character rather than for their content - a venue, a club, a braindance -
+# so location and euphemism terms matter as much as anatomy. And the list will
+# still be wrong in both directions, which is what the override file is for.
 $nsfwWords = @(
+    # explicit
     'nude','nudity','naked','nsfw','sex','sexual','erotic','porn','lewd',
-    'genital','penis','vagina','breast','nipple','boob','underwear','panties',
-    'lingerie','bdsm','fetish','joytoy','brothel','strip','topless','hentai',
-    'adult','xxx','busty','thicc','onlyfans','hotscenes','jiggle'
+    'hentai','xxx','fetish','bdsm','orgasm',
+    # anatomy
+    'genital','penis','vagina','breast','nipple','boob','dick','cock',
+    'pubic','titty','areola',
+    # garments that in practice mark adult mods
+    'lingerie','panties','topless','underwear',
+    # sex work, venues and euphemism - the category keywords miss most often
+    'joytoy','brothel','strip','escort','stripper','pleasures','pleasure',
+    'jig jig','jigjig','licks club','clouds','cloud - ','braindance',
+    'hotscenes','shower','milk','tongue',
+    # body-mod shorthand
+    'busty','thicc','curvy','jiggle','onlyfans','adult'
 )
 function Test-NsfwByName { param([string]$Name)
     $l = $Name.ToLower()
     foreach ($w in $nsfwWords) { if ($l -match [regex]::Escape($w)) { return $true } }
+    return $false
+}
+
+# Overrides, because no keyword list gets both directions right. Tactical
+# clothing mods legitimately contain "underwear"; adult mods legitimately have
+# innocuous names. A small hand-maintained file beats endlessly tuning regexes.
+#
+# Format (all fields optional):
+#   { "forceAdult": { "ids": [123], "names": ["exact or *wildcard*"] },
+#     "forceSafe":  { "ids": [456], "names": ["Zenitex Underwear*"] } }
+$override = $null
+if (Test-Path $OverridePath) {
+    try { $override = Get-Content $OverridePath -Raw | ConvertFrom-Json }
+    catch { Write-Warning "override file unreadable: $OverridePath" }
+}
+function Test-Override {
+    param($Mod, $Rule)
+    if (-not $Rule) { return $false }
+    if ($Rule.ids -and $Mod.NexusId -and ($Rule.ids -contains $Mod.NexusId)) { return $true }
+    if ($Rule.names) {
+        foreach ($pat in $Rule.names) { if ($Mod.Name -like $pat) { return $true } }
+    }
     return $false
 }
 
@@ -217,12 +255,27 @@ foreach ($m in $mods) {
 # adult-flagged were each named only for the character.
 $flaggedIds = @{}
 foreach ($m in $mods) { if ($m.NexusId -and $m.Adult) { $flaggedIds["$($m.NexusId)"] = $true } }
-$propagated = 0
+# Propagation cuts both ways. It catches an adult mod's innocuously-named
+# add-ons, but it also drags in genuinely safe siblings that merely share a
+# Nexus page - a base skin texture sharing an ID with an adult edition of
+# itself, for instance. So record who was caught this way and print the list:
+# hiding is the safer default for this feature, but the user needs to be able
+# to audit it and exempt the mistakes.
+$propagatedNames = New-Object System.Collections.Generic.List[string]
 foreach ($m in $mods) {
     if ($m.NexusId -and -not $m.Adult -and $flaggedIds.ContainsKey("$($m.NexusId)")) {
         $m.Adult = $true
-        $propagated++
+        $propagatedNames.Add($m.Name)
     }
+}
+$propagated = $propagatedNames.Count
+
+# Overrides win over everything, including the API flag - they are the user's
+# explicit judgement about their own install.
+$forcedAdult = 0; $forcedSafe = 0
+foreach ($m in $mods) {
+    if (Test-Override $m $override.forceAdult) { if (-not $m.Adult) { $forcedAdult++ }; $m.Adult = $true }
+    elseif (Test-Override $m $override.forceSafe) { if ($m.Adult) { $forcedSafe++ }; $m.Adult = $false }
 }
 
 $hidden = 0
@@ -255,7 +308,16 @@ if ($HideNSFW) {
         "using Nexus's own ``contains_adult_content`` flag"
     }
     W "- **$hidden** adult-flagged mods omitted, $how"
-    if ($propagated -gt 0) { W "- of those, **$propagated** were caught only by sharing a Nexus ID with a flagged mod" }
+    if ($propagated -gt 0) {
+        W "- of those, **$propagated** were caught only by sharing a Nexus ID with a flagged mod:"
+        W ""
+        foreach ($n in ($propagatedNames | Sort-Object)) { W "  - $n" }
+        W ""
+        W "  Check that list. A safe mod sharing a Nexus page with an adult one gets"
+        W "  hidden too; add any mistakes to ``forceSafe`` in the override file."
+    }
+    if ($forcedAdult -gt 0) { W "- **$forcedAdult** added by override file" }
+    if ($forcedSafe -gt 0) { W "- **$forcedSafe** exempted by override file (false positives)" }
 }
 W ""
 
