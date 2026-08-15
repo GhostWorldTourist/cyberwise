@@ -145,7 +145,38 @@ saying that key toggles the minimap has just told you the label is stale.
 
 ## Tools
 
-- `tools/Get-Hotkeys.ps1` - harvests all four sources, resolves groups, applies
+- `tools/Get-Hotkeys.ps1` - harvests all five sources, resolves groups, applies
   overrides, returns objects.
 - `tools/New-HotkeySheet.ps1` - renders a self-contained HTML cheatsheet, merging
   a small notes json for hardware maps and tap/hold semantics.
+- `tools/Measure-PageFit.ps1` - renders a page headless at a given viewport and
+  reports document height, viewport height, and the class of anything
+  overflowing horizontally.
+
+## Measure a layout, do not eyeball it
+
+A cheatsheet is only glanceable if it fits on one screen, and "looks too tall"
+is not a number you can act on. Several rounds of tuning were wasted guessing a
+viewport from downscaled screenshots before measuring it directly; the fixes
+took one pass afterwards.
+
+Two failures that a screenshot hides completely:
+
+- **An element pushed clean off the page.** A long inline label with
+  `white-space:nowrap` forced its row wider than the container and shoved the
+  keycap past the right edge. Not clipped, not squeezed - absent. Only the
+  overflow probe named it.
+- **A page that "fits" because the browser default was used.** In PowerShell,
+  `--window-size=$W,$H` unquoted is parsed as an **array**, so two separate
+  arguments reach the browser, the flag is ignored, and it silently renders at
+  800x600. The first measurement claimed a 754px viewport. Quote it.
+
+When testing a page that restores its own state on load, do not inject that
+state into the markup - a class forced onto `<body>` is stripped by the page's
+own restore logic before anything is measured, and the result looks like a
+feature that does nothing. Drive the real control instead:
+
+```powershell
+(Get-Content $f -Raw) -replace '(?i)</body>',
+  '<script>document.getElementById("modtoggle").click();</script></body>'
+```
