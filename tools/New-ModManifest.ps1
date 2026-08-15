@@ -227,7 +227,7 @@ function Test-NsfwByName { param([string]$Name)
 #
 # Format (all fields optional):
 #   { "forceAdult": { "ids": [123], "names": ["exact or *wildcard*"] },
-#     "forceSafe":  { "ids": [456], "names": ["Zenitex Underwear*"] } }
+#     "forceSafe":  { "ids": [456], "names": ["*Tactical Underwear*"] } }
 $override = $null
 if (Test-Path $OverridePath) {
     try { $override = Get-Content $OverridePath -Raw | ConvertFrom-Json }
