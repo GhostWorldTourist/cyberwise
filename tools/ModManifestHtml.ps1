@@ -65,18 +65,18 @@ body{
     linear-gradient(90deg,rgba(252,238,10,.022) 1px,transparent 1px);
   background-size:44px 44px;
 }
-/* scanlines, kept faint enough to read through */
-body::after{
-  content:''; position:fixed; inset:0; pointer-events:none; z-index:9;
-  background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,transparent 1px 3px);
-  mix-blend-mode:multiply;
-}
 .wrap{max-width:1500px;margin:0 auto;padding:0 22px 80px}
 
 /* ---------- header ---------- */
 header{
   position:relative; padding:38px 0 22px; margin-bottom:6px;
-  border-bottom:1px solid var(--line);
+  border-bottom:1px solid var(--line); overflow:hidden;
+}
+/* Scanlines live ONLY here. Across a whole page of 800 cards they are actively
+   tiring to read through; confined to the masthead they still set the tone. */
+header::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.34) 0 1px,transparent 1px 3px);
 }
 h1{
   font-family:var(--mono); font-size:clamp(30px,5.5vw,60px); font-weight:700;
