@@ -3,10 +3,10 @@
 > **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
 > **Re-check after a patch:** Confirm `r6\cache\inputUserMappings.xml` is still regenerated at launch, and that CET's `bindings.json` still packs virtual-key codes at bits 48-55. Both are internal formats with no compatibility promise.
 
-Never hand-transcribe a keybind. Four systems own bindings, they disagree on
+Never hand-transcribe a keybind. Five systems own bindings, they disagree on
 format, and only one of them holds what the player actually pressed last.
 
-## The four sources, in precedence order
+## The five sources
 
 | Source | Holds | Format |
 |---|---|---|
@@ -14,6 +14,14 @@ format, and only one of them holds what the player actually pressed last.
 | `r6\cache\inputUserMappings.xml` | Input Loader's **merged** output, every mod plus vanilla, regenerated at launch | `IK_` names, `buttonGroup` resolved |
 | `red4ext\plugins\mod_settings\user.ini` | the user's **actual** rebinds | `IK_` names, keyed by `overridableUI` id |
 | `bin\x64\plugins\cyber_engine_tweaks\bindings.json` | CET hotkeys | packed VK codes |
+| `...\cyber_engine_tweaks\mods\<mod>\**\*.json` | CET mods that keep their **own** config | `IK_` names |
+
+The last one is the trap. Nothing obliges a CET mod to use CET's binding
+registry, so a key can be live in game and absent from all four other stores. On
+a large install this was three mods out of ~150 - but one of them was night
+vision, a key pressed constantly, sitting on top of two other bindings without
+appearing on any generated sheet. **A binding you cannot find is not evidence
+the key is free.**
 
 `user.ini` wins. It is applied at runtime, so it is **not** reflected in the
 cache - reading the cache alone gives you the mod author's defaults and tells
@@ -74,6 +82,29 @@ mostly noise.
 **`ConvertFrom-Json` needs `-AsHashtable` here.** The file contains keys
 differing only in case (`HideMeshes` and `hideMeshes`), and the default
 case-insensitive object conversion throws on the collision.
+
+## Reading a CET mod's own config
+
+Two conventions cover most of them:
+
+```json
+{"keyboard":{"mkbBinding_1":"IK_F3","mkbBinding_2":"IK_F4","mkbBinding_keys":1}}
+{"ToggleKey":"IK_Y","QuickToggleKey_1":"IK_None"}
+```
+
+- **`mkbBinding_keys` says how many slots are live.** The example above is bound
+  to F3 alone; `mkbBinding_2` is a leftover from a previous binding. Report the
+  chord without checking the count and you invent an F3+F4 combo that does not
+  exist.
+- **`IK_None` means unbound**, not a key named None.
+- `padBinding_*` mirrors the same shape for the controller.
+- The json key names the *slot*, not the function - `mkbBinding_1` tells you
+  nothing about what the mod does. The mod folder is the only clue, so the
+  action name has to be supplied.
+
+Depth-limit the search. `mods\` also holds mods shipping megabytes of json data,
+and a blind recurse reads all of it to find a handful of keys; `mods\*\*.json`
+plus `mods\*\config\*.json` caught every case here.
 
 ## Do not derive categories from input contexts
 

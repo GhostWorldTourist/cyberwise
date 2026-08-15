@@ -47,10 +47,12 @@ outcome. Three such cases prove nothing. Find a pair where the orders disagree.
 actual settings store (see `references/environment.md`). A mod's `.reds` or `.xml`
 declares what the author shipped, not what the user set.
 
-**Keybinds are a special case of that, and there are four stores, not one.** The
+**Keybinds are a special case of that, and there are five stores, not one.** The
 mod's `r6\input\*.xml` holds only a default; `mod_settings\user.ini` holds the
-rebind that beats it, and CET keeps its own in packed integers. Read all of them
-before stating what a key does. `references/input-bindings.md`.
+rebind that beats it; CET keeps its own in packed integers; and some CET mods
+ignore that registry and keep private json. Read all of them before stating what
+a key does - and never conclude a key is free because you could not find it.
+`references/input-bindings.md`.
 
 **Always dereference an internal name to what the mod manager calls it.** Folder
 names, TweakXL namespaces, redscript modules and archive filenames are authored by
