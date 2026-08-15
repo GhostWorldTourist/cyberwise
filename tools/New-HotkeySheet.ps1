@@ -126,10 +126,15 @@ $catHtml = foreach ($c in $order) {
       </div>
 "@
     }
+    # One oversized panel sets the height of the whole sheet - Combat's 21 rows
+    # against Tools' 7 left half the screen empty below the short panels. Split
+    # a tall panel's rows into internal columns and let it claim proportionally
+    # more width, and every panel ends up roughly the same height.
+    $big = $set.Count -gt 12
     @"
-  <section class="panel">
+  <section class="panel$(if ($big) { ' big' })">
     <h2><span class="dot $($accent[$c])"></span>$(esc $c)<b>$($set.Count)</b></h2>
-    $($rows -join '')
+    <div class="rows">$($rows -join '')</div>
   </section>
 "@
 }
@@ -185,7 +190,7 @@ $html = @"
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HOTKEYS // CYBERPUNK 2077</title>
+<title>Cyberpunk 2077 Hotkeys</title>
 <style>
 :root{
   --yellow:#fcee0a; --cyan:#00f0ff; --red:#ff003c; --green:#39ff88; --purple:#b56cff;
@@ -209,9 +214,9 @@ body{
 /* No max-width. This is meant to be parked on a second monitor, so a centred
    column on an ultrawide wastes the whole point - spreading wide buys more
    columns, which buys a shorter page, which is what "at a glance" means. */
-.wrap{margin:0 auto;padding:0 22px 40px}
+.wrap{margin:0 auto;padding:0 22px 10px}
 
-header{position:relative;padding:20px 0 12px;overflow:hidden;border-bottom:1px solid var(--line)}
+header{position:relative;padding:12px 0 9px;overflow:hidden;border-bottom:1px solid var(--line)}
 /* Scanlines are confined to the masthead. Over a page you actually read from,
    they fight the text; over a title block they just set the tone. */
 header::after{content:'';position:absolute;inset:0;pointer-events:none;
@@ -220,9 +225,9 @@ h1{font-family:var(--mono);font-size:calc(var(--fs)*1.7);font-weight:700;margin:
   letter-spacing:.09em;text-transform:uppercase;color:var(--yellow);
   text-shadow:2px 0 var(--red),-2px 0 var(--cyan)}
 h1 span{color:var(--text);text-shadow:none}
-.sub{font-family:var(--mono);font-size:calc(var(--fs)*.56);letter-spacing:.15em;color:var(--dim);margin-top:9px}
+.sub{font-family:var(--mono);font-size:calc(var(--fs)*.56);letter-spacing:.15em;color:var(--dim);margin-top:6px}
 
-.bar{position:sticky;top:0;z-index:9;padding:10px 0;
+.bar{position:sticky;top:0;z-index:9;padding:8px 0;
   background:linear-gradient(180deg,var(--bg) 76%,transparent);display:flex;gap:12px;align-items:center}
 #q{flex:1 1 auto;background:var(--panel);color:var(--text);border:1px solid var(--line);
   border-left:3px solid var(--yellow);padding:13px 16px;font-family:var(--mono);
@@ -235,12 +240,19 @@ h1 span{color:var(--text);text-shadow:none}
    it derives itself, and on a wide monitor it decided two columns were enough
    and left two thirds of the screen empty. Flex just fills the row. */
 .cols{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px}
-.panel{background:var(--panel);border:1px solid var(--line);padding:13px 16px 6px;
+/* The bottom padding has to clear the 14px corner bevel below - at 6px the
+   last row of a panel was being sliced by the clip-path. */
+.panel{background:var(--panel);border:1px solid var(--line);padding:11px 16px 14px;
   flex:1 1 400px; min-width:0;
   clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
 .panel.wide{flex-basis:100%;margin-top:14px}
+/* A tall panel splits internally and takes proportionally more width, so no
+   single category dictates the height of the page. */
+.panel.big{flex-grow:2;flex-basis:820px}
+.panel.big .rows{columns:2;column-gap:22px}
+.rows .row{break-inside:avoid}
 h2{font-family:var(--mono);font-size:calc(var(--fs)*.6);letter-spacing:.2em;text-transform:uppercase;
-  margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid var(--line);
+  margin:0 0 6px;padding-bottom:6px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:10px;color:var(--text)}
 h2 b{margin-left:auto;color:var(--dim);font-weight:400;font-size:calc(var(--fs)*.52);letter-spacing:.12em}
 .dot{width:10px;height:10px;flex:0 0 10px;transform:rotate(45deg)}
@@ -257,17 +269,24 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
    action, which doubled the height of the entire sheet for information you
    only want when you go to change something. Inline and dimmed, it costs
    nothing and the row stays scannable. */
-.row{display:flex;align-items:baseline;gap:12px;padding:5px 2px;border-bottom:1px solid #191926}
+.row{display:flex;align-items:baseline;gap:12px;padding:4px 2px;border-bottom:1px solid #191926}
 .row:last-child{border-bottom:0}
-.act{flex:1;font-size:calc(var(--fs)*.84);line-height:1.25}
+/* min-width:0 + overflow-wrap let the label give way. Without them the action
+   text's longest word sets a floor on the row width, and inside a narrow
+   column that floor plus a wide keycap ("Caps Lock") overflowed the page. */
+.act{flex:1 1 0;min-width:0;overflow-wrap:anywhere;font-size:calc(var(--fs)*.84);line-height:1.22}
+/* The mod name wraps like any other text. Held on one line it set a hard floor
+   on the row's width - "Character Customization Anywhere" is wider than a Tools
+   column - and the keycap next to it was pushed off the page. */
 .act em{font-style:normal;font-size:calc(var(--fs)*.5);color:#6a6a80;
-  font-family:var(--mono);letter-spacing:.03em;margin-left:9px;white-space:nowrap}
+  font-family:var(--mono);letter-spacing:.03em;margin-left:9px}
 .def{color:#4c4c60;margin-left:5px;font-size:calc(var(--fs)*.42);vertical-align:1px}
 .keys{white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:6px}
 .keys i{color:#4c4c60;font-style:normal;padding:0 2px;font-size:calc(var(--fs)*.62)}
 /* Thumb-button badge, replacing the mouse panel that repeated these rows. */
-.ms{font-family:var(--mono);font-size:calc(var(--fs)*.5);font-weight:700;color:var(--bg);
-  background:#5a5a72;border-radius:3px;padding:2px 5px;letter-spacing:.02em}
+.ms{font-family:var(--mono);font-size:calc(var(--fs)*.5);font-weight:700;color:#b4b4cc;
+  background:rgba(138,138,162,.14);border:1px solid rgba(138,138,162,.55);
+  border-radius:3px;padding:1px 4px;letter-spacing:.02em}
 
 /* ---- mouse ---- */
 .mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -282,11 +301,16 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
 /* ---- gestures ---- */
 .ggrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:18px}
 .ggroup h3{font-family:var(--mono);font-size:calc(var(--fs)*.57);letter-spacing:.16em;
-  text-transform:uppercase;color:var(--cyan);margin:0 0 9px;font-weight:400}
-.grow{display:flex;gap:14px;align-items:baseline;padding:9px 0;border-bottom:1px solid #191926}
+  text-transform:uppercase;color:var(--cyan);margin:0 0 6px;font-weight:400}
+.grow{display:flex;gap:14px;align-items:baseline;padding:7px 0;border-bottom:1px solid #191926}
 .gkey{flex:0 0 auto;min-width:9.2em;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+/* Luminous text on a dark ground, like every other accent on the sheet. Solid
+   cyan behind black type was the one place that inverted, and small letter-
+   spaced uppercase is exactly where that inversion reads worst. Padding drops
+   by the width of the new border, so the chip occupies the same box. */
 .ges{font-family:var(--mono);font-size:calc(var(--fs)*.5);letter-spacing:.11em;text-transform:uppercase;
-  color:var(--bg);background:var(--cyan);padding:2px 7px;white-space:nowrap}
+  color:var(--cyan);background:rgba(0,240,255,.12);border:1px solid rgba(0,240,255,.45);
+  padding:1px 6px;white-space:nowrap}
 .gdoes{flex:1;font-size:calc(var(--fs)*.79);line-height:1.3}
 .steps{display:block;margin-top:5px;font-size:calc(var(--fs)*.58);color:var(--dim);font-family:var(--mono)}
 .steps b{font-weight:400;color:#a8a8bd} .steps i{font-style:normal;color:#4c4c60;padding:0 5px}
@@ -301,8 +325,8 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
   color:var(--dim);font-weight:400;margin-right:7px}
 .cw em{font-style:normal;color:var(--dim);font-size:calc(var(--fs)*.55);font-family:var(--mono)}
 
-footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
-  font-family:var(--mono);font-size:calc(var(--fs)*.55);color:#4c4c60;line-height:1.85}
+footer{margin-top:14px;padding-top:9px;border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:calc(var(--fs)*.5);color:#4c4c60;line-height:1.5}
 .hide{display:none !important}
 
 @media print{
@@ -319,7 +343,7 @@ footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
 <div class="wrap">
 
 <header>
-  <h1>Hot<span>keys</span></h1>
+  <h1>Cyberpunk 2077 <span>Hotkeys</span></h1>
   <div class="sub">$subline</div>
 </header>
 
