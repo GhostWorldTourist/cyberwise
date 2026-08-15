@@ -3,15 +3,26 @@
 > **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
 > **Re-check after a patch:** Mod manager behaviour rather than game behaviour, so it drifts with Vortex/MO2 releases. The redscript compile-test invocation is the part most likely to change with a scc update.
 
+Every path here is **relative to the game install root**. Steam, GOG and Epic put
+that root in different places, users move it, and it is not always on C:. Get the
+real root once - from the manager, from the launcher, or by asking - and never
+assume a drive letter.
+
 ## Read the user's real settings, not a mod's defaults
 
-`red4ext\plugins\mod_settings\user.ini` holds every Mod Settings override as
-`[Module.Class]` sections with `key = value`. On a large install this runs to
-thousands of entries.
+If the Mod Settings framework is installed, `red4ext\plugins\mod_settings\user.ini`
+holds the user's overrides as `[Module.Class]` sections with `key = value`. On a
+heavily modded install it runs to thousands of entries; on a small one it may be
+short or missing. **A missing key means "never overridden", not "not configurable"** -
+the shipped default is then what applies.
 
 **Check it first for any "what is X set to" or "which key does Y" question.**
 Quoting a shipped default has caused real errors - one mod's XML declared a hotkey
 of `IK_O` while the user's actual binding in `user.ini` was `IK_Pause`.
+
+Not every mod uses Mod Settings. Others keep configuration in a CET mod's own
+`.json`, in a `.reds` constant, or in a menu of their own. There is no single
+settings store; work out which one the mod in question uses before quoting a value.
 
 ## Establish how the install is assembled FIRST
 
@@ -24,30 +35,53 @@ trusting anything on disk.**
 
 | look for | means |
 |---|---|
-| `__folder_managed_by_vortex` marker files; a staging root at `%APPDATA%\Vortex\<game>\mods`; deployed files with **link count 2** | Vortex |
+| `__folder_managed_by_vortex` marker files; a staging root full of `<Display Name>-<NexusID>-<version>-<timestamp>` folders; deployed files with **link count 2** | Vortex |
 | `ModOrganizer.ini`; mods under MO2's own `mods\` tree; a game directory that looks suspiciously bare while the game is closed | MO2 |
 | files simply present, no markers, no staging root, no deployment step | manual |
+
+Vortex's staging root defaults to `%APPDATA%\Vortex\<game>\mods`, but it is
+relocatable and frequently relocated - hardlink deployment requires it to sit on
+the same volume as the game. MO2's `mods\` tree likewise lives wherever the
+instance was created. **Ask for the path; do not assume one.**
+
+These modes are also not exclusive. A managed install routinely carries
+hand-dropped files alongside the managed ones, plus files mods write at runtime, so
+"the manager doesn't list it" is not evidence a file isn't loaded.
 
 When in doubt, ask. It is one question and it changes the entire approach.
 
 ### Manual install
 
 The simplest case and the one everything here assumes by default: files are
-physically in the game directory and what you see is what the game loads.
+physically in the game directory and what you see is what the game loads. It is
+not a beginners-only setup - large hand-built load orders exist, and the techniques
+here scale to them.
 
 Caveats: there is no staging copy, so **any hand-edit you make is the only copy** -
 back it up before editing. And there is no manifest, so nothing can tell you which
-mod a given file came from. Filename and the mod's own folder are all you have.
+mod a given file came from: a mod's files are merged into the game's own directory
+tree, so grouping-by-folder only works where the mod happened to ship a folder of
+its own. Filename and that folder are all you have.
+
+Because there is no manifest, an uninstall is a manual file-by-file removal, and
+leftovers from a half-removed mod are a routine cause of "I already uninstalled
+that". Keep the downloaded archives - their file lists are the only record of what
+each mod put where.
 
 ### Vortex
 
-- **Deployment is by hardlink.** Editing a deployed file also edits the staging
-  copy. Useful for patching, but a mod reinstall reverts hand-patches.
+- **Deployment is by hardlink** *on the default deployment method*. Editing a
+  deployed file then also edits the staging copy. Useful for patching, but a mod
+  reinstall reverts hand-patches. Vortex can also be set to symlink or move
+  deployment; under those the next two bullets do not hold, so **check the game's
+  deployment method before relying on either**.
 - **Write through the link.** Tools that replace a file by delete-and-recreate break
   the hardlink and desynchronise staging. Prefer in-place writes.
-- **Link count tells you the origin.** A deployed file with link count 2 is
-  manager-managed. Link count 1 means it was created in-game or installed manually -
-  which is why a purge does not remove it (it is not in the deployment manifest).
+- **Link count tells you the origin.** Under hardlink deployment, a deployed file
+  with link count 2 is manager-managed. Link count 1 means it was created in-game or
+  installed manually - which is why a purge does not remove it (it is not in the
+  deployment manifest). This is the fastest way to explain a file the manager
+  denies owning.
 - **Staging folder names lie about versions.** Updates happen *in place*, keeping
   the original folder name while replacing files. Never infer a version from the
   folder name; check the RED4ext log for plugins, or compare against the download
@@ -88,10 +122,20 @@ If not, you are outside the VFS and must change approach.
 
 ## Files created in-game are not backed up by the manager
 
-Presets, saved configurations and script libraries written by mods at runtime exist
-**only** in the deployed folder, with no staging copy. They survive a purge (not
-being in the manifest) but are lost on a mod reinstall or a manual clean. Back
-these up somewhere outside the game directory if they represent real work.
+Presets, saved configurations and script libraries written by mods at runtime are
+created after deployment, so no manager has a copy of them.
+
+- **Vortex:** they exist only in the deployed game folder. They survive a purge
+  (not being in the deployment manifest) but are lost on a mod reinstall or a
+  manual clean.
+- **MO2:** writes made from inside the VFS are normally redirected into the
+  **Overwrite** folder rather than into the mod that prompted them, so they exist
+  but belong to no mod. Look there before concluding a preset was lost.
+- **Manual:** they sit alongside the mod's own files and are indistinguishable
+  from them, so a "delete the mod folder" uninstall takes them with it.
+
+Either way: back these up somewhere outside the game directory if they represent
+real work.
 
 ## Resolving an internal name back to a findable mod
 
@@ -107,9 +151,15 @@ the mod's public name.
 | MO2 | the `mods\` subfolder name is the name shown in the UI (set at install, so user-edited) |
 | manual | **no mapping exists.** The folder name is all there is - say so rather than guessing |
 
-For a file rather than a folder, find which staging folder contains that filename.
-That single step answers "which mod is this from" far more reliably than reasoning
-about the name.
+The Vortex pattern holds for mods installed from Nexus. Anything added from a
+local archive, or dragged in by hand, can carry any folder name at all - so treat
+a name that does not match the pattern as "unknown provenance", not as a parse
+failure.
+
+For a file rather than a folder, find which staging folder (or MO2 mod folder)
+contains that filename. That single step answers "which mod is this from" far more
+reliably than reasoning about the name. With no manager there is no such index, and
+the honest answer is that the file cannot be traced from disk alone.
 
 ### Why it is worth doing even when you think you know
 
@@ -137,8 +187,10 @@ than last Tuesday" will therefore miss most of a fresh deploy and is not a relia
 way to answer "what changed".
 
 What is reliable: diff the archive list against a known-good `modlist.txt`, or read
-the manager's own install dates. Vortex staging folder names carry an install
-timestamp as their trailing number.
+the manager's own install dates (Vortex staging folder names carry an install
+timestamp as their trailing number; MO2 shows an install date per mod). With no
+manager, the list diff is the only option, which is a good reason to keep a copy
+of the last known-good one.
 
 The exception that misleads further: logs and caches under `red4ext\plugins\*` *do*
 update on every run, so a timestamp sweep will surface those and make it look like
@@ -159,7 +211,9 @@ mods appeared installed, enabled, and did nothing.
 
 Check `r6\logs\redscript_*.log` for `Compilation complete` and a plausible source
 reference count. This should be among the first things verified on any install where
-"a script mod isn't working".
+"a script mod isn't working". The log is written by the game at runtime, so on a
+virtualising install look for it wherever that manager redirects runtime writes
+(MO2: Overwrite) rather than concluding it was never produced.
 
 Causes seen, none of them obvious:
 
@@ -186,8 +240,9 @@ A real case: one download was the full package (23 files - a script plus 20 twea
 files and an archive), while the "alternative" was 2 files (a manifest and a
 *different build* of the same script). Disabling the first to use the second
 silently dropped 20 tweaks and an archive that nothing else supplied. The correct
-setup was to install **both** and let a manager conflict rule decide which copy of
-the shared script survived.
+setup was to install **both** and decide explicitly which copy of the shared script
+survived - a conflict rule in Vortex, mod priority in MO2, or, installing by hand,
+keeping only the intended copy of the contested file.
 
 When two builds of the same filename exist, **file size is the identity tell**.
 Record the byte counts; if the number flips after a redeploy, behaviour changed
@@ -205,7 +260,8 @@ recommending anyone uninstall one.
 
 A large load order routinely logs dozens of TweakXL errors that are upstream author
 bugs with no crash risk. Do not treat the count as a health metric or try to drive
-it to zero.
+it to zero. (On a small load order the reverse holds: a handful of mods producing a
+page of errors is worth actually reading, because there is nothing else to blame.)
 
 One genuinely confusing pattern: **which records fail can vary between launches**,
 because another mod is reshaping the same records and the outcome is order-dependent.
@@ -213,14 +269,18 @@ A varying error list is not nondeterminism in the game; it is load-order interac
 
 ## Compile-testing redscript without launching the game
 
+`scc.exe` ships with redscript and lives under the game root, so this only exists
+on an install that has redscript at all:
+
 ```
-engine\tools\scc.exe -compile <game>\r6\scripts -compilePathsFile <paths> \
+<game>\engine\tools\scc.exe -compile <game>\r6\scripts -compilePathsFile <paths> \
     -customCacheDir <dir> -outputCacheFile <file>
 ```
 
 `<paths>` must list **only the extra script directories** - every directory under
 `red4ext\plugins` that contains `.reds` (Codeware, TweakXL, ArchiveXL, mod_settings
-and similar).
+and similar). Enumerate them; do not hardcode a list, since which frameworks are
+installed varies per install.
 
 - **Do not also list `r6/scripts` in the paths file.** It double-compiles and
   produces thousands of bogus `SYM_REDEFINITION` errors.
@@ -231,9 +291,14 @@ Caution: `scc.exe` writes into `r6\logs` and rotates at 5 files, destroying olde
 `redscript_*.log` history. Back that folder up first if it matters. It also pops a
 GUI dialog on failure, so do not run it unattended.
 
+**On a virtualising install this must be run through the manager.** Started from a
+plain shell, it compiles a game directory the mods are not in, and reports a clean
+build that means nothing.
+
 ## PowerShell traps
 
-Both of these produced convincing wrong answers before being caught:
+The tooling shipped with this skill is PowerShell, and both of these produced
+convincing wrong answers before being caught:
 
 - **`Test-Path` without `-LiteralPath`** treats `[` and `]` in mod filenames as
   wildcards. On a large load order this reports a handful of phantom missing files.

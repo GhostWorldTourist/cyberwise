@@ -34,6 +34,10 @@
 #       can be live in game and absent from every store above. Rare but not
 #       negligible - and the ones that do it are toggles you press constantly.
 #
+# All five are optional. A load order of nothing but .archive files has none of
+# them, and the correct output for that install is no rows at all - every read
+# below is guarded, and the script says so rather than looking broken.
+#
 # ---------------------------------------------------------------------------
 # The CET packing, since it is undocumented and cost some time
 # ---------------------------------------------------------------------------
@@ -50,14 +54,113 @@
 
 [CmdletBinding()]
 param(
-    [string] $GameRoot = 'C:\Games\Steam\steamapps\common\Cyberpunk 2077',
+    # Where Cyberpunk 2077 is installed. Left empty, the install is located from
+    # the storefront records on this machine - see Resolve-GameRoot below.
+    [string] $GameRoot,
     [switch] $IncludeGamepad
 )
+
+# ============================================================= install lookup ==
+
+# Every store this script reads is a path under the game root, and no two
+# storefronts record that path the same way. Probe each one's own registry key
+# or manifest, confirm the candidate really holds the game executable, and say
+# so plainly when nothing is found - a wrong root reads as "this install has no
+# hotkeys", which is the least useful way to be wrong.
+function Resolve-GameRoot {
+    $candidates = New-Object System.Collections.Generic.List[string]
+    if ($env:CP2077_GAMEROOT) { $candidates.Add($env:CP2077_GAMEROOT) }
+
+    # -- Steam: the client's install path, then every library folder it knows --
+    $steamRoots = foreach ($k in 'HKCU:\Software\Valve\Steam',
+                                 'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam',
+                                 'HKLM:\SOFTWARE\Valve\Steam') {
+        (Get-ItemProperty -Path $k -Name InstallPath -ErrorAction SilentlyContinue).InstallPath
+    }
+    # [IO.Path]::Combine rather than Join-Path throughout: Join-Path resolves the
+    # drive qualifier through the PowerShell provider and hard-errors on a path
+    # whose drive does not exist, which is exactly what a stale library entry or
+    # an unplugged external drive looks like.
+    foreach ($s in ($steamRoots | Where-Object { $_ } | Select-Object -Unique)) {
+        $candidates.Add([IO.Path]::Combine($s, 'steamapps\common\Cyberpunk 2077'))
+        # libraryfolders.vdf lists the other drives games may live on. It is
+        # Valve's own text format rather than json, and the paths in it have
+        # their backslashes doubled - unescape or the Join-Path below is bogus.
+        $vdf = [IO.Path]::Combine($s, 'steamapps\libraryfolders.vdf')
+        if (Test-Path -LiteralPath $vdf) {
+            $raw = Get-Content -LiteralPath $vdf -Raw -ErrorAction SilentlyContinue
+            foreach ($m in [regex]::Matches([string]$raw, '"path"\s+"([^"]+)"')) {
+                $lib = $m.Groups[1].Value -replace '\\\\', '\'
+                $candidates.Add([IO.Path]::Combine($lib, 'steamapps\common\Cyberpunk 2077'))
+            }
+        }
+    }
+
+    # -- GOG Galaxy: one registry key per installed game, keyed by product id --
+    foreach ($root in 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\Games',
+                      'HKLM:\SOFTWARE\GOG.com\Games') {
+        foreach ($g in (Get-ChildItem -Path $root -ErrorAction SilentlyContinue)) {
+            $p = Get-ItemProperty -Path $g.PSPath -ErrorAction SilentlyContinue
+            if ($p.gameName -like '*Cyberpunk*' -and $p.path) { $candidates.Add([string]$p.path) }
+        }
+    }
+
+    # -- Epic: one .item manifest per installed title, under ProgramData -------
+    $epic = [IO.Path]::Combine([string]$env:ProgramData, 'Epic\EpicGamesLauncher\Data\Manifests')
+    if (Test-Path -LiteralPath $epic) {
+        foreach ($f in (Get-ChildItem -LiteralPath $epic -Filter *.item -File -ErrorAction SilentlyContinue)) {
+            try { $j = Get-Content -LiteralPath $f.FullName -Raw | ConvertFrom-Json } catch { continue }
+            if ($j.DisplayName -like '*Cyberpunk*' -and $j.InstallLocation) { $candidates.Add([string]$j.InstallLocation) }
+        }
+    }
+
+    # -- last resort: each storefront's default folder on every fixed drive.
+    # A handful of directory probes, not a scan.
+    foreach ($d in ([IO.DriveInfo]::GetDrives() | Where-Object { $_.DriveType -eq 'Fixed' -and $_.IsReady })) {
+        foreach ($rel in 'Program Files (x86)\Steam\steamapps\common\Cyberpunk 2077',
+                         'Steam\steamapps\common\Cyberpunk 2077',
+                         'SteamLibrary\steamapps\common\Cyberpunk 2077',
+                         'Games\Steam\steamapps\common\Cyberpunk 2077',
+                         'GOG Games\Cyberpunk 2077',
+                         'Program Files (x86)\GOG Galaxy\Games\Cyberpunk 2077',
+                         'Games\GOG Games\Cyberpunk 2077',
+                         'Program Files\Epic Games\Cyberpunk2077',
+                         'Epic Games\Cyberpunk2077',
+                         'Games\Cyberpunk 2077') {
+            $candidates.Add([IO.Path]::Combine($d.RootDirectory.FullName, $rel))
+        }
+    }
+
+    foreach ($c in ($candidates | Where-Object { $_ } | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath ([IO.Path]::Combine($c, 'bin\x64\Cyberpunk2077.exe'))) { return $c }
+    }
+    return $null
+}
+
+# An explicit -GameRoot is never second-guessed by detection: it either exists
+# and is used, or it is an error. Detection only runs when nothing was given.
+if (-not $GameRoot) {
+    $GameRoot = Resolve-GameRoot
+    if (-not $GameRoot) {
+        throw ("Could not find a Cyberpunk 2077 install (checked the Steam, GOG and Epic " +
+               "records on this machine, plus their default folders). " +
+               "Pass -GameRoot 'X:\path\to\Cyberpunk 2077', or set CP2077_GAMEROOT.")
+    }
+}
+if (-not (Test-Path -LiteralPath $GameRoot)) {
+    throw "no such folder: '$GameRoot'"
+}
+if (-not (Test-Path -LiteralPath ([IO.Path]::Combine($GameRoot, 'bin\x64\Cyberpunk2077.exe')))) {
+    # Read it anyway - it may be a copy of the mod folders rather than a full
+    # install - but say so, because the likelier explanation is a wrong path.
+    Write-Warning "no bin\x64\Cyberpunk2077.exe under '$GameRoot' - reading it anyway"
+}
+Write-Verbose "game root: $GameRoot"
 
 # =========================================================== key name tables ==
 
 $ikPretty = @{
-    'IK_SingleQuote'='˝'; 'IK_Semicolon'=';'; 'IK_Comma'=','; 'IK_Period'='.'
+    'IK_SingleQuote'="'"; 'IK_Semicolon'=';'; 'IK_Comma'=','; 'IK_Period'='.'
     'IK_Slash'='/'; 'IK_Backslash'='\'; 'IK_LBracket'='['; 'IK_RBracket'=']'
     'IK_Equals'='='; 'IK_Minus'='-'; 'IK_Tilde'='`'; 'IK_CapsLock'='Caps Lock'
     'IK_MiddleMouse'='Middle Click'; 'IK_RightMouse'='Right Click'
@@ -100,7 +203,7 @@ $vk = @{
     20='Caps Lock';27='Esc';32='Space';33='Page Up';34='Page Down';35='End'
     36='Home';37='Left';38='Up';39='Right';40='Down';45='Insert';46='Delete'
     186=';';187='=';188=',';189='-';190='.';191='/';192='`'
-    219='[';220='\';221=']';222='˝'
+    219='[';220='\';221=']';222="'"
 }
 0..9   | ForEach-Object { $vk[48 + $_] = "$_" }
 65..90 | ForEach-Object { $vk[$_] = [string][char]$_ }
@@ -122,6 +225,11 @@ function Format-VK {
 
 # Input-loader filenames are terse or inconsistent; give them the names the user
 # would actually recognise in their mod manager.
+#
+# This is a courtesy lookup for mods commonly seen in the wild, not a required
+# list. Anything missing falls through Resolve-ModName, which splits the
+# camelCase filename ("VehicleSecurityRework" -> "Vehicle Security Rework"), so
+# an unrecognised mod still reads sensibly - add entries only where that fails.
 $modNames = @{
     'AlwaysFirstEquip'='Always First Equip'; 'auto_drive_enhanced'='Auto Drive Enhanced'
     'ChipwareExpansion'='Chipware Expansion'; 'DialogueHistory'='Dialogue History'
@@ -157,6 +265,9 @@ function Resolve-ModName { param([string]$n) if ($modNames.ContainsKey($n)) { $m
 # case-insensitive, so a 'UI|Menu' pattern matches the "ui" inside
 # "AlwaysFirstEq-ui-p". Which situation a key belongs to is a judgement about
 # the mod, so make it one.
+#
+# Partial by design: a mod that is not listed lands in 'World', which is a dull
+# but never wrong answer. Extend it for whatever the install actually has.
 $modBucket = @{
     'Enhanced Vehicle System'='Driving'; 'Auto Drive Enhanced'='Driving'
     'Vehicle Security Rework'='Driving'
@@ -192,8 +303,9 @@ $actionNames = @{
     'Vehicle CycleWindow'='Cycle windows'; 'Vehicle HeadlightsCall'='Flash headlights'
     'Vehicle ToggleCustomLights'='Toggle individual lights'
     'immersive time skip'='Skip time'
-    # Three separate toggles with near-identical names. LHUD_Toggle ships in an
-    # optional second input file and is the one still on its mod default.
+    # Three separate toggles with near-identical names, from the same mod;
+    # LHUD_Toggle ships in an optional second input file, so an install may have
+    # two of these and not the third.
     'LHUD Global'='Toggle whole HUD'; 'LHUD Minimap'='Toggle minimap'
     'LHUD Toggle'='Simple HUD toggle'
     'mark to sell'='Mark item to sell'; 'mark similar to sell'='Mark all similar to sell'
@@ -400,6 +512,13 @@ if (Test-Path -LiteralPath $cetModsDir) {
 
 # ================================================================== finalise ==
 
+if ($rows.Count -eq 0) {
+    # None of the five stores existed, or none of them held a binding. That is
+    # the correct answer for an archive-only load order: archives declare no
+    # keys, and CET / RED4ext / Input Loader are only present if a mod needs them.
+    Write-Warning "no bindings found under '$GameRoot' - normal for a load order with no CET, RED4ext or r6\input mods"
+}
+
 $final = $rows
 if (-not $IncludeGamepad) { $final = $rows | Where-Object { $_.Key } }
 
@@ -412,3 +531,4 @@ $final = $final |
     }
 
 return @($final | Sort-Object Context, Mod, Action)
+

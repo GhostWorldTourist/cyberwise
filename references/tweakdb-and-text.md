@@ -5,9 +5,12 @@
 
 ## Never guess a record ID
 
-`r6\cache\modded\tweakdb_ep1.str` is a plain string table containing every TweakDB
-record and flat name - hundreds of thousands of entries. Extract printable ASCII
-runs and you have a searchable ID list.
+TweakXL writes a string table under `r6\cache\modded\` - a `.str` file whose exact
+name carries an expansion suffix on a Phantom Liberty install (`tweakdb_ep1.str`).
+It is a plain string table containing every TweakDB record and flat name - hundreds
+of thousands of entries. Extract printable ASCII runs and you have a searchable ID
+list. It only exists once TweakXL has run, so if it is not there, check that TweakXL
+is installed and the game has been launched at least once since.
 
 This matters because **CDPR's naming is genuinely inconsistent**:
 `Items.ContagionLvl2Program` but `Items.OverheatProgramLvl2`. A guessed ID produces
@@ -63,9 +66,12 @@ curve lookup, not a value.
 
 ## Finding game text
 
-Extract `base\localization\en-us\onscreens\onscreens_final.json` from
-`lang_en_text.archive` and serialize it. It contains **UI strings, shards, emails,
-journal entries and computer text** - tens of thousands of entries.
+Extract `base\localization\<locale>\onscreens\onscreens_final.json` from that
+locale's text archive and serialize it - `en-us` inside `lang_en_text.archive` for
+English, and one such pair per installed language. It contains **UI strings, shards,
+emails, journal entries and computer text** - tens of thousands of entries. If the
+user quoted text from the game in another language, search that language's archive,
+not the English one.
 
 Two traps:
 
@@ -77,4 +83,5 @@ Two traps:
   it entirely. Search the `femaleVariant` values, not just the keys.
 
 Entry structure is `femaleVariant`, `maleVariant`, `primaryKey`, `secondaryKey`.
-The file is large enough that a line-by-line read beats `ConvertFrom-Json`.
+The file is large enough that a streaming line-by-line read beats loading the whole
+thing into a JSON parser (in PowerShell, beats `ConvertFrom-Json` by a wide margin).

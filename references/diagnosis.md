@@ -1,7 +1,7 @@
 # Diagnosing a broken install
 
 > **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
-> **Re-check after a patch:** Log paths move when RED4ext, ArchiveXL, TweakXL or CET update. Verify each path exists before concluding a log is empty rather than relocated.
+> **Re-check after a patch:** Log paths move when RED4ext, ArchiveXL, TweakXL or CET update. Verify each path exists before concluding a log is empty rather than relocated - or simply absent because that framework was never installed here.
 
 ## Which log says what
 
@@ -14,6 +14,19 @@
 | `r6\logs\scripting.log` | runtime script errors |
 | `bin\x64\plugins\cyber_engine_tweaks\cyber_engine_tweaks.log` | CET framework |
 | `...\cyber_engine_tweaks\mods\<name>\<name>.log` | per-CET-mod errors, including ones thrown outside your own pcall |
+
+**Every path above is relative to the game root** - the folder containing
+`bin\x64\Cyberpunk2077.exe`, wherever this particular Steam, GOG or Epic install
+happens to live. Establish that root once, ask if it is not obvious, and join
+everything to it. Never assume a drive letter or a library path.
+
+**A missing log is not a silent log.** None of these frameworks ship with the game:
+REDscript, RED4ext, CET, ArchiveXL and TweakXL are separate downloads, usually
+pulled in as dependencies by whichever mods need them, and no install has all of
+them by default. A list of twenty archive-only retextures legitimately has none,
+and `r6\logs\` may not exist at all. Work out which frameworks are actually present
+before reading meaning into an absent log - and before proposing a fix that assumes
+one is there.
 
 **ArchiveXL's log is the one people forget.** A sector patch that fails logs
 "No patches have been applied" and reverts *everything* in that file - so a single
@@ -46,8 +59,9 @@ its REDmod version) and an appearance mod's facial/paperdoll archives.
 groups, but reproduce first. A single hang is not proof.
 
 **Game reaches gameplay then dies after ~30-60 seconds with nothing in any log** -
-suspect an incompatible ReShade add-on before suspecting game mods. See
-`reshade.md`.
+if ReShade is installed, suspect an incompatible add-on there before suspecting
+game mods. See `reshade.md`. (Ask whether ReShade is in play; it is an injector
+installed outside any mod manager, so it will not appear in a mod list.)
 
 **Mod installed, no error anywhere, no effect** - almost always load order (inert
 archive) or a `.xl` that failed silently. Check ArchiveXL's log, then check whether
@@ -80,6 +94,8 @@ Always re-read the ArchiveXL log after editing a sector patch.
   alphabetical halves - related mods fail together.
 - When a suspect is found, confirm by **re-enabling it alone**, not just by the
   absence of the fault.
+- On a short mod list, do not halve anything - start from what changed most
+  recently. Full method and how it scales up and down: `bisecting.md`.
 
 ## Things that look like mod bugs and are not
 

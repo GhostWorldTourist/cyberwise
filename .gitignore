@@ -1,2 +1,13 @@
 .DS_Store
 Thumbs.db
+
+# Generated reports list somebody's actual installed mods, hardware and paths.
+# The tools default to writing these outside the repo, but a run from the repo
+# root would land them here.
+mod-manifest*.md
+mod-manifest*.html
+cp2077-system-profile*.md
+cp2077-system-profile*.html
+cp2077_hotkeys_cheatsheet*.html
+nsfw-overrides.json
+.nexus-cache.json

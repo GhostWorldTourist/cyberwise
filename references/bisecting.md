@@ -1,7 +1,7 @@
 # Bisecting a broken load order
 
 > **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
-> **Re-check after a patch:** Method rather than data - largely patch-independent. The one thing to recheck is where your manager stages files, since the parking advice assumes same-volume moves.
+> **Re-check after a patch:** Method rather than data - largely patch-independent. The one thing to re-check is where files are staged on the install in front of you, if anything stages them, since the parking advice assumes same-volume moves.
 
 Cyberpunk load times make bisection expensive. Getting the method wrong turns a
 two-hour job into a two-day one. Everything here was learned during a bisect that
@@ -23,6 +23,45 @@ because there was nothing deterministic there.
 culprit by elimination when the underlying evidence is one unreproduced event is
 not.
 
+## Match the method to the size of the list
+
+Bisection is what you reach for when the suspect set is too large to inspect. It is
+not a ritual, and below a certain size it is *slower* than just looking. The costs
+quoted throughout this file come from large installs; scale them down freely.
+
+**At every size, the first question is "what changed", not "which half".** A fault
+that appeared right after one install has a suspect list of one, and no amount of
+halving beats reading the log and reverting that.
+
+- **Under ~20 mods** - do not bisect at all. Read the logs (`diagnosis.md`), then
+  disable the two or three most recent additions. A binary search here is ~5
+  launches to find something you could have named in zero.
+- **Dozens to low hundreds** - skip straight to the layer pass below. Four launches
+  classify the fault by *kind* of mod, which on a list this size often names the
+  culprit outright without any halving.
+- **Many hundreds** - bisect properly and budget for it. Around 900 items is ~10
+  launches for a clean binary search, and Cyberpunk's load time makes every wasted
+  round expensive.
+
+The rules - reproduce first, one variable per test, validate against the full load
+order - hold at every size. Only the search strategy scales.
+
+## Disabling versus parking
+
+**If there is a mod manager, prefer its own enable/disable.** It is reversible, it
+records what you did, and it will not desynchronise the manager's picture of the
+install. Two manager-specific reasons this matters:
+
+- **Vortex deploys by hardlink.** Moving a deployed file out of the game directory
+  leaves the staging copy in place and the deployment out of date, so a later
+  deployment can quietly restore it in the middle of a test.
+- **MO2 virtualises.** With the game closed the archives may not physically be in
+  `archive\pc\mod` at all, so there may be nothing to move - and moving whatever
+  *is* there tests nothing. Disable in MO2's own UI. See `environment.md`.
+
+Park files by hand when there is no manager, or when you need finer granularity
+than the manager offers - half of one mod's archives, say.
+
 ## Where to park files
 
 **Park inside the game folder** - e.g. `<game>\_bisect_parked\`.
@@ -31,16 +70,20 @@ not.
 - Nothing cleans it.
 
 **Do not park in `%TEMP%`.** Temp sweepers run on their own schedule and will
-delete your parked mods mid-procedure. This cost 208 staged archives and a full
-redeploy in one session.
+delete your parked mods mid-procedure. In one session this cost 208 staged archives
+and a full redeploy.
 
 ## Order of operations
 
-1. **Purge everything.** Confirms the fault is mod-related at all before you spend
-   any launches narrowing it.
-2. **Park whole layers**, not individual files: `r6\scripts`, CET `mods`, all
+1. **Get to a clean game first.** Turn everything off and launch. This confirms the
+   fault is mod-related at all before you spend any launches narrowing it, and
+   occasionally ends the investigation because it still happens. (Vortex calls this
+   a purge; MO2 can disable at profile level; a manual install moves the folders
+   aside.)
+2. **Disable whole layers**, not individual files: `r6\scripts`, CET `mods`, all
    `*.xl`, all `*.archive`. Four launches tells you which *kind* of mod is at fault
-   and halves the search space cheaply.
+   and halves the search space cheaply. Skip any layer the install does not have -
+   an archives-only list has three of these to test, not four.
 3. **Then binary search within the guilty layer.**
 
 `.xl` files deserve early suspicion for anything that only manifests on a **new

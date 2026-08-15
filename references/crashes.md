@@ -48,13 +48,19 @@ something useful though: it was a hard process death, not a clean exit.
 
 ## Measuring memory without fooling yourself
 
-**Startup genuinely ramps 0 to ~14 GB of GPU memory in about two minutes.** Sampling
-once during that ramp and once after it, then reporting the difference as a leak,
-is an easy and confident mistake. It was made here and reported as "≈1.5 GB/min
-sustained growth", which was pure measurement error.
+Only worth doing if memory is actually a suspect - `isOom: true`, or a crash that
+only shows up deep into long sessions. Do not open a memory investigation by
+default. If you do measure, the traps below are easy ones to fall into.
+
+**Startup genuinely ramps GPU memory hard, for minutes.** On one heavily modded
+install it climbed from 0 to ~14 GB in about two minutes; the figure and the
+duration will differ with the card, the settings and the mod list, but the shape
+does not. Sampling once during that ramp and once after it, then reporting the
+difference as a leak, is an easy and confident mistake - in that investigation it
+produced a reported "≈1.5 GB/min sustained growth" that was pure measurement error.
 
 To claim a leak you need a **trend across a long session**, not two points. A
-40-minute capture in the same investigation showed memory plateauing after the load
+40-minute capture on the same install showed memory plateauing after the load
 ramp and then oscillating with no trend for 27 minutes - healthy 15 seconds before
 death, with `isOom: false` agreeing.
 
@@ -69,17 +75,23 @@ Other traps in the same area:
 
 ## Running a watcher
 
-Sample every 15-30 s to CSV: working set, private bytes, per-process and adapter
-GPU memory, free RAM, handle count, thread count. Write a marker when the process
-disappears, and copy `CrashInfo.json` on death before it is overwritten.
+No such tool ships with this skill and none is standard - if you want one you write
+it, which is a few dozen lines. What it needs to do: sample every 15-30 s to CSV
+(working set, private bytes, per-process and adapter GPU memory, free RAM, handle
+count, thread count), write a marker when the process disappears, and copy
+`CrashInfo.json` on death before the next crash overwrites it.
 
-**`Start-Job` does not work for this.** Background jobs are children of the calling
-PowerShell session and die when the call returns. Launch detached:
+**If you build it in PowerShell, `Start-Job` does not work.** Background jobs are
+children of the calling PowerShell session and die when the call returns. Launch
+detached instead:
 
 ```powershell
 Start-Process powershell.exe -WindowStyle Hidden -ArgumentList `
-    '-NoProfile','-ExecutionPolicy','Bypass','-File',"<path>\watch.ps1","-Out","<csv>"
+    '-NoProfile','-ExecutionPolicy','Bypass','-File',"<your-watcher.ps1>","-Out","<csv>"
 ```
+
+The same applies to any agent-launched helper: if it is a child of the session that
+started it, it dies with that session.
 
 ## Single-variable testing
 
@@ -88,7 +100,7 @@ mod changes. Change one at a time and record which. In one session a mod setting
 test and a driver update were nearly run together, which would have made both
 results uninterpretable.
 
-Prefer tests that are instant and reversible. An in-game Mod Settings toggle beats
+Prefer tests that are instant and reversible. An in-game mod-settings toggle beats
 a redeploy; a graphics setting beats a driver rollback.
 
 ## Reading mod source is inference, not measurement

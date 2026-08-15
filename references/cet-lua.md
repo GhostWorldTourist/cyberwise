@@ -22,9 +22,13 @@ Every one of these has produced a confusing failure:
 
 Pasted multi-line code arrives concatenated into one line, producing errors like
 `sol: syntax error ... '=' expected near 'not'`. Anything longer than a single
-statement must be **read from a file**, not pasted. A small script-runner mod that
-`loadstring`s files from disk is worth building early - it turns every subsequent
-investigation from guesswork into iteration.
+statement must be **read from a file**, not pasted.
+
+If an investigation is going to need more than a couple of probes, write a throwaway
+CET mod that `loadstring`s a file from disk and run everything through it. Nothing
+like this ships with CET or with this skill - it is a dozen lines you write once -
+but it turns every subsequent probe from a one-shot paste into an edit-and-rerun
+loop.
 
 Related: errors escaping before a flush leave a **0-byte output file and no clue**.
 Flush per line. CET's per-mod log (`...\mods\<name>\<name>.log`) catches errors
@@ -71,9 +75,11 @@ Send the user to a ripperdoc. Note also that the *slot* is
 `gamedataEquipmentArea` enum member - different identifiers, easy to confuse, and
 mixing them up fails silently.
 
-**For screenshots, change the appearance rather than the hardware.** Arm cyberware
-visuals are appearance entries (`holstered_default_tpp`, `holstered_strong_tpp`,
-`holstered_nanowire_tpp`), independent of what is installed.
+**If the goal is how the arms look rather than what they do, change the appearance
+instead of the hardware.** Arm cyberware visuals are appearance entries
+(`holstered_default_tpp`, `holstered_strong_tpp`, `holstered_nanowire_tpp`),
+independent of what is actually installed - so a look can be set from the console
+even though the cyberware itself cannot.
 
 ## Quest facts
 

@@ -15,7 +15,9 @@
 
 [CmdletBinding()]
 param(
-    [string] $GameRoot = 'C:\Games\Steam\steamapps\common\Cyberpunk 2077',
+    # Left empty, Get-Hotkeys.ps1 locates the install itself (Steam / GOG / Epic
+    # records, then their default folders) and errors if it cannot.
+    [string] $GameRoot,
     [string] $Notes,
     [string] $Out = "$env:USERPROFILE\Downloads\cp2077_hotkeys_cheatsheet.html",
 
@@ -36,8 +38,17 @@ function esc { param([string]$s) ($s -replace '&','&amp;' -replace '<','&lt;' -r
 
 # ==================================================================== gather ==
 
-$binds = & (Join-Path $PSScriptRoot 'Get-Hotkeys.ps1') -GameRoot $GameRoot
+# Only forward -GameRoot when there is one, so an empty value does not override
+# Get-Hotkeys' own detection with a blank path.
+$harvestArgs = @{}
+if ($GameRoot) { $harvestArgs.GameRoot = $GameRoot }
+$binds = @(& (Join-Path $PSScriptRoot 'Get-Hotkeys.ps1') @harvestArgs)
 Write-Host "harvested $($binds.Count) keyboard bindings" -ForegroundColor Cyan
+if ($binds.Count -eq 0) {
+    # Not an error: an archive-only load order declares no keys. The sheet still
+    # renders, so any notes file the user passes is not silently thrown away.
+    Write-Warning "no bindings on disk - the sheet will hold only whatever -Notes supplies"
+}
 
 $n = $null
 if ($Notes -and (Test-Path -LiteralPath $Notes)) {
@@ -126,9 +137,10 @@ $catHtml = foreach ($c in $order) {
       </div>
 "@
     }
-    # One oversized panel sets the height of the whole sheet - Combat's 21 rows
-    # against Tools' 7 left half the screen empty below the short panels. Split
-    # a tall panel's rows into internal columns and let it claim proportionally
+    # One oversized panel sets the height of the whole sheet - a category with
+    # three times the rows of its neighbours leaves half the screen empty below
+    # the short panels. Split a tall panel's rows into internal columns and let
+    # it claim proportionally
     # more width, and every panel ends up roughly the same height.
     $big = $set.Count -gt 12
     @"
@@ -157,9 +169,9 @@ if ($n.gestures) {
         </div>
 "@
         }
-        # Name the mod per group only when they differ. Every gesture here comes
-        # from one mod today, so repeating it three times would be noise - but
-        # the panel said nothing at all, which left the keys unattributable.
+        # Name the mod per group only when the groups differ. Repeating one mod
+        # name down every group is noise; naming none of them leaves the keys
+        # unattributable, which is worse.
         $gmod = if ($g.mod -and -not $oneMod) { "<em>$(esc $g.mod)</em>" } else { '' }
         "<div class=""ggroup""><h3>$(esc $g.group)$gmod</h3>$($items -join '')</div>"
     }

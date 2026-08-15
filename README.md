@@ -5,7 +5,10 @@ A Claude Code skill for diagnosing modded **Cyberpunk 2077** installs.
 It is not a modding tutorial. It is a set of field notes about the things that are
 counterintuitive, undocumented, or actively contradicted by popular advice - the
 ones that cost hours before they were understood. Every entry was learned by
-getting it wrong first on a real ~700-archive load order.
+getting it wrong first on a real install (846 mods, around 700 archives) - but the
+notes are written for any install: 20 mods or 900, Vortex, MO2 or none at all,
+Steam, GOG or Epic, on whatever drive. Where a finding is specific to one manager
+or one scale, it says so.
 
 ## What it covers
 
@@ -23,14 +26,26 @@ getting it wrong first on a real ~700-archive load order.
 | **Environment** | telling manual / Vortex / MO2 apart and why it changes everything; resolving an internal name back to a findable mod; reading real settings vs shipped defaults; redscript as an all-or-nothing gate; tooling traps |
 
 
-## Included tool
+## Included tools
 
 `tools/New-ModManifest.ps1` builds a readable inventory of an installed load order:
 every mod, what it deploys, its Nexus link and install date, and - with an API key -
 a one-line description of what it actually does. `-HideNSFW` omits adult content.
 
-It needs no credentials for the basics, because managers encode
-`<Display Name>-<NexusID>-<version>-<timestamp>` into the staging folder name.
+It needs no credentials for the basics, because a manager that installed from Nexus
+encodes `<Display Name>-<NexusID>-<version>-<timestamp>` into the staging folder
+name. It reads a manager's staging root: the Vortex layout is found automatically,
+MO2 needs `-StagingRoot` pointed at its `mods\` folder, and a fully manual install
+has no staging tree for it to read.
+
+Also included: `Get-Hotkeys.ps1` / `New-HotkeySheet.ps1` (every keybind on an
+install, from all five stores that hold them, rendered as a cheatsheet),
+`Measure-PageFit.ps1` (does a generated page fit a stated viewport) and
+`NexusCredential.ps1` (stores a Nexus API key in Windows Credential Manager).
+
+**Pass your own paths.** These scripts carry defaults - a game root, a staging
+root, a viewport - and those defaults are the author's machine, not yours. Use
+`-GameRoot`, `-StagingRoot`, `-Width`/`-Height`.
 
 ## Install
 
@@ -60,8 +75,16 @@ invoke it directly with `/cyberwise`.
   new patch means triaging a handful of files rather than re-auditing everything.
   The highest-drift areas are flagged as such: save format first, then TweakDB
   record IDs, then crash telemetry.
-- Findings are empirical, from one large Vortex-managed install. Where something was
-  verified, it says so; where it is inference, it says that too.
+- Findings are empirical, and most of the measuring happened on one large
+  Vortex-managed install. Game behaviour (archives, load order, saves, TweakDB,
+  logs) does not care which manager put the files there. Manager-specific
+  behaviour is another matter: the MO2 and manual-install notes come from those
+  tools' documented behaviour rather than from years of running them, so treat
+  them as less battle-tested than the Vortex ones. Where something was verified,
+  it says so; where it is inference, it says that too.
+- The tools are PowerShell on Windows. The notes themselves apply to a Linux/Proton
+  install too, but the paths there sit under the Proton prefix and none of that has
+  been tested here.
 - Nothing here is a substitute for reading the logs. Several notes exist purely to
   say *which* log, because that is the part people skip.
 

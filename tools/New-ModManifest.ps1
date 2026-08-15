@@ -19,9 +19,21 @@
         straight from Nexus. Responses are cached to disk, so a second run costs
         nothing and you can re-render the report freely.
 
-    Why the folder name is enough for tier 1: managers encode
-    <Display Name>-<NexusID>-<version>-<timestamp> when they install from Nexus.
-    That single convention yields the name, a working URL and the install date.
+    Why the folder name is often enough for tier 1: Vortex encodes
+    <Display Name>-<NexusID>-<version>-<timestamp> when it installs from Nexus,
+    and that one convention yields the name, a working URL and the install date.
+
+    Other managers do not. Mod Organizer 2 names a mod folder whatever the user
+    named it, and a hand-unzipped folder is whatever was in the archive. Those
+    still list - name, footprint and file count all come from the folder itself -
+    they just carry no Nexus link, version or install date, and the report says
+    how many entries are in that position rather than quietly showing less.
+
+.PARAMETER StagingRoot
+    Folder holding one subfolder per mod. Vortex: the "Mod Staging Folder" from
+    Settings > Mods. MO2: the "mods" folder inside the instance. No manager: any
+    folder you keep unpacked mods in. Guessed from the usual Vortex locations
+    when omitted.
 
 .PARAMETER NexusApiKey
     Personal API key from nexusmods.com/users/myaccount?tab=api. Without it the
@@ -45,8 +57,12 @@ param(
     [string] $Game        = 'cyberpunk2077',
     [string] $NexusApiKey,
     [switch] $HideNSFW,
-    [string] $Out         = "$PSScriptRoot\mod-manifest.md",
-    [string] $CachePath   = "$PSScriptRoot\.nexus-cache.json",
+    # Written to the current directory, not beside the script: the script may
+    # live in a shared or read-only skill folder, and a manifest is a listing of
+    # somebody's install - it belongs where they ran the command, not in the
+    # tool's own directory where it can end up committed by accident.
+    [string] $Out         = 'mod-manifest.md',
+    [string] $CachePath,
     [string] $OverridePath = (Join-Path $PSScriptRoot 'nsfw-overrides.json'),
     [string] $HtmlOut,
     [switch] $NoHtml,
@@ -55,19 +71,46 @@ param(
 
 # ---------------------------------------------------------------- discovery --
 
-if (-not $StagingRoot) {
-    $guess = Join-Path $env:APPDATA "Vortex\$Game\mods"
-    if (Test-Path $guess) { $StagingRoot = $guess }
+# The Nexus API cache is per-user data, not part of the tool, so it defaults to
+# LOCALAPPDATA. An existing cache beside the script still wins, so nobody loses
+# one they already built up.
+if (-not $CachePath) {
+    $legacyCache = Join-Path $PSScriptRoot '.nexus-cache.json'
+    $CachePath = if (Test-Path -LiteralPath $legacyCache) { $legacyCache }
+                 else { Join-Path ([string]$env:LOCALAPPDATA) 'cyberwise\nexus-cache.json' }
 }
-if (-not $StagingRoot -or -not (Test-Path $StagingRoot)) {
-    throw "Could not find a staging root. Pass -StagingRoot explicitly. (MO2 users: point this at MO2's mods folder.)"
+
+# Only Vortex has a predictable staging location. MO2 keeps its mods inside
+# whichever instance folder the user chose, and a self-managed install is
+# wherever they put it - neither can be guessed, so both are asked for.
+if (-not $StagingRoot) {
+    $guesses = New-Object System.Collections.Generic.List[string]
+    $guesses.Add((Join-Path ([string]$env:APPDATA) "Vortex\$Game\mods"))
+    # Vortex's other common layout is <drive>:\Vortex Mods\<game>, used whenever
+    # the staging folder was moved off the system drive.
+    foreach ($d in ([IO.DriveInfo]::GetDrives() | Where-Object { $_.DriveType -eq 'Fixed' -and $_.IsReady })) {
+        $guesses.Add((Join-Path $d.RootDirectory.FullName "Vortex Mods\$Game"))
+    }
+    $StagingRoot = $guesses | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
+if (-not $StagingRoot -or -not (Test-Path -LiteralPath $StagingRoot)) {
+    throw @"
+Could not find a mod staging folder. Pass -StagingRoot explicitly:
+  Vortex - Settings > Mods > "Mod Staging Folder" (default %APPDATA%\Vortex\$Game\mods)
+  MO2    - the 'mods' folder inside your instance (Tools > Settings > Paths)
+  neither - any folder holding one subfolder per unpacked mod
+"@
 }
 
 Write-Host "staging: $StagingRoot" -ForegroundColor DarkGray
 
 # ------------------------------------------------------------------ parsing --
 
-# <Display Name>-<NexusID>-<version>-<unix timestamp>
+# Vortex's folder convention, for mods it installed from Nexus:
+#   <Display Name>-<NexusID>-<version>-<unix timestamp>
+# Nothing else guarantees it - an MO2 folder or a hand-unzipped one simply does
+# not match, and those mods fall back to the folder name alone. Non-matching
+# folders are counted and reported, never dropped.
 # The version segment is NOT always numeric - real examples include "2k",
 # "1-0-beta", "v2". Anchor on the trailing 10-digit unix timestamp and the
 # numeric id instead, and let the version be anything between them.
@@ -135,7 +178,13 @@ foreach ($d in (Get-ChildItem -LiteralPath $StagingRoot -Directory)) {
     $mods.Add([pscustomobject]$entry)
 }
 
-Write-Host "found $($mods.Count) mods; $(($mods | Where-Object NexusId).Count) carry a Nexus ID" -ForegroundColor DarkGray
+$withId = @($mods | Where-Object NexusId).Count
+Write-Host "found $($mods.Count) mods; $withId carry a Nexus ID" -ForegroundColor DarkGray
+if ($mods.Count -gt 0 -and $withId -eq 0) {
+    Write-Warning ("no folder name matched <Name>-<NexusID>-<version>-<timestamp>, so this is " +
+                   "almost certainly not a Vortex staging folder. Everything still lists, but " +
+                   "with no Nexus link, version, install date or descriptions.")
+}
 
 # -------------------------------------------------------------- enrichment --
 
@@ -190,6 +239,10 @@ if ($NexusApiKey) {
         Start-Sleep -Milliseconds $ThrottleMs
     }
     Write-Progress -Activity 'Fetching from Nexus' -Completed
+    $cacheDir = Split-Path -Parent $CachePath
+    if ($cacheDir -and -not (Test-Path -LiteralPath $cacheDir)) {
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    }
     $cache | ConvertTo-Json -Depth 4 | Set-Content $CachePath -Encoding UTF8
 }
 
@@ -311,6 +364,13 @@ W ""
 W "Generated $(Get-Date -Format 'yyyy-MM-dd HH:mm') from ``$StagingRoot``."
 W ""
 W "- **$($mods.Count)** mods listed"
+# Recomputed rather than reusing the pre-filter count: -HideNSFW may have
+# dropped rows since.
+$listedWithId = @($mods | Where-Object NexusId).Count
+if ($listedWithId -lt $mods.Count) {
+    W ("- **$listedWithId** of them have a Nexus ID in the folder name. Only Vortex writes one, " +
+       "so mods installed with another manager or by hand list without a link, version or install date.")
+}
 if ($NexusApiKey) {
     $desc = ($mods | Where-Object Summary).Count
     W "- **$desc** enriched with Nexus descriptions"
@@ -382,7 +442,7 @@ W "folder names and layout. Tier 2 (summary, author, adult flag) comes from the"
 W "Nexus v1 API and is cached in ``$(Split-Path $CachePath -Leaf)`` so re-runs are free."
 
 Set-Content -LiteralPath $Out -Value $sb.ToString() -Encoding UTF8
-Write-Host "wrote $Out" -ForegroundColor Green
+Write-Host "wrote $((Resolve-Path -LiteralPath $Out).Path)" -ForegroundColor Green
 
 # ------------------------------------------------------------------- html ----
 # Markdown stays the primary output - it diffs, greps and pastes. The HTML is a
@@ -399,7 +459,7 @@ if (-not $NoHtml) {
         $html = ConvertTo-ManifestHtml -Mods $mods -Game $Game -StagingRoot $StagingRoot `
                     -HiddenCount $hidden -HideNSFW:$HideNSFW -FlagSource $flagSource
         Set-Content -LiteralPath $HtmlOut -Value $html -Encoding UTF8
-        Write-Host "wrote $HtmlOut" -ForegroundColor Green
+        Write-Host "wrote $((Resolve-Path -LiteralPath $HtmlOut).Path)" -ForegroundColor Green
     } else {
         Write-Warning "ModManifestHtml.ps1 not found beside this script; skipped HTML"
     }

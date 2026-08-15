@@ -36,13 +36,18 @@ Implement it in a language with wrapping 64-bit multiply. PowerShell throws on
 
 Two dictionaries, both incomplete:
 
-- **Codeware's `KnownHashes.txt`** (`red4ext\plugins\Codeware\Data\`) - roughly
-  127k paths. **Resolves only about 20% of mod archive entries.** It is mesh, entity
-  and rig heavy. It contains **almost no texture paths**, no scene, questphase or
-  audio paths. A *negative* result is only meaningful for a path you have already
-  confirmed is in the dictionary.
+- **Codeware's `KnownHashes.txt`** - *if Codeware is present.* It ships at
+  `red4ext\plugins\Codeware\Data\` under the game root, and Codeware is a mod
+  dependency, not part of the game, so plenty of installs simply do not have it.
+  Roughly 127k paths. **On one large mod list it resolved only about 20% of archive
+  entries.** It is mesh, entity and rig heavy; it contains **almost no texture
+  paths**, no scene, questphase or audio paths. A *negative* result is only
+  meaningful for a path you have already confirmed is in the dictionary.
 - **WolvenKit** ships its own, broader dictionary. If it is installed, extracting an
   archive and listing the output is the fastest way to see real paths.
+
+Assume neither is available until you have checked. Neither is required for the
+work below.
 
 **Collision detection needs no dictionary at all** - the same hash appearing in two
 archives is a conflict regardless of whether you can name the file. Prefer working
@@ -52,7 +57,10 @@ you need to explain *what* is conflicting.
 ## Practical recipes
 
 **"Which mod owns file X?"** Hash the depot path, scan every archive index for that
-hash, sort the owners by `modlist.txt` position, earliest wins.
+hash, then sort the owners by whatever governs order on that install - `modlist.txt`
+position where the file exists, alphabetical where it does not, the manager's list
+where the manager owns ordering. Earliest wins. See `load-order.md` before
+assuming which.
 
 **"Why do two body parts not match?"** Do not start with load order. Extract the
 suspect archives and read their actual file lists. A skin patch that ships torso
@@ -65,6 +73,10 @@ like `base\4k\`, `base\v_textures\`, or a body-mod's own namespace mean the arch
 is a **patch layer over another mod**, and it is inert without that mod installed.
 
 ## WolvenKit CLI round-trip
+
+Needed only to see real paths or to *edit* content. Everything above - collision
+detection, ownership, "what is in this archive" by hash - works with no WolvenKit
+at all, so do not make it a prerequisite for a user who has never installed it.
 
 The CLI is a **separate download** from the GUI - a GUI install has no CLI.
 

@@ -5,8 +5,9 @@
 #
 # Everything is inlined - no fonts, no scripts, no images from anywhere else -
 # so the file works offline, from a USB stick, or attached to a forum post.
-# Mod data is embedded as JSON and rendered client-side, which is what makes
-# instant search over ~800 entries practical.
+# Mod data is embedded as JSON and rendered client-side, which is what keeps
+# search instant on a large load order - a few hundred to a few thousand entries
+# filter without the page having been re-generated.
 
 function ConvertTo-ManifestHtml {
     param(
@@ -72,7 +73,7 @@ header{
   position:relative; padding:38px 0 22px; margin-bottom:6px;
   border-bottom:1px solid var(--line); overflow:hidden;
 }
-/* Scanlines live ONLY here. Across a whole page of 800 cards they are actively
+/* Scanlines live ONLY here. Across a whole page of cards they are actively
    tiring to read through; confined to the masthead they still set the tone. */
 header::after{
   content:''; position:absolute; inset:0; pointer-events:none;

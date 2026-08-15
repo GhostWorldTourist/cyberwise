@@ -1,6 +1,7 @@
 # Measure-PageFit.ps1 -- does a page fit a given viewport without scrolling?
 #
-#     .\Measure-PageFit.ps1 -Path page.html -Width 3057 -Height 1550
+#     .\Measure-PageFit.ps1 -Path page.html                 # this machine's screen
+#     .\Measure-PageFit.ps1 -Path page.html -Width 1920 -Height 1080
 #
 # Returns the document height, the viewport, and the overflow. Eyeballing a
 # screenshot tells you a page is too tall but not by how much, which turns
@@ -13,8 +14,14 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string] $Path,
-    [int] $Width  = 3057,
-    [int] $Height = 1550,
+
+    # Viewport to test against. Omitted, it is measured from this machine's
+    # primary display - the page is being sized for whoever is running this, and
+    # any fixed number here would be one author's monitor. Pass both explicitly
+    # when sizing for a screen you are not sitting at.
+    [int] $Width,
+    [int] $Height,
+
     [string] $Browser,
     [switch] $Screenshot,
     [string] $ShotPath
@@ -23,6 +30,37 @@ param(
 # NOTE: --window-size takes a comma-separated pair, and PowerShell parses a bare
 # `--window-size=$W,$H` as an ARRAY - passing two separate arguments, so the flag
 # is silently ignored and the browser reports its 800x600 default. Quote it.
+
+function Get-PrimaryViewport {
+    # WinForms reports the working area - the screen minus the taskbar - in the
+    # process's coordinate space, which is what a maximised browser window gets
+    # and therefore closer to the truth than the raw panel resolution.
+    #
+    # Two ways it can be unavailable: PowerShell without the Windows Desktop
+    # runtime, and non-Windows. Fall back to the display mode, then to 1080p,
+    # which is an arbitrary but stated default rather than a silent one.
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+        if ($wa.Width -gt 0 -and $wa.Height -gt 0) { return @([int]$wa.Width, [int]$wa.Height) }
+    } catch { }
+    try {
+        $v = Get-CimInstance Win32_VideoController -ErrorAction Stop |
+             Where-Object { $_.CurrentHorizontalResolution -gt 0 } | Select-Object -First 1
+        if ($v) { return @([int]$v.CurrentHorizontalResolution, [int]$v.CurrentVerticalResolution) }
+    } catch { }
+    return @(1920, 1080)
+}
+
+if (-not $Width -or -not $Height) {
+    $auto = Get-PrimaryViewport
+    if (-not $Width)  { $Width  = $auto[0] }
+    if (-not $Height) { $Height = $auto[1] }
+    # --window-size is in CSS pixels. On a display running above 100% scaling the
+    # browser fits proportionally fewer of them than the panel has physical
+    # pixels, so on a scaled screen measure the real window and pass it.
+    Write-Verbose "viewport ${Width}x${Height} (auto-detected primary display)"
+}
 
 if (-not $Browser) {
     $Browser = @(
