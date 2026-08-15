@@ -28,6 +28,12 @@
 #       CET hotkeys, as packed virtual-key codes rather than names. 0 = unbound,
 #       which most of them are.
 #
+#   bin\x64\plugins\cyber_engine_tweaks\mods\<mod>\**\*.json
+#       Some CET mods ignore the central store and keep their own config, as
+#       IK_ names. Nothing obliges them to use CET's binding registry, so a key
+#       can be live in game and absent from every store above. Rare but not
+#       negligible - and the ones that do it are toggles you press constantly.
+#
 # ---------------------------------------------------------------------------
 # The CET packing, since it is undocumented and cost some time
 # ---------------------------------------------------------------------------
@@ -130,6 +136,14 @@ $modNames = @{
     'AppearanceMenuMod'='Appearance Menu Mod'; 'cet'='Cyber Engine Tweaks'
     'flashlight'='Flashlight'; 'freefly'='Free Fly'
     'characterCustomizationAnywhere'='Character Customization Anywhere'
+    'nightVision'='Kiroshi Night Vision'; 'skip_radio_song'='Skip Radio Song'
+    'InteractiveAccessories'='Interactive Accessories'
+}
+# What a CET mod's own primary binding actually does, when the json key is a
+# generic `mkbBinding_1` that names the slot rather than the function.
+$cetPrimary = @{
+    'Kiroshi Night Vision'='Toggle night vision'
+    'Skip Radio Song'='Skip radio song'
 }
 function Resolve-ModName { param([string]$n) if ($modNames.ContainsKey($n)) { $modNames[$n] } else { $n -creplace '([a-z])([A-Z])','$1 $2' } }
 
@@ -156,6 +170,8 @@ $modBucket = @{
     'Cyber Engine Tweaks'='Tools'; 'Appearance Menu Mod'='Tools'
     'Character Customization Anywhere'='Tools'; 'Free Fly'='Tools'
     'Disclosed Hidden Gems'='Tools'
+    'Kiroshi Night Vision'='Combat'; 'Skip Radio Song'='World'
+    'Interactive Accessories'='World'
 }
 function Resolve-Bucket { param([string]$mod) if ($modBucket.ContainsKey($mod)) { $modBucket[$mod] } else { 'World' } }
 
@@ -191,6 +207,7 @@ $actionNames = @{
     'freeze_time'='Freeze time'; 'overlay_key'='Open CET console'
     'openCCScreenIn'='Open character customisation'
     'flashLightToggleIn'='Toggle flashlight'; 'freeflyActivationIn'='Toggle free-fly camera'
+    'ToggleKey'='Toggle accessory'
 }
 1..8 | ForEach-Object { $actionNames["SelectHack$_"] = "Quickhack slot $_" }
 function Resolve-Action {
@@ -321,6 +338,59 @@ if (Test-Path -LiteralPath $cetPath) {
                 Source  = 'your setting'
                 System  = 'CET'
             })
+        }
+    }
+}
+
+# -- CET per-mod config json (the fifth store) -----------------------------
+#
+# Depth-limited on purpose: `mods\` also holds mods that ship megabytes of json
+# data, and a blind recurse would read all of it to find three keys.
+function Add-CetConfigBinding {
+    param([hashtable]$h, [string]$mod, $sink)
+
+    # A chord is spread over mkbBinding_1..N, and `mkbBinding_keys` says how many
+    # are live. Ignore it and you report a two-key chord for a mod whose second
+    # slot is just a stale leftover from a previous binding.
+    $live  = if ($h.ContainsKey('mkbBinding_keys')) { [int]$h['mkbBinding_keys'] } else { 0 }
+    $chord = for ($i = 1; $i -le $live; $i++) {
+        $v = $h["mkbBinding_$i"]
+        if ($v -is [string] -and $v -like 'IK_*' -and $v -ne 'IK_None') { Format-IK $v }
+    }
+    if ($chord) {
+        $act = if ($cetPrimary.ContainsKey($mod)) { $cetPrimary[$mod] } else { "Toggle $mod" }
+        $sink.Add([pscustomobject]@{
+            Mod=$mod; Action=$act; Key=($chord -join ' + '); Pad=''
+            Context=(Resolve-Bucket $mod); Scope=''; Source='your setting'; System='CET config'
+        })
+    }
+
+    foreach ($k in $h.Keys) {
+        $v = $h[$k]
+        if ($v -is [hashtable]) { Add-CetConfigBinding $v $mod $sink; continue }
+        if ($v -isnot [string] -or $v -notlike 'IK_*') { continue }
+        if ($v -eq 'IK_None') { continue }                # explicitly unbound
+        if ($k -match '^(mkb|pad)Binding') { continue }    # chord handled above
+        if (Test-IsPad $v) { continue }
+        $sink.Add([pscustomobject]@{
+            Mod=$mod; Action=(Resolve-Action $k); Key=(Format-IK $v); Pad=''
+            Context=(Resolve-Bucket $mod); Scope=''; Source='your setting'; System='CET config'
+        })
+    }
+}
+
+$cetModsDir = Join-Path $GameRoot 'bin\x64\plugins\cyber_engine_tweaks\mods'
+if (Test-Path -LiteralPath $cetModsDir) {
+    foreach ($d in (Get-ChildItem -LiteralPath $cetModsDir -Directory -ErrorAction SilentlyContinue)) {
+        $jsons = @(Get-ChildItem -LiteralPath $d.FullName -Filter *.json -File -ErrorAction SilentlyContinue)
+        $sub = Join-Path $d.FullName 'config'
+        if (Test-Path -LiteralPath $sub) {
+            $jsons += @(Get-ChildItem -LiteralPath $sub -Filter *.json -File -ErrorAction SilentlyContinue)
+        }
+        foreach ($file in $jsons) {
+            try { $cfg = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json -AsHashtable } catch { continue }
+            if ($cfg -isnot [hashtable]) { continue }
+            Add-CetConfigBinding $cfg (Resolve-ModName $d.Name) $rows
         }
     }
 }
