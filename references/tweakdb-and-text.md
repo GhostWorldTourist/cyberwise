@@ -1,5 +1,8 @@
 # TweakDB edits and finding game text
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** HIGH DRIFT. Record IDs, vendor stock structure and price component names all move between patches. Re-verify every ID against the current string table; never carry one forward on faith.
+
 ## Never guess a record ID
 
 `r6\cache\modded\tweakdb_ep1.str` is a plain string table containing every TweakDB

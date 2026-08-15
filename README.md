@@ -42,7 +42,14 @@ invoke it directly with `/cyberwise`.
 
 ## Scope and honesty
 
-- Written against **patch 2.31**. Paths and behaviours drift between patches.
+- Written against **patch 2.31**. Paths and behaviours drift between patches, and
+  they drift at very different rates.
+- **Every file carries its own verification stamp**, because references get read in
+  isolation - a model loading `references/crashes.md` never sees this README. Each
+  one also has a **Re-check after a patch** line naming what to re-test first, so a
+  new patch means triaging a handful of files rather than re-auditing everything.
+  The highest-drift areas are flagged as such: save format first, then TweakDB
+  record IDs, then crash telemetry.
 - Findings are empirical, from one large Vortex-managed install. Where something was
   verified, it says so; where it is inference, it says that too.
 - Nothing here is a substitute for reading the logs. Several notes exist purely to

@@ -1,5 +1,8 @@
 # Diagnosing a broken install
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** Log paths move when RED4ext, ArchiveXL, TweakXL or CET update. Verify each path exists before concluding a log is empty rather than relocated.
+
 ## Which log says what
 
 | log | tells you |

@@ -1,5 +1,8 @@
 # CET, Lua, and console commands
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** The LuaJIT 5.1 limits are stable. The console calls and the ripperdoc gate on cyberware are game-version behaviour - re-test those before recommending them.
+
 ## The sandbox is LuaJIT (Lua 5.1), not modern Lua
 
 Every one of these has produced a confusing failure:

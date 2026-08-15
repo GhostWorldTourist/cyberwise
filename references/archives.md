@@ -1,5 +1,8 @@
 # Archives, hashes, and finding out who owns a file
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** The RDAR index layout and FNV1a-64 hashing are stable across patches; dictionary coverage is not. Re-measure how much KnownHashes.txt resolves before relying on a negative result.
+
 ## Reading an .archive index without any tooling
 
 You do not need WolvenKit to answer "which mods collide" or "what does this archive

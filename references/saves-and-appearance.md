@@ -1,5 +1,8 @@
 # Saves and appearance data
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** HIGHEST DRIFT IN THIS SKILL. The save format carries its own version number (269 when this was written) and CDPR revises it. Re-verify the chunk table layout and the node-offset arithmetic against a fresh save before trusting any parse.
+
 ## Read the metadata first
 
 `metadata.9.json` sits beside `sav.dat` in each save folder and needs **no

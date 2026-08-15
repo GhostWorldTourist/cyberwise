@@ -1,5 +1,8 @@
 # ReShade and virtual photography stacks
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** Not bound to the game patch - this tracks ReShade and add-on releases instead. Re-check the add-on build signature test and the REST incompatibility against current versions.
+
 Everything lives in `bin\x64` alongside the game executable.
 
 ## The add-on build is mandatory, and you identify it by signature

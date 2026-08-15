@@ -1,5 +1,8 @@
 # Crash forensics
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** HIGH DRIFT. CrashInfo.json is CDPR telemetry and its fields can change or vanish between patches. Confirm the file still appears and still carries isOom, district and sessionLength before building an investigation on it.
+
 ## The game writes its own post-mortem
 
 ```

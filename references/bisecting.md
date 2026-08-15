@@ -1,5 +1,8 @@
 # Bisecting a broken load order
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** Method rather than data - largely patch-independent. The one thing to recheck is where your manager stages files, since the parking advice assumes same-volume moves.
+
 Cyberpunk load times make bisection expensive. Getting the method wrong turns a
 two-hour job into a two-day one. Everything here was learned during a bisect that
 produced **six confidently wrong answers** before the real cause.

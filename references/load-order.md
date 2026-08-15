@@ -1,5 +1,8 @@
 # Load order
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** Confirm override direction still favours earlier entries before trusting any precedence work. The append-on-install behaviour belongs to whatever writes modlist.txt, so it can change without a game patch.
+
 ## Verifying override direction on an unfamiliar install
 
 Do not assume. Two models are in play and they are frequently confused:

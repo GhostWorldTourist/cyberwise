@@ -1,5 +1,8 @@
 # Environment, mod managers, and tooling traps
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> **Re-check after a patch:** Mod manager behaviour rather than game behaviour, so it drifts with Vortex/MO2 releases. The redscript compile-test invocation is the part most likely to change with a scc update.
+
 ## Read the user's real settings, not a mod's defaults
 
 `red4ext\plugins\mod_settings\user.ini` holds every Mod Settings override as

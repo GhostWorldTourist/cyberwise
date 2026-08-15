@@ -5,6 +5,11 @@ description: Diagnose Cyberpunk 2077 mod problems - load order and conflicts, ar
 
 # Cyberwise
 
+> **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
+> Every file under `references/` carries its own verification stamp and a
+> **Re-check after a patch** line naming what to re-test first. Trust those over
+> this one; some areas drift much faster than others.
+
 Field notes for diagnosing a modded Cyberpunk 2077 install. This assumes you can
 already read a log and install a mod. What follows is the set of things that are
 **counterintuitive, undocumented, or actively contradicted by popular advice** -
