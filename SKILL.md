@@ -47,6 +47,11 @@ outcome. Three such cases prove nothing. Find a pair where the orders disagree.
 actual settings store (see `references/environment.md`). A mod's `.reds` or `.xml`
 declares what the author shipped, not what the user set.
 
+**Keybinds are a special case of that, and there are four stores, not one.** The
+mod's `r6\input\*.xml` holds only a default; `mod_settings\user.ini` holds the
+rebind that beats it, and CET keeps its own in packed integers. Read all of them
+before stating what a key does. `references/input-bindings.md`.
+
 **Always dereference an internal name to what the mod manager calls it.** Folder
 names, TweakXL namespaces, redscript modules and archive filenames are authored by
 mod authors for themselves and routinely bear no resemblance to the name a user sees
@@ -190,3 +195,4 @@ write it outside any repo, and never commit it.
 | `references/tweakdb-and-text.md` | TweakXL authoring, finding real record IDs, locating game text |
 | `references/reshade.md` | add-on build, shader pack collisions, known incompatibilities |
 | `references/environment.md` | mod manager behaviour, settings store, compile-testing, tooling traps |
+| `references/input-bindings.md` | the four binding stores, `overridableUI` overrides, CET's packed key codes |

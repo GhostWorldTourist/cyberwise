@@ -1,0 +1,336 @@
+# New-HotkeySheet.ps1 -- build a self-contained hotkey cheatsheet from the
+# bindings actually present in a Cyberpunk install.
+#
+#     .\New-HotkeySheet.ps1 -Out ~\Downloads\hotkeys.html
+#
+# Keys come from Get-Hotkeys.ps1, which reads them off disk - no hand-typed
+# bindings, so the sheet cannot drift from the game the way a hand-written one
+# does. Anything that genuinely is not on disk (mouse hardware mapping, tap/hold
+# semantics) lives in a small notes json and is merged over the top; pass it with
+# -Notes. Everything is inlined, so the file works offline and on a phone
+# propped next to the keyboard.
+#
+# Optimised for reading at a glance mid-game: big keycaps, one accent colour per
+# situation, no information that only appears on hover.
+
+[CmdletBinding()]
+param(
+    [string] $GameRoot = 'C:\Games\Steam\steamapps\common\Cyberpunk 2077',
+    [string] $Notes,
+    [string] $Out = "$env:USERPROFILE\Downloads\cp2077_hotkeys_cheatsheet.html"
+)
+
+$ErrorActionPreference = 'Stop'
+function esc { param([string]$s) ($s -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;') }
+
+# ==================================================================== gather ==
+
+$binds = & (Join-Path $PSScriptRoot 'Get-Hotkeys.ps1') -GameRoot $GameRoot
+Write-Host "harvested $($binds.Count) keyboard bindings" -ForegroundColor Cyan
+
+$n = $null
+if ($Notes -and (Test-Path -LiteralPath $Notes)) {
+    $n = Get-Content -LiteralPath $Notes -Raw | ConvertFrom-Json
+    Write-Host "merged notes from $Notes" -ForegroundColor Cyan
+}
+
+foreach ($e in $n.extra) {
+    $binds += [pscustomobject]@{
+        Mod=$e.mod; Action=$e.action; Key=$e.key; Pad=''
+        Context=$e.context; Scope=''; Source='manual'; System='notes'
+    }
+}
+
+# Which categories exist, in the order a player would want them.
+$order  = 'Combat','Driving','Stealth & Loot','World','Tools'
+$accent = @{ 'Combat'='red'; 'Driving'='cyan'; 'Stealth & Loot'='green'
+             'World'='yellow'; 'Tools'='purple' }
+
+# Keys carrying more than one meaning. Most are harmless - the game scopes
+# bindings by input context, so 'R' can reload, renew a chip and pick a pocket
+# without conflict - but a couple genuinely overlap and are worth seeing.
+$collisions = $binds | Group-Object Key | Where-Object Count -gt 1 | Sort-Object Name
+
+# ===================================================================== render ==
+
+$sb = [Text.StringBuilder]::new()
+function w { param([string]$s) [void]$sb.AppendLine($s) }
+
+# ---- mouse panel ----
+$mouseHtml = ''
+if ($n.mouse) {
+    $cells = foreach ($m in $n.mouse) {
+        # Resolve what this key actually does from the harvested data, so a
+        # rebind in game shows up here without editing the notes file.
+        #
+        # Only worth printing where it disagrees with the hand-written label -
+        # "Flashlight / Toggle flashlight" is noise, while "Night vision /
+        # Toggle minimap" is the sheet telling you the label has gone stale.
+        $flat = { param($s) ($s -replace '[^a-z0-9]','').ToLower() }
+        $lbl  = & $flat $m.label
+        $hits = @($binds | Where-Object { $_.Key -eq $m.sends } | Where-Object {
+            $a = & $flat $_.Action
+            -not ($a.Contains($lbl) -or $lbl.Contains($a))
+        })
+        $via  = if ($hits) { ($hits | ForEach-Object { "$($_.Action)" } | Select-Object -Unique) -join ' &middot; ' } else { '' }
+        @"
+    <div class="mbtn">
+      <span class="mnum">$($m.button)</span>
+      <kbd class="k">$(esc $m.sends)</kbd>
+      <span class="mlbl">$(esc $m.label)</span>
+      $(if ($via) { "<span class=""mvia"">$via</span>" })
+    </div>
+"@
+    }
+    $mouseHtml = @"
+  <section class="panel mouse">
+    <h2><span class="dot yellow"></span>$(esc $n.device)<b>thumb pad</b></h2>
+    <div class="mgrid">$($cells -join '')</div>
+    <p class="foot">Hardware mapping - the mouse sends these keys, and the grey line is what the game currently does with them.</p>
+  </section>
+"@
+}
+
+# ---- category panels ----
+$catHtml = foreach ($c in $order) {
+    $set = @($binds | Where-Object Context -eq $c | Sort-Object Mod, Action)
+    if (-not $set) { continue }
+    $rows = foreach ($b in $set) {
+        $keys = ($b.Key -split ' / ' | ForEach-Object { "<kbd class=""k"">$(esc $_)</kbd>" }) -join '<i>/</i>'
+        $mark = if ($b.Source -eq 'your setting') { '' } else { '<span class="def" title="mod default - not rebound by you">&#9679;</span>' }
+        @"
+      <div class="row" data-s="$(esc "$($b.Action) $($b.Mod) $($b.Key)".ToLower())">
+        <span class="act">$(esc $b.Action)<em>$(esc $b.Mod)$mark</em></span>
+        <span class="keys">$keys</span>
+      </div>
+"@
+    }
+    @"
+  <section class="panel">
+    <h2><span class="dot $($accent[$c])"></span>$(esc $c)<b>$($set.Count)</b></h2>
+    $($rows -join '')
+  </section>
+"@
+}
+
+# ---- gesture panel ----
+$gestHtml = ''
+if ($n.gestures) {
+    $groups = foreach ($g in $n.gestures) {
+        $items = foreach ($i in $g.items) {
+            $steps = if ($i.steps) {
+                '<span class="steps">' + (($i.steps | ForEach-Object { "<b>$(esc $_)</b>" }) -join '<i>&rsaquo;</i>') + '</span>'
+            } else { '' }
+            @"
+        <div class="grow">
+          <span class="gkey"><kbd class="k">$(esc $i.key)</kbd><span class="ges">$(esc $i.gesture)</span></span>
+          <span class="gdoes">$(esc $i.does)$steps</span>
+        </div>
+"@
+        }
+        "<div class=""ggroup""><h3>$(esc $g.group)</h3>$($items -join '')</div>"
+    }
+    $gestHtml = @"
+  <section class="panel wide">
+    <h2><span class="dot cyan"></span>Vehicle gestures<b>tap &middot; hold &middot; multi-tap</b></h2>
+    <div class="ggrid">$($groups -join '')</div>
+  </section>
+"@
+}
+
+# ---- collision panel ----
+$colHtml = ''
+if ($collisions) {
+    $items = foreach ($g in $collisions) {
+        $who = ($g.Group | ForEach-Object { "<span class=""cw""><b>$(esc $_.Context)</b>$(esc $_.Action) <em>$(esc $_.Mod)</em></span>" }) -join ''
+        "<div class=""crow""><kbd class=""k"">$(esc $g.Name)</kbd><div class=""cwho"">$who</div></div>"
+    }
+    $colHtml = @"
+  <section class="panel wide">
+    <h2><span class="dot red"></span>Shared keys<b>$($collisions.Count)</b></h2>
+    <p class="foot">Bindings scope to an input context, so most of these never fire at the same time - a key can reload a gun and open a door because you are never doing both. Worth a glance anyway when something does not respond the way you expect.</p>
+    <div class="cgrid">$($items -join '')</div>
+  </section>
+"@
+}
+
+$stamp   = Get-Date -Format 'yyyy-MM-dd HH:mm'
+$yours   = @($binds | Where-Object Source -eq 'your setting').Count
+$subline = "$($binds.Count) BOUND KEYS &nbsp;//&nbsp; $yours FROM YOUR SETTINGS &nbsp;//&nbsp; READ FROM DISK $stamp"
+
+$html = @"
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HOTKEYS // CYBERPUNK 2077</title>
+<style>
+:root{
+  --yellow:#fcee0a; --cyan:#00f0ff; --red:#ff003c; --green:#39ff88; --purple:#b56cff;
+  --bg:#07070a; --panel:#101018; --line:#26263a; --text:#e4e4ee; --dim:#8a8aa2;
+  --mono:'Consolas','SF Mono','DejaVu Sans Mono',monospace;
+  --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:16px; line-height:1.45;
+  background-image:
+    linear-gradient(rgba(252,238,10,.02) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(252,238,10,.02) 1px,transparent 1px);
+  background-size:46px 46px;
+}
+.wrap{max-width:1560px;margin:0 auto;padding:0 20px 70px}
+
+header{position:relative;padding:32px 0 18px;overflow:hidden;border-bottom:1px solid var(--line)}
+/* Scanlines are confined to the masthead. Over a page you actually read from,
+   they fight the text; over a title block they just set the tone. */
+header::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.34) 0 1px,transparent 1px 3px)}
+h1{font-family:var(--mono);font-size:clamp(28px,5vw,54px);font-weight:700;margin:0;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--yellow);
+  text-shadow:2px 0 var(--red),-2px 0 var(--cyan)}
+h1 span{color:var(--text);text-shadow:none}
+.sub{font-family:var(--mono);font-size:11.5px;letter-spacing:.15em;color:var(--dim);margin-top:9px}
+
+.bar{position:sticky;top:0;z-index:9;padding:13px 0;
+  background:linear-gradient(180deg,var(--bg) 76%,transparent);display:flex;gap:12px;align-items:center}
+#q{flex:1 1 auto;background:var(--panel);color:var(--text);border:1px solid var(--line);
+  border-left:3px solid var(--yellow);padding:12px 15px;font-family:var(--mono);font-size:15px;outline:none}
+#q:focus{border-color:var(--cyan);border-left-color:var(--cyan)}
+#q::placeholder{color:#4c4c60}
+#hits{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap}
+
+.cols{columns:3 430px;column-gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);padding:15px 16px 8px;margin:0 0 16px;
+  break-inside:avoid;display:inline-block;width:100%;
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
+.panel.wide{columns:auto}
+h2{font-family:var(--mono);font-size:12.5px;letter-spacing:.2em;text-transform:uppercase;
+  margin:0 0 12px;padding-bottom:9px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:9px;color:var(--text)}
+h2 b{margin-left:auto;color:var(--dim);font-weight:400;font-size:10.5px;letter-spacing:.12em}
+.dot{width:9px;height:9px;flex:0 0 9px;transform:rotate(45deg)}
+.dot.red{background:var(--red)} .dot.cyan{background:var(--cyan)}
+.dot.green{background:var(--green)} .dot.yellow{background:var(--yellow)}
+.dot.purple{background:var(--purple)}
+
+/* Keycap. The whole sheet is read at arm's length, so these stay chunky. */
+kbd.k{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--yellow);
+  background:#1b1b26;border:1px solid #3a3a52;border-bottom-width:3px;border-radius:4px;
+  padding:4px 10px;min-width:34px;display:inline-block;text-align:center;white-space:nowrap}
+
+.row{display:flex;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid #191926}
+.row:last-child{border-bottom:0}
+.act{flex:1;font-size:15.5px;line-height:1.25}
+.act em{display:block;font-style:normal;font-size:11px;color:var(--dim);
+  font-family:var(--mono);letter-spacing:.04em;margin-top:2px}
+.def{color:#4c4c60;margin-left:6px;font-size:9px;vertical-align:1px}
+.keys{white-space:nowrap;flex:0 0 auto}
+.keys i{color:#4c4c60;font-style:normal;padding:0 3px;font-size:12px}
+
+/* ---- mouse ---- */
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.mbtn{background:#15151f;border:1px solid #2b2b40;padding:9px 9px 8px;text-align:center;position:relative}
+.mnum{position:absolute;top:3px;left:6px;font-family:var(--mono);font-size:10px;color:#4c4c60}
+.mbtn kbd.k{margin:3px 0 5px}
+.mlbl{display:block;font-size:12.5px;line-height:1.25;color:var(--text)}
+.mvia{display:block;font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:3px;line-height:1.3}
+.foot{font-size:11.5px;color:var(--dim);line-height:1.5;margin:11px 0 8px}
+
+/* ---- gestures ---- */
+.ggrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
+.ggroup h3{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--cyan);margin:0 0 8px;font-weight:400}
+.grow{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px solid #191926}
+.gkey{flex:0 0 148px;display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}
+.ges{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--bg);background:var(--cyan);padding:2px 6px;white-space:nowrap}
+.gdoes{flex:1;font-size:14.5px;line-height:1.3}
+.steps{display:block;margin-top:4px;font-size:11px;color:var(--dim);font-family:var(--mono)}
+.steps b{font-weight:400;color:#a8a8bd} .steps i{font-style:normal;color:#4c4c60;padding:0 5px}
+
+/* ---- collisions ---- */
+.cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:9px}
+.crow{display:flex;gap:11px;align-items:flex-start;background:#15151f;border:1px solid #2b2b40;padding:9px 11px}
+.crow kbd.k{color:var(--red);border-color:#4a1024}
+.cwho{flex:1;display:flex;flex-direction:column;gap:3px}
+.cw{font-size:12.5px;line-height:1.3}
+.cw b{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--dim);font-weight:400;margin-right:6px}
+.cw em{font-style:normal;color:var(--dim);font-size:10.5px;font-family:var(--mono)}
+
+footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:11px;color:#4c4c60;line-height:1.85}
+.hide{display:none !important}
+
+@media print{
+  body{background:#fff;color:#000;font-size:11pt;background-image:none}
+  .bar,footer,header::after{display:none}
+  h1{color:#000;text-shadow:none}
+  .panel{border:1px solid #999;background:#fff;clip-path:none;break-inside:avoid}
+  kbd.k{color:#000;background:#eee;border-color:#999}
+  .cols{columns:2}
+  .act em,.mvia,.foot{color:#555}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Hot<span>keys</span></h1>
+  <div class="sub">$subline</div>
+</header>
+
+<div class="bar">
+  <input id="q" type="search" placeholder="filter - action, mod or key...">
+  <span id="hits"></span>
+</div>
+
+<div class="cols">
+$mouseHtml
+$($catHtml -join '')
+</div>
+
+$gestHtml
+$colHtml
+
+<footer>
+  Keys read from r6\input\*.xml, r6\cache\inputUserMappings.xml, red4ext\plugins\mod_settings\user.ini<br>
+  and bin\x64\plugins\cyber_engine_tweaks\bindings.json. &#9679; marks a mod default you have not rebound.<br>
+  Generated $stamp // CYBERWISE
+</footer>
+</div>
+
+<script>
+// DOM filtering rather than a re-render: the sheet is static, and hiding rows
+// keeps the panels and their headings where the eye already expects them.
+const q = document.getElementById('q'), hits = document.getElementById('hits');
+const rows = [...document.querySelectorAll('.row')];
+q.addEventListener('input', () => {
+  const terms = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let n = 0;
+  rows.forEach(r => {
+    const ok = terms.every(t => r.dataset.s.includes(t));
+    r.classList.toggle('hide', !ok);
+    if (ok) n++;
+  });
+  // Drop a panel once every row in it is filtered out.
+  document.querySelectorAll('.panel:not(.wide)').forEach(p => {
+    const rs = p.querySelectorAll('.row');
+    p.classList.toggle('hide', rs.length > 0 && ![...rs].some(r => !r.classList.contains('hide')));
+  });
+  hits.textContent = terms.length ? n + ' / ' + rows.length : '';
+});
+</script>
+</body>
+</html>
+"@
+
+$dir = Split-Path -Parent $Out
+if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+Set-Content -LiteralPath $Out -Value $html -Encoding UTF8
+Write-Host "wrote $Out ($([math]::Round((Get-Item -LiteralPath $Out).Length/1kb,1)) KB)" -ForegroundColor Green
