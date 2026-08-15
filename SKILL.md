@@ -14,10 +14,18 @@ each one learned by getting it wrong first.
 
 These four cost the most time when skipped.
 
+**Find out how the install is assembled before you trust the filesystem.** Manual,
+Vortex and MO2 present completely different pictures on disk, and nearly every
+technique here reads the disk. In particular, **an MO2 install may show you an
+almost empty game directory** - it virtualises mods through USVFS and its Root
+Builder plugin copies files in at launch and removes them when the game closes. On
+such an install "the file isn't there" is not evidence of anything. Detection recipe
+and per-manager consequences: `references/environment.md`.
+
 **Confirm the mod is actually deployed before theorising about why it fails.**
 Hours have gone into explaining the behaviour of a mod that was staged in the mod
 manager but never deployed to the game. Check the file is on disk under the game
-directory. Every time.
+directory - or, on a virtualising setup, check the manager's own view. Every time.
 
 **Reproduce before bisecting.** One crash or hang is not a deterministic fault.
 Confirm it repeats before halving anything, or you will bisect noise and "fix" it
@@ -54,7 +62,8 @@ Consequences that follow, and they matter more than the rule itself:
 - **A catch-all AIO retexture belongs LATE in the list**, so specific mods beat it.
 - **Newly installed archives get appended to the end**, which is the bottom of the
   priority stack. Every mod the user installs starts out losing every file it
-  contests. Re-check conflicts after *any* deploy.
+  contests. Re-check conflicts after *any* mod change - install, update, uninstall
+  or variant swap - however your install is assembled.
 - `modlist.txt` is a deliberate custom order, not a fossil and not alphabetical.
   Never delete it to "fall back to alphabetical".
 
@@ -117,7 +126,8 @@ not belong there:
 
 **Some archives are written at runtime.** At least one known mod (Dynamic Moon
 Phases) generates its `.archive` from an ASI at game start, so the file appears and
-vanishes between sessions. It ships nothing in staging. Never prune its entry as
+vanishes between sessions. The mod ships no archive of its own, so there is nothing
+to compare against wherever your installed copies live. Never prune its entry as
 stale - and note it still needs a permanent slot in `modlist.txt`, because an
 unlisted archive sorts last and loses.
 

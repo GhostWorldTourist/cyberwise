@@ -10,7 +10,33 @@ thousands of entries.
 Quoting a shipped default has caused real errors - one mod's XML declared a hotkey
 of `IK_O` while the user's actual binding in `user.ini` was `IK_Pause`.
 
-## Mod manager behaviour (Vortex)
+## Establish how the install is assembled FIRST
+
+Almost every technique in this skill reads the game directory. Whether that
+directory tells you the truth depends entirely on how mods got there, and there are
+three very different answers. **Determine which one you are looking at before
+trusting anything on disk.**
+
+### Detecting the mode
+
+| look for | means |
+|---|---|
+| `__folder_managed_by_vortex` marker files; a staging root at `%APPDATA%\Vortex\<game>\mods`; deployed files with **link count 2** | Vortex |
+| `ModOrganizer.ini`; mods under MO2's own `mods\` tree; a game directory that looks suspiciously bare while the game is closed | MO2 |
+| files simply present, no markers, no staging root, no deployment step | manual |
+
+When in doubt, ask. It is one question and it changes the entire approach.
+
+### Manual install
+
+The simplest case and the one everything here assumes by default: files are
+physically in the game directory and what you see is what the game loads.
+
+Caveats: there is no staging copy, so **any hand-edit you make is the only copy** -
+back it up before editing. And there is no manifest, so nothing can tell you which
+mod a given file came from. Filename and the mod's own folder are all you have.
+
+### Vortex
 
 - **Deployment is by hardlink.** Editing a deployed file also edits the staging
   copy. Useful for patching, but a mod reinstall reverts hand-patches.
@@ -25,6 +51,37 @@ of `IK_O` while the user's actual binding in `user.ini` was `IK_Pause`.
   archive.
 - **Never diff the mod directory mid-deploy.** Doing so reports transient states as
   additions and removals. Confirm no operation is running first.
+
+### MO2 - the important one, because the filesystem lies
+
+MO2 and Cyberpunk are **not natively compatible**; using MO2 without extra setup
+produces CET and RED4ext errors. Working installs rely on the **Root Builder**
+plugin, and that changes what you can see:
+
+- **Root Builder copies its folders into the game directory at launch and removes
+  them again when the game closes.** So inspecting the game directory while the game
+  is shut down can show you almost nothing, and what it does show may be stale.
+- **USVFS virtualisation means mod files may never be physically present** in the
+  game directory at all - the merged view exists only for processes inside MO2's
+  virtual filesystem. A script run from outside sees the bare game.
+- CET **1.27+** is required for USVFS compatibility; 1.26 and earlier do not work.
+  A confusing CET failure on an MO2 install is worth checking against this first.
+- REDmod deploys automatically before launch, so REDmod state is also a
+  launch-time artifact rather than something sitting on disk.
+
+**Practical consequences.** On an MO2 install:
+
+- "The file isn't there" is not evidence the mod isn't installed.
+- Conflict and load-order scanning must be done against **MO2's own mod list and
+  its virtual ordering**, not against `archive\pc\mod` on disk.
+- Ask the user to check MO2's UI, or to run your inspection **through MO2** so it
+  inherits the VFS, rather than from a plain shell.
+- Hand-editing a deployed file is pointless if Root Builder will discard it on exit.
+  Edit the file in MO2's mod folder instead.
+
+If you are unsure whether a given install virtualises, the quick test is: with the
+game closed, does `archive\pc\mod` contain the archives the user says are enabled?
+If not, you are outside the VFS and must change approach.
 
 ## Files created in-game are not backed up by the manager
 

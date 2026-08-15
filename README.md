@@ -20,9 +20,12 @@ getting it wrong first on a real ~700-archive load order.
 | **CET & Lua** | the LuaJIT 5.1 sandbox limits; console commands that work, and popular ones that silently don't |
 | **TweakDB** | never guessing record IDs; vendor stock gating; why some price records exist but are never read |
 | **ReShade** | identifying the add-on build by signature; shader pack header collisions; a known silent-crash incompatibility |
-| **Environment** | mod manager hardlink behaviour; reading real settings vs shipped defaults; compile-testing; tooling traps |
+| **Environment** | telling manual / Vortex / MO2 apart and why it changes everything; reading real settings vs shipped defaults; redscript as an all-or-nothing gate; tooling traps |
 
 ## Install
+
+Works with manual installs, Vortex and MO2 - though see the environment notes, because
+MO2 virtualises the filesystem and that changes how you diagnose anything.
 
 Copy the folder into your Claude Code skills directory:
 
