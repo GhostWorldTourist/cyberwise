@@ -48,6 +48,8 @@ param(
     [string] $Out         = "$PSScriptRoot\mod-manifest.md",
     [string] $CachePath   = "$PSScriptRoot\.nexus-cache.json",
     [string] $OverridePath = (Join-Path $PSScriptRoot 'nsfw-overrides.json'),
+    [string] $HtmlOut,
+    [switch] $NoHtml,
     [int]    $ThrottleMs  = 120
 )
 
@@ -136,6 +138,20 @@ foreach ($d in (Get-ChildItem -LiteralPath $StagingRoot -Directory)) {
 Write-Host "found $($mods.Count) mods; $(($mods | Where-Object NexusId).Count) carry a Nexus ID" -ForegroundColor DarkGray
 
 # -------------------------------------------------------------- enrichment --
+
+# Fall back to Windows Credential Manager so the key never has to be typed on a
+# command line, pasted into a chat, or committed. See NexusCredential.ps1.
+if (-not $NexusApiKey) {
+    $credHelper = Join-Path $PSScriptRoot 'NexusCredential.ps1'
+    if (Test-Path $credHelper) {
+        . $credHelper
+        $stored = Get-NexusApiKey
+        if ($stored) {
+            $NexusApiKey = $stored
+            Write-Host "using API key from Windows Credential Manager" -ForegroundColor DarkGray
+        }
+    }
+}
 
 $cache = @{}
 if (Test-Path $CachePath) {
@@ -367,3 +383,24 @@ W "Nexus v1 API and is cached in ``$(Split-Path $CachePath -Leaf)`` so re-runs a
 
 Set-Content -LiteralPath $Out -Value $sb.ToString() -Encoding UTF8
 Write-Host "wrote $Out" -ForegroundColor Green
+
+# ------------------------------------------------------------------- html ----
+# Markdown stays the primary output - it diffs, greps and pastes. The HTML is a
+# second rendering of the same data for when you want to browse and search it.
+
+if (-not $NoHtml) {
+    $htmlHelper = Join-Path $PSScriptRoot 'ModManifestHtml.ps1'
+    if (Test-Path -LiteralPath $htmlHelper) {
+        . $htmlHelper
+        if (-not $HtmlOut) {
+            $HtmlOut = [IO.Path]::ChangeExtension($Out, '.html')
+        }
+        $flagSource = if ($heuristicUsed) { 'name heuristic' } else { 'nexus flag' }
+        $html = ConvertTo-ManifestHtml -Mods $mods -Game $Game -StagingRoot $StagingRoot `
+                    -HiddenCount $hidden -HideNSFW:$HideNSFW -FlagSource $flagSource
+        Set-Content -LiteralPath $HtmlOut -Value $html -Encoding UTF8
+        Write-Host "wrote $HtmlOut" -ForegroundColor Green
+    } else {
+        Write-Warning "ModManifestHtml.ps1 not found beside this script; skipped HTML"
+    }
+}
