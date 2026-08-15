@@ -7,13 +7,51 @@ House standard for anything this skill generates for a human to read: a mod
 manifest, a hotkey sheet, a system profile. Two output formats, one design
 language, and one rule that matters more than any of the styling.
 
-## The rule: look at the result
+## First: ask what it has to fit
+
+**"Fits on screen" is meaningless until you know whose screen, and how they will
+have the window.** Do not detect it. Ask:
+
+> Open this and put the browser window on the monitor you'll actually read it
+> on, at the size you'll actually use - then tell me the number.
+
+```powershell
+.\Show-ViewportProbe.ps1     # opens a page reporting its own viewport, live
+```
+
+The user drags the window wherever they want it and reads back a figure like
+`1712 x 945`. That goes straight into `-Width` / `-Height`.
+
+Detecting the display cannot answer this, because between the panel and the
+viewport sit: which monitor, maximised or half-width, the tab strip, the address
+bar, an optional bookmarks bar, a sidebar, browser zoom, and OS display scaling.
+Auto-detection assumes maximised-on-the-primary-at-100%, and silently sizes for
+that. The cases where it is simply wrong are ordinary ones:
+
+- a small secondary or prompter panel - detection reports the big monitor and
+  produces a page that will never fit the one they meant
+- a wall-mounted TV across the room
+- "half the width of my second monitor", which no screen enumeration can express
+
+**Then say what that viewport implies, honestly.** The number is an input to the
+design, not just a pass/fail:
+
+- **Small** (a prompter panel, a phone, a narrow split) - say plainly that not
+  everything will be visible at once, agree what earns the top of the page, and
+  accept scrolling for the rest. Do not shrink the type until it fits; an
+  unreadable page that fits is not a win.
+- **Large or far away** (a TV, a big second monitor) - scale the type up hard.
+  The default that reads well at desk distance is far too small at three metres.
+- **Ordinary** - fit it, and use the headroom for breathing room rather than
+  more content.
+
+## Then: look at the result
 
 **Render the page and look at it before calling it done.** Generating HTML you
 have never seen is writing code you have never run.
 
 ```powershell
-.\Measure-PageFit.ps1 -Path out.html -Screenshot -ShotPath shot.png
+.\Measure-PageFit.ps1 -Path out.html -Width 1712 -Height 945 -Screenshot -ShotPath shot.png
 ```
 
 Then actually read `shot.png`. The measurement catches what you cannot see; the
@@ -34,11 +72,10 @@ normal build-and-eyeball loop:
   reach the browser, the flag is dropped, and it silently renders at its 800x600
   default. The first reading claimed a 754px viewport. Quote it.
 
-Screenshots you are *given* are a poor substitute: they arrive downscaled by an
-unknown factor, so sizing from one is sizing for a guessed viewport. Measure
-instead. Where a page is being sized for someone else's screen, ask for the
-resolution rather than assuming; every viewport baked into a script is somebody
-else's monitor.
+Screenshots you are *given* are a poor substitute for measuring: they arrive
+downscaled by an unknown factor, so sizing from one is sizing for a guessed
+viewport. They are still worth asking for as a *look* - they show crowding,
+contrast and ugliness that no measurement reports.
 
 **Testing a page that restores its own state:** drive the real control. A class
 forced onto `<body>` is stripped by the page's own restore logic before anything

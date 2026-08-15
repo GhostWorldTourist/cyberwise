@@ -193,6 +193,8 @@ because an unlisted archive sorts last and loses.
   change a diagnosis, as Discord-pasteable markdown and an HTML report, led by a
   flags section saying what is likely to be the problem. Start here when someone
   arrives with "it's broken" and no detail.
+- `tools/Show-ViewportProbe.ps1` - asks the user's own browser window how big it
+  is, so a layout is sized for the window they will read it in.
 - `tools/Measure-PageFit.ps1` - does a generated page fit a given viewport.
 - `tools/NexusCredential.ps1` - Nexus API key in Windows Credential Manager.
 
@@ -252,10 +254,16 @@ height, and the class of anything overflowing horizontally:
 .\Measure-PageFit.ps1 -Path page.html -Width <px> -Height <px> -Screenshot -ShotPath shot.png
 ```
 
-Omit the size and it measures this machine's primary display, which is right
-when the page is for whoever is running it. **Pass both explicitly when sizing
-for a screen you are not sitting at** - a second monitor, a phone, a projector -
-and ask the user for the resolution rather than assuming one.
+**Get the viewport from the user, not from the screen.** Run
+`tools/Show-ViewportProbe.ps1`, and ask them to put the browser window on the
+monitor they will actually read it on, at the size they will actually use, then
+read back the number it shows. Detecting the display assumes maximised on the
+primary at 100% zoom, and cannot express "the little side panel" or "half-width
+on monitor 2" at all.
+
+Then say what that viewport implies rather than silently designing to it: on a
+small one, agree what earns the top of the page and accept scrolling for the
+rest; on a TV, scale the type up hard. An unreadable page that fits is not a win.
 
 And look at the output, not just the number: pass `-Screenshot` and read the
 image. The measurement catches what you cannot see; the screenshot catches what a

@@ -1,7 +1,13 @@
 # Measure-PageFit.ps1 -- does a page fit a given viewport without scrolling?
 #
-#     .\Measure-PageFit.ps1 -Path page.html                 # this machine's screen
-#     .\Measure-PageFit.ps1 -Path page.html -Width 1920 -Height 1080
+#     .\Measure-PageFit.ps1 -Path page.html -Width 1712 -Height 945
+#     .\Measure-PageFit.ps1 -Path page.html                 # falls back to a guess
+#
+# Get the width and height from the user, not from the screen: run
+# Show-ViewportProbe.ps1, have them size a browser window the way they actually
+# intend to read the page, and use the numbers it reports. What the layout has
+# to fit is a window, not a panel - which monitor, maximised or half-width, the
+# bookmarks bar, zoom and display scaling all sit in between.
 #
 # Returns the document height, the viewport, and the overflow. Eyeballing a
 # screenshot tells you a page is too tall but not by how much, which turns
@@ -15,10 +21,10 @@
 param(
     [Parameter(Mandatory)] [string] $Path,
 
-    # Viewport to test against. Omitted, it is measured from this machine's
-    # primary display - the page is being sized for whoever is running this, and
-    # any fixed number here would be one author's monitor. Pass both explicitly
-    # when sizing for a screen you are not sitting at.
+    # Viewport to test against, in CSS pixels. ASK THE USER FOR THESE - see
+    # Show-ViewportProbe.ps1. Omitted, they fall back to this machine's primary
+    # display working area, which is only right when the reader is sitting at
+    # this machine and will maximise the window on the main monitor.
     [int] $Width,
     [int] $Height,
 
@@ -32,6 +38,11 @@ param(
 # is silently ignored and the browser reports its 800x600 default. Quote it.
 
 function Get-PrimaryViewport {
+    # A FALLBACK, not the intended path. It assumes the reader is at this
+    # machine, on the primary monitor, maximised, at 100% zoom, with no
+    # bookmarks bar - and it cannot represent "half-width on monitor 2" or
+    # "the small panel on the left" at all. Prefer numbers from the user.
+    #
     # WinForms reports the working area - the screen minus the taskbar - in the
     # process's coordinate space, which is what a maximised browser window gets
     # and therefore closer to the truth than the raw panel resolution.
@@ -59,7 +70,7 @@ if (-not $Width -or -not $Height) {
     # --window-size is in CSS pixels. On a display running above 100% scaling the
     # browser fits proportionally fewer of them than the panel has physical
     # pixels, so on a scaled screen measure the real window and pass it.
-    Write-Verbose "viewport ${Width}x${Height} (auto-detected primary display)"
+    Write-Warning "no viewport given - guessing ${Width}x${Height} from this machine's primary display. Run Show-ViewportProbe.ps1 and pass the user's real window size."
 }
 
 if (-not $Browser) {
