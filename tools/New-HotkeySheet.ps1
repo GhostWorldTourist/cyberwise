@@ -133,7 +133,7 @@ $catHtml = foreach ($c in $order) {
     $big = $set.Count -gt 12
     @"
   <section class="panel$(if ($big) { ' big' })">
-    <h2><span class="dot $($accent[$c])"></span>$(esc $c)<b>$($set.Count)</b></h2>
+    <h2><span class="dot $($accent[$c])"></span>$(esc $c)</h2>
     <div class="rows">$($rows -join '')</div>
   </section>
 "@
@@ -372,7 +372,7 @@ footer span:last-child{margin-left:auto}
 
 <div class="bar">
   <input id="q" type="search" placeholder="filter - action, mod or key...">
-  <button id="modtoggle" class="pill on" title="show or hide which mod each binding belongs to">mod names</button>
+  <button id="modtoggle" class="pill" title="show or hide which mod each binding belongs to">mod names</button>
   <span id="hits"></span>
 </div>
 
@@ -421,8 +421,10 @@ function setMods(on){
   mt.classList.toggle('on', on);
   try { localStorage.setItem('cw_modnames', on ? '1' : '0'); } catch (e) {}
 }
-let modsOn = true;
-try { modsOn = localStorage.getItem('cw_modnames') !== '0'; } catch (e) {}
+// Off by default: the keys are what you glance at, and which mod owns a binding
+// only matters when you go looking for something to change.
+let modsOn = false;
+try { modsOn = localStorage.getItem('cw_modnames') === '1'; } catch (e) {}
 setMods(modsOn);
 mt.addEventListener('click', () => setMods(document.body.classList.contains('nomods')));
 </script>
