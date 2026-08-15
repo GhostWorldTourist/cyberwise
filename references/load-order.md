@@ -85,6 +85,34 @@ problems drown in noise.
 - Swapping a mod variant produces **both at once**: a stale entry for the old
   filename and an unlisted archive for the new one.
 
+A listed-but-missing entry is frequently **not** a fault at all. Two normal
+causes beyond a disabled mod: an archive an ASI plugin **writes at runtime**,
+which simply is not on disk while the game is closed and must never be pruned as
+stale; and a mod deliberately kept installed-but-off. Report these, but as
+information rather than as damage.
+
+### Do not treat `#` as a comment
+
+**`modlist.txt` has no comment syntax.** Every non-blank line is an archive
+filename, and `#` is a perfectly legal *leading character* in one - mods use it
+precisely because it sorts early, so a load order is full of names like
+`###-NovaScanner.archive` and `#PetTheCat.archive`.
+
+Filtering `^#` as comments - the reflex in almost every config parser - silently
+drops those entries from the "listed" set. Every one then shows up as *on disk
+but unlisted*, which is a serious-sounding fault, and the count can be large: on
+one 727-archive install this fabricated **60** unlisted archives where the true
+number was zero. It also inflates the apparent list length discrepancy, so the
+numbers look internally consistent while being entirely wrong.
+
+Two cheap sanity checks before believing any unlisted count:
+
+- **Do the totals reconcile?** Listed entries plus genuinely-unlisted archives
+  should be close to the file count on disk. If your parse says 668 entries for
+  727 archives, 61 lines went somewhere.
+- **Are the offenders suspiciously uniform?** If every "unlisted" archive shares
+  a leading character, you are looking at your own filter, not the load order.
+
 ## What reordering can and cannot fix
 
 Three situations produce an identical-looking conflict report, and **only one of
