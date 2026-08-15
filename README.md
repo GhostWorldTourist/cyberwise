@@ -20,7 +20,7 @@ getting it wrong first on a real ~700-archive load order.
 | **CET & Lua** | the LuaJIT 5.1 sandbox limits; console commands that work, and popular ones that silently don't |
 | **TweakDB** | never guessing record IDs; vendor stock gating; why some price records exist but are never read |
 | **ReShade** | identifying the add-on build by signature; shader pack header collisions; a known silent-crash incompatibility |
-| **Environment** | telling manual / Vortex / MO2 apart and why it changes everything; reading real settings vs shipped defaults; redscript as an all-or-nothing gate; tooling traps |
+| **Environment** | telling manual / Vortex / MO2 apart and why it changes everything; resolving an internal name back to a findable mod; reading real settings vs shipped defaults; redscript as an all-or-nothing gate; tooling traps |
 
 ## Install
 

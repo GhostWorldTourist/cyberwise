@@ -42,6 +42,13 @@ outcome. Three such cases prove nothing. Find a pair where the orders disagree.
 actual settings store (see `references/environment.md`). A mod's `.reds` or `.xml`
 declares what the author shipped, not what the user set.
 
+**Always dereference an internal name to what the mod manager calls it.** Folder
+names, TweakXL namespaces, redscript modules and archive filenames are authored by
+mod authors for themselves and routinely bear no resemblance to the name a user sees
+in their manager. Telling someone "`ChipwareExpansion` is doing this" leaves them
+unable to find it. Say **Neuralware - Chipware Expansion (Nexus 19798)** and they
+can act. Recipe per manager: `references/environment.md`.
+
 **Do not hand your own guesses back to the user as their statements.** Naming a
 mod you inferred and then writing "the mod is X, not Y" - as though they had said
 Y - wastes a turn and costs trust. If you worked something out, say you worked it

@@ -90,6 +90,47 @@ Presets, saved configurations and script libraries written by mods at runtime ex
 being in the manifest) but are lost on a mod reinstall or a manual clean. Back
 these up somewhere outside the game directory if they represent real work.
 
+## Resolving an internal name back to a findable mod
+
+Never leave the user holding an identifier they cannot search for. Internal names
+are chosen by authors for their own convenience and frequently share nothing with
+the mod's public name.
+
+### How to look it up
+
+| manager | method |
+|---|---|
+| Vortex | the staging folder name encodes it: `<Display Name>-<NexusID>-<version>-<timestamp>` |
+| MO2 | the `mods\` subfolder name is the name shown in the UI (set at install, so user-edited) |
+| manual | **no mapping exists.** The folder name is all there is - say so rather than guessing |
+
+For a file rather than a folder, find which staging folder contains that filename.
+That single step answers "which mod is this from" far more reliably than reasoning
+about the name.
+
+### Why it is worth doing even when you think you know
+
+**A file's name may have nothing to do with the mod shipping it.** An archive called
+`_33removeunderwearforarchivexl.archive` turned out to be bundled inside a **dress
+mod** - the author shipped it as a dependency so the dress would sit correctly.
+Searching the manager for "underwear" found nothing, and the user could not locate
+it until the containing mod was identified by tracing the file back to staging.
+
+**The folder name carries more than the name.** A staging folder reading
+`01 - BODY - PALE-15426-1-1-<timestamp>` tells you the display name is
+"01 - BODY - PALE", the Nexus ID is 15426, and - from the `01` prefix - that this is
+one numbered part of a **modular** mod. When a user's problem turned out to be a
+missing leg texture, that `01` was the clue that other parts existed and one of them
+might supply it.
+
+**Version matters and the folder lies about it** - see the Vortex note above.
+Report the version from the RED4ext log or the download archive, not the folder.
+
+### What to give the user
+
+Display name, Nexus ID, and where it deployed. That is enough to find it in a
+manager, find it on Nexus, and check its file list for parts they may not have.
+
 ## Redscript compilation is all-or-nothing
 
 **If redscript fails to compile, every single `.reds` mod is silently off.** Not
