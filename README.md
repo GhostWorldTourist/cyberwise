@@ -13,7 +13,9 @@ getting it wrong first on a real ~700-archive load order.
 |---|---|
 | **Load order** | why earlier-in-list wins and `zzz_` advice is backwards; why every newly installed mod starts inert; how to test override direction without fooling yourself |
 | **Archives** | reading the RDAR index with no tooling; FNV1a-64 path hashing; which hash dictionaries exist and how incomplete they are |
-| **Diagnosis** | which log answers which question; why a failed ArchiveXL patch looks like total mod failure; failure shapes and what they usually mean |
+| **Diagnosis** | which log answers which question; why a failed ArchiveXL patch looks like total mod failure; why you must locate a visual symptom before theorising |
+| **Bisecting** | where to park files and why not `%TEMP%`; searching by layer before by file; why automated hang detection cannot work |
+| **Crashes** | the post-mortem the game writes itself; why Windows Error Reporting never fires; how to measure memory without inventing a leak |
 | **Saves & appearance** | decompressing `sav.dat`; the logical-offset trap; CDPR's `CharacetrCustomization` typo; the ACU preset format |
 | **CET & Lua** | the LuaJIT 5.1 sandbox limits; console commands that work, and popular ones that silently don't |
 | **TweakDB** | never guessing record IDs; vendor stock gating; why some price records exist but are never read |

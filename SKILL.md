@@ -34,6 +34,15 @@ outcome. Three such cases prove nothing. Find a pair where the orders disagree.
 actual settings store (see `references/environment.md`). A mod's `.reds` or `.xml`
 declares what the author shipped, not what the user set.
 
+**Do not hand your own guesses back to the user as their statements.** Naming a
+mod you inferred and then writing "the mod is X, not Y" - as though they had said
+Y - wastes a turn and costs trust. If you worked something out, say you worked it
+out.
+
+**What the user saw in game outranks what a mod page says.** They are running the
+build; documentation describes intent. When their observation contradicts your
+source, the source is what is wrong, and arguing the point is a waste of a turn.
+
 ## The load-order rule is backwards from most guides
 
 **Earlier in `archive/pc/mod/modlist.txt` WINS.** Popular advice says to prefix a
@@ -65,6 +74,12 @@ check the rest of the payload. A mod's real content may be a CET Lua file, an
 entSpawner registration, a `.reds` script or an `.xl` - none of which appear in an
 archive conflict scan. Uninstalling on archive evidence alone has destroyed
 working functionality.
+
+**The same trap exists outside archives.** If redscript fails to compile, *every*
+`.reds` mod on the install is silently off, with no in-game sign - on one install
+that state went unnoticed for eight months. And a RED4ext plugin whose DLL fails to
+load never compiles its scripts either. Verify the thing is actually running before
+concluding anything from its behaviour. See `references/environment.md`.
 
 ## Many visual bugs are not conflicts at all
 
@@ -112,7 +127,9 @@ unlisted archive sorts last and loses.
 |---|---|
 | `references/load-order.md` | verifying override direction, precedence rules, inert detection |
 | `references/archives.md` | RDAR index format, FNV1a-64 path hashing, hash dictionaries and their gaps |
-| `references/diagnosis.md` | which log says what, crash vs hang, isolating a bad mod |
+| `references/diagnosis.md` | which log says what, locating a visual symptom, failure shapes |
+| `references/bisecting.md` | parking files, layer-first search, why automated hang detection fails |
+| `references/crashes.md` | CrashInfo.json, why WER never fires, memory measurement traps |
 | `references/saves-and-appearance.md` | save decompression, appearance data, ACU preset format |
 | `references/cet-lua.md` | CET sandbox limits, console cheats that work and that don't |
 | `references/tweakdb-and-text.md` | TweakXL authoring, finding real record IDs, locating game text |

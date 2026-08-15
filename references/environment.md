@@ -33,6 +33,67 @@ Presets, saved configurations and script libraries written by mods at runtime ex
 being in the manifest) but are lost on a mod reinstall or a manual clean. Back
 these up somewhere outside the game directory if they represent real work.
 
+## Redscript compilation is all-or-nothing
+
+**If redscript fails to compile, every single `.reds` mod is silently off.** Not
+degraded - off. There is no in-game indication. On one install this was true for
+**eight months** before anyone noticed, and during that time a whole category of
+mods appeared installed, enabled, and did nothing.
+
+Check `r6\logs\redscript_*.log` for `Compilation complete` and a plausible source
+reference count. This should be among the first things verified on any install where
+"a script mod isn't working".
+
+Causes seen, none of them obvious:
+
+- **Duplicate class definitions** - the same mod installed twice under different
+  names (two downloads from one Nexus page, byte-identical `.reds` files).
+- **A missing module dependency** - one mod importing a module that ships in a
+  separate "core" download, producing dozens of errors from one absent mod.
+- **A stale hand-patch** - a hand-edit made to work around an old incompatibility,
+  still in place after the author shipped a real fix that did more.
+
+Also: **a plugin's script directory only compiles if the plugin's DLL loads.** A
+plugin shipped accidentally as a *Debug* build imports `MSVCP140D.dll`,
+`ucrtbased.dll` and `VCRUNTIME140D.dll`, which are not present on a normal machine.
+RED4ext logs error 126 and the plugin never loads - so its scripts never compile and
+the mod is completely inert with no other symptom. Check `red4ext.log` for load
+failures before believing a plugin is active.
+
+## Two downloads from one mod page may not be alternatives
+
+Do not assume that files labelled like variants are mutually exclusive. Compare
+their **contents and file counts** first.
+
+A real case: one download was the full package (23 files - a script plus 20 tweak
+files and an archive), while the "alternative" was 2 files (a manifest and a
+*different build* of the same script). Disabling the first to use the second
+silently dropped 20 tweaks and an archive that nothing else supplied. The correct
+setup was to install **both** and let a manager conflict rule decide which copy of
+the shared script survived.
+
+When two builds of the same filename exist, **file size is the identity tell**.
+Record the byte counts; if the number flips after a redeploy, behaviour changed
+silently.
+
+## Do not infer duplication from shared records
+
+Several mods writing to the same TweakDB records are not necessarily duplicates.
+A set of vehicle-handling mods all wrote to the same vehicle records while touching
+**disjoint property sets** - TweakXL merges that fine and all of them were needed.
+Compare the *properties* each mod writes, not the records it targets, before
+recommending anyone uninstall one.
+
+## Triaging TweakXL errors
+
+A large load order routinely logs dozens of TweakXL errors that are upstream author
+bugs with no crash risk. Do not treat the count as a health metric or try to drive
+it to zero.
+
+One genuinely confusing pattern: **which records fail can vary between launches**,
+because another mod is reshaping the same records and the outcome is order-dependent.
+A varying error list is not nondeterminism in the game; it is load-order interaction.
+
 ## Compile-testing redscript without launching the game
 
 ```

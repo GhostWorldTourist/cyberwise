@@ -16,6 +16,27 @@
 "No patches have been applied" and reverts *everything* in that file - so a single
 malformed entry looks exactly like total mod failure.
 
+## Locate a visual symptom before theorising about it
+
+**Establish where the camera is.** "All the NPCs are grey" and "NPCs are grey in a
+mirror" are different bugs with completely disjoint suspect lists. In one case the
+report was scene-wide, the reality was a single NPC seen in one bathroom mirror, and
+several rounds were lost proposing scene-wide causes. The culprit was a **mirror
+mod**, and the symptom only ever existed in reflections.
+
+Three surfaces worth separating, because each has its own suspects:
+
+| where it looks wrong | look at |
+|---|---|
+| world rendering | skin/body texture mods, load order |
+| mirrors and reflections | mirror and reflection mods |
+| character creator / paperdoll | UV frameworks, appearance-mod facial archives, paperdoll overrides |
+
+Character-creator faults in particular - black skin, missing body parts, missing
+teeth - are usually **not** caused by the skin textures you would suspect from the
+world view. Known causes have included a UV framework build (fixed by switching to
+its REDmod version) and an appearance mod's facial/paperdoll archives.
+
 ## Failure shapes
 
 **Game hangs at new game / loading** - a quest or scene mod. Bisect by disabling
