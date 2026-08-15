@@ -142,6 +142,9 @@ $catHtml = foreach ($c in $order) {
 # ---- gesture panel ----
 $gestHtml = ''
 if ($n.gestures) {
+    # If every group credits the same mod, say it once in the panel heading.
+    $mods   = @($n.gestures | ForEach-Object { $_.mod } | Where-Object { $_ } | Select-Object -Unique)
+    $oneMod = if ($mods.Count -eq 1) { $mods[0] } else { $null }
     $groups = foreach ($g in $n.gestures) {
         $items = foreach ($i in $g.items) {
             $steps = if ($i.steps) {
@@ -154,11 +157,16 @@ if ($n.gestures) {
         </div>
 "@
         }
-        "<div class=""ggroup""><h3>$(esc $g.group)</h3>$($items -join '')</div>"
+        # Name the mod per group only when they differ. Every gesture here comes
+        # from one mod today, so repeating it three times would be noise - but
+        # the panel said nothing at all, which left the keys unattributable.
+        $gmod = if ($g.mod -and -not $oneMod) { "<em>$(esc $g.mod)</em>" } else { '' }
+        "<div class=""ggroup""><h3>$(esc $g.group)$gmod</h3>$($items -join '')</div>"
     }
+    $credit = if ($oneMod) { "<b>$(esc $oneMod)</b>" } else { '<b>tap &middot; hold &middot; multi-tap</b>' }
     $gestHtml = @"
   <section class="panel wide">
-    <h2><span class="dot cyan"></span>Vehicle gestures<b>tap &middot; hold &middot; multi-tap</b></h2>
+    <h2><span class="dot cyan"></span>Vehicle gestures$credit</h2>
     <div class="ggrid">$($groups -join '')</div>
   </section>
 "@
@@ -235,6 +243,14 @@ h1 span{color:var(--text);text-shadow:none}
 #q:focus{border-color:var(--cyan);border-left-color:var(--cyan)}
 #q::placeholder{color:#4c4c60}
 #hits{font-family:var(--mono);font-size:calc(var(--fs)*.55);color:var(--dim);white-space:nowrap}
+.pill{font-family:var(--mono);font-size:calc(var(--fs)*.5);letter-spacing:.1em;cursor:pointer;
+  background:var(--panel);color:var(--dim);border:1px solid var(--line);padding:10px 14px;
+  text-transform:uppercase;white-space:nowrap;transition:.12s}
+.pill:hover{color:var(--text);border-color:#3a3a54}
+.pill.on{background:var(--yellow);color:#07070a;border-color:var(--yellow);font-weight:700}
+/* Hiding the mod name drops every row to a single line - the densest the sheet
+   gets, for when you know your mods and only want the keys. */
+body.nomods .act em{display:none}
 
 /* Flex rather than CSS multi-column. Multicol balances content across a count
    it derives itself, and on a wide monitor it decided two columns were enough
@@ -349,6 +365,7 @@ footer{margin-top:14px;padding-top:9px;border-top:1px solid var(--line);
 
 <div class="bar">
   <input id="q" type="search" placeholder="filter - action, mod or key...">
+  <button id="modtoggle" class="pill on" title="show or hide which mod each binding belongs to">mod names</button>
   <span id="hits"></span>
 </div>
 
@@ -387,6 +404,20 @@ q.addEventListener('input', () => {
   });
   hits.textContent = terms.length ? n + ' / ' + rows.length : '';
 });
+
+// Mod-name toggle. The preference sticks across regenerations where the browser
+// allows it - localStorage is unavailable on some file:// origins, so treat a
+// failure as "no persistence" rather than letting it break the control.
+const mt = document.getElementById('modtoggle');
+function setMods(on){
+  document.body.classList.toggle('nomods', !on);
+  mt.classList.toggle('on', on);
+  try { localStorage.setItem('cw_modnames', on ? '1' : '0'); } catch (e) {}
+}
+let modsOn = true;
+try { modsOn = localStorage.getItem('cw_modnames') !== '0'; } catch (e) {}
+setMods(modsOn);
+mt.addEventListener('click', () => setMods(document.body.classList.contains('nomods')));
 </script>
 </body>
 </html>
