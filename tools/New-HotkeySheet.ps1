@@ -306,11 +306,16 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
    text's longest word sets a floor on the row width, and inside a narrow
    column that floor plus a wide keycap ("Caps Lock") overflowed the page. */
 .act{flex:1 1 0;min-width:0;overflow-wrap:anywhere;font-size:calc(var(--fs)*.84);line-height:1.22}
-/* The mod name wraps like any other text. Held on one line it set a hard floor
-   on the row's width - "Character Customization Anywhere" is wider than a Tools
-   column - and the keycap next to it was pushed off the page. */
-.act em{font-style:normal;font-size:calc(var(--fs)*.5);color:#6a6a80;
-  font-family:var(--mono);letter-spacing:.03em;margin-left:9px}
+/* The mod name goes on its own line, under the action.
+   Inline it competes with the action for the same line and wraps mid-phrase -
+   "Toggle night vision Kiroshi Night / Vision" - which splits the action name
+   in half and leaves every row a different height, so nothing scans. On its own
+   line the action stays one clean line and rows stay uniform.
+   It still wraps rather than being held on one line: held, a long name like
+   "Character Customization Anywhere" set a hard floor on the row width and
+   pushed the keycap off the page. */
+.act em{display:block;font-style:normal;font-size:calc(var(--fs)*.5);color:#6a6a80;
+  font-family:var(--mono);letter-spacing:.03em;margin-top:3px;line-height:1.2}
 .def{color:#4c4c60;margin-left:5px;font-size:calc(var(--fs)*.42);vertical-align:1px}
 .keys{white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:6px}
 .keys i{color:#4c4c60;font-style:normal;padding:0 2px;font-size:calc(var(--fs)*.62)}
