@@ -13,6 +13,12 @@
 # screenshot tells you a page is too tall but not by how much, which turns
 # layout tuning into guesswork; a number turns it into arithmetic.
 #
+# READING THE RESULT: DocHeight equal to ViewHeight does NOT mean the page fills
+# the window exactly. scrollHeight has the viewport as its floor, so equality
+# only means "shorter than the viewport" - which Fits already said. For the true
+# content height, and therefore the real headroom, run it again against a
+# deliberately short window (-Height 400).
+#
 # Works by copying the page, appending a script that stamps the measurements
 # into <title>, and reading that back out of --dump-dom. Headless Chromium has
 # no other way to return a value from the page over the command line.

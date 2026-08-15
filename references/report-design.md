@@ -57,6 +57,22 @@ have never seen is writing code you have never run.
 Then actually read `shot.png`. The measurement catches what you cannot see; the
 screenshot catches what a number cannot describe.
 
+**Reading the result:** `DocHeight == ViewHeight` does *not* mean the page fills
+the window exactly. `scrollHeight` has the viewport as its floor, so equality
+just means "shorter than the viewport" - which is what `Fits: True` already told
+you. To learn the true content height, and therefore how much headroom is left
+to spend, measure again against a deliberately short window:
+
+```powershell
+.\Measure-PageFit.ps1 -Path out.html -Width 1712 -Height 400   # DocHeight is now real
+```
+
+Spend headroom deliberately. If a page has 230px spare, a `-Scale` bump may be
+better than empty space - but check the *worst* state, not the current one. On
+one sheet, scaling up 20% fitted comfortably with an optional column hidden and
+overflowed by 219px with it shown, so the smaller scale was the right answer:
+it was the only one where the toggle worked in both directions.
+
 `Measure-PageFit.ps1` renders headless at a stated viewport and returns the
 document height, the viewport height, and the class of anything overflowing
 horizontally. It exists because two failure modes are **invisible** in the
