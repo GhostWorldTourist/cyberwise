@@ -82,9 +82,18 @@ invoke it directly with `/cyberwise`.
   tools' documented behaviour rather than from years of running them, so treat
   them as less battle-tested than the Vortex ones. Where something was verified,
   it says so; where it is inference, it says that too.
-- The tools are PowerShell on Windows. The notes themselves apply to a Linux/Proton
-  install too, but the paths there sit under the Proton prefix and none of that has
-  been tested here.
+- **The tools are PowerShell on Windows, deliberately, and there is no other
+  runtime to install.** The diagnostics are Windows APIs rather than incidentally
+  Windows code: the registry for locating the install and reading true VRAM past
+  the 4 GB `AdapterRAM` ceiling, CIM for pagefile and disk media, Credential
+  Manager for the API key. Rewriting them in another language would still be
+  Windows-only, and would add a runtime that does not ship with the OS the game
+  requires. PowerShell is already there.
+
+  **The notes are the portable half, and they are portable today.** File formats,
+  hash algorithms and diagnostic reasoning have no operating system. A
+  Linux/Proton user gets all of `references/` and none of `tools/`; the paths
+  there sit under the Proton prefix and none of that has been tested here.
 - Nothing here is a substitute for reading the logs. Several notes exist purely to
   say *which* log, because that is the part people skip.
 
