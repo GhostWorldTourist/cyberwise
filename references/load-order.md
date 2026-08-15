@@ -20,9 +20,9 @@ Worked example of a *useless* test:
 
 | pair | list order | alphabetical | earlier-wins predicts | later-alpha-wins predicts |
 |---|---|---|---|---|
-| `Preem Skin` (65) vs `###Ultra Skin` (66) | Preem first | Ultra first | Preem | Preem |
+| `Skin Textures` (65) vs `###Better Skin` (66) | Skin Textures first | ###Better Skin first | Skin Textures | Skin Textures |
 
-Both models say Preem. Mods prefixed `#`, `!` or `~` sort early alphabetically
+Both models name the same winner. Mods prefixed `#`, `!` or `~` sort early alphabetically
 *and* tend to be placed early in the list, so this correlation is the norm, not the
 exception. Three such pairs still prove nothing.
 
