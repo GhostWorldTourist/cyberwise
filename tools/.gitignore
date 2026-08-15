@@ -1,0 +1,4 @@
+# Generated output contains the user's actual mod list - never commit it.
+*.md
+!README.md
+.nexus-cache.json

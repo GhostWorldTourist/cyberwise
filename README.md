@@ -22,6 +22,16 @@ getting it wrong first on a real ~700-archive load order.
 | **ReShade** | identifying the add-on build by signature; shader pack header collisions; a known silent-crash incompatibility |
 | **Environment** | telling manual / Vortex / MO2 apart and why it changes everything; resolving an internal name back to a findable mod; reading real settings vs shipped defaults; redscript as an all-or-nothing gate; tooling traps |
 
+
+## Included tool
+
+`tools/New-ModManifest.ps1` builds a readable inventory of an installed load order:
+every mod, what it deploys, its Nexus link and install date, and - with an API key -
+a one-line description of what it actually does. `-HideNSFW` omits adult content.
+
+It needs no credentials for the basics, because managers encode
+`<Display Name>-<NexusID>-<version>-<timestamp>` into the staging folder name.
+
 ## Install
 
 Works with manual installs, Vortex and MO2 - though see the environment notes, because

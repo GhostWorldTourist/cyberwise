@@ -151,6 +151,31 @@ to compare against wherever your installed copies live. Never prune its entry as
 stale - and note it still needs a permanent slot in `modlist.txt`, because an
 unlisted archive sorts last and loses.
 
+## Included tool
+
+`tools/New-ModManifest.ps1` generates a readable inventory of an installed load
+order - what every mod is, what it deploys, and (with a Nexus API key) what it
+does. No mod manager shows this in one place.
+
+It works offline because managers encode `<Display Name>-<NexusID>-<version>-<timestamp>`
+into the staging folder name, which yields the name, a working URL and the install
+date with no credentials at all. `-NexusApiKey` adds one-line summaries, author,
+category and the real adult-content flag, cached to disk so re-runs are free.
+`-HideNSFW` omits adult mods.
+
+Two things worth knowing before trusting its NSFW filter:
+
+- **Without an API key it is a name heuristic and it under-detects.** On a
+  846-mod list it caught 17. Adult mods with innocuous names sail past.
+- **Flags propagate across a shared Nexus ID**, because one Nexus page carries one
+  adult flag but can ship many separately-named files. That alone caught 7 of
+  those 17 - a set of character add-ons named only for the character, whose parent
+  page was flagged. Any per-file heuristic that ignores the ID grouping will miss
+  them.
+
+The generated report contains the user's actual mod list. Treat it as personal:
+write it outside any repo, and never commit it.
+
 ## Reference material
 
 | file | covers |
