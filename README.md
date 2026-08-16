@@ -28,9 +28,17 @@ textures.
 | `cyberwise-reports` | mod inventory, system profile, any HTML/markdown deliverable |
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua, finding game text |
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
+| `cyberwise-backstory` | building a character: V's history, voice, roleplay decisions, a dossier |
 
 **They are additive** - a hotkey sheet is also an HTML deliverable, so that job
 wants `cyberwise-hotkeys` and `cyberwise-reports`.
+
+`cyberwise-backstory` is the odd one out, and deliberately so: it is about
+**playing** the game rather than fixing it. It interviews you about your V rather
+than writing one, knows the lifepath prologues well enough to ask questions only
+this game could ask, and states where something sits relative to canon exactly
+once without arguing about it. It lives here because this is where the Cyberpunk
+knowledge already is.
 
 Measured on the split, per task: the front door plus one topic skill and its
 reference costs **1,000-2,200 tokens less** than the old single skill did, because

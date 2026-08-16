@@ -182,9 +182,16 @@ not cost you anything when the question is about textures.
 | `cyberwise-reports` | inventory the mod list, profile the machine, or generate any HTML/markdown deliverable |
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua and console commands, finding game text |
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
+| `cyberwise-backstory` | building a character - V's history, voice, roleplay decisions, a dossier |
 
 `references/environment.md` stays here rather than in one of those, because
 manager behaviour, the settings store and compile-testing bear on all of them.
 
 **These are additive.** A hotkey sheet is also an HTML deliverable, so that job
 wants `cyberwise-hotkeys` *and* `cyberwise-reports`. Load both.
+
+`cyberwise-backstory` is the odd one out: it is about **playing** the game rather
+than fixing it, and none of the method rules above apply to it. It is here
+because this is where the Cyberpunk knowledge lives. If the question is about a
+character rather than an install, go straight there - the diagnostic rules will
+only get in the way.

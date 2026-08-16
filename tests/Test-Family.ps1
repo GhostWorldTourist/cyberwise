@@ -224,12 +224,23 @@ Check 'every skill carries a Codex manifest with the three interface fields' {
 # at this page and nothing else. Irreversible edits are the one failure mode
 # here with no recovery path.
 Check 'any skill that advises writing into an install names the backup helper' {
-    $writeVerbs = 'Set-Content|Out-File|WriteAllText|rewrit|patch .* in place|edit .* in place'
+    # BOTH conditions, deliberately. Keying on write-ish words alone flagged the
+    # backstory skill for saying prose is "never rewritten" - a check that cries
+    # wolf gets switched off, so it has to mean a write to a real game file:
+    # an actual write cmdlet or "in place", AND a concrete file it could land on.
+    # `rewrit` is back in the list, and it has to be: without it the ONLY trigger
+    # words in cyberwise-conflicts lived inside the backup advice itself, so
+    # deleting that advice also deleted the trigger and the check passed on the
+    # very regression it exists to catch. A trigger that lives in the remedy is
+    # not a check. The AND with $gameFiles is what makes it safe to include -
+    # prose about "never rewritten" in a skill with no game files is ignored.
+    $writeVerbs = 'Set-Content|Out-File|WriteAllText|\bin place\b|rewrit'
+    $gameFiles  = 'modlist\.txt|user\.ini|\.yaml|\.reds|\.archive|\.xl\b|inputUserMappings'
     foreach ($s in $withMd) {
         $md = Get-Content -LiteralPath (Join-Path $s.FullName 'SKILL.md') -Raw
-        if ($md -notmatch $writeVerbs) { continue }
+        if ($md -notmatch $writeVerbs -or $md -notmatch $gameFiles) { continue }
         if ($md -notmatch 'ModFileBackup|Set-ModFileContent|Restore-ModFile') {
-            "$($s.Name): advises an in-place write but never mentions ModFileBackup.ps1"
+            "$($s.Name): advises an in-place write to a game file but never mentions ModFileBackup.ps1"
         }
     }
 }

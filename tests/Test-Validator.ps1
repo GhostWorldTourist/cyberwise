@@ -144,6 +144,20 @@ Assert-Catches 'a hardcoded absolute user path' 'no absolute user' `
     { ($frontOrig + "`nRun it from $leak.`n") | Set-Content -LiteralPath $front -NoNewline } `
     { $frontOrig | Set-Content -LiteralPath $front -NoNewline }
 
+# -- safe edits ---------------------------------------------------------------
+# The regression that matters: somebody tidies the "snapshot before you write"
+# paragraph out of a skill that tells the model to rewrite modlist.txt, and the
+# only thing standing between a user and an unrecoverable edit disappears
+# quietly. Reference files are read in isolation, so a rule stated only in the
+# front door is not protection.
+$conf     = Join-Path $S 'cyberwise-conflicts\SKILL.md'
+$confOrig = Get-Content -LiteralPath $conf -Raw
+
+Assert-Catches 'a skill that rewrites a game file with the backup advice removed' 'backup helper' `
+    { (($confOrig -split "`r?`n" | Where-Object { $_ -notmatch 'ModFileBackup|Set-ModFileContent|Restore-ModFile' }) -join "`n") |
+        Set-Content -LiteralPath $conf -NoNewline } `
+    { $confOrig | Set-Content -LiteralPath $conf -NoNewline }
+
 # -- codex --------------------------------------------------------------------
 $yaml     = Join-Path $S 'cyberwise-hotkeys\agents\openai.yaml'
 $yamlOrig = Get-Content -LiteralPath $yaml -Raw
