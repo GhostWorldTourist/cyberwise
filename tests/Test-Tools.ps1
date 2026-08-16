@@ -349,6 +349,54 @@ if ($threw) { Ok 'backups: an oversized file is refused without -Force' }
 else { Bad 'backups: an oversized file is refused without -Force' 'a 60 MB file was copied into the vault silently' }
 Remove-Item -LiteralPath $big -Force
 
+# ========================================================== patch watch ======
+#
+# The sweep that makes overriding another author's file safe. Without it, an
+# override silently keeps winning over every fix they ship afterwards - the one
+# failure mode that made overriding a whole file a bad idea in the first place.
+
+. (Join-Path $Root 'skills\cyberwise\tools\ModPatchWatch.ps1')
+
+$pwDir = Join-Path $sandbox 'patchwatch'
+New-Item -ItemType Directory -Path $pwDir -Force | Out-Null
+$script:PatchStore = Join-Path $pwDir 'patches.json'   # never touch the real store
+
+$upstream = Join-Path $pwDir 'their.yaml'
+$override = Join-Path $pwDir 'mine.yaml'
+Set-Content -LiteralPath $upstream 'author: v1' -NoNewline
+Set-Content -LiteralPath $override 'mine: v1'   -NoNewline
+
+Register-ModPatch -Name 'T' -UpstreamPath $upstream -OverridePath $override -Note 'why' 6>$null | Out-Null
+
+$s = (Test-ModPatches -Quiet | Where-Object Name -eq 'T').State
+if ($s -eq 'OK') { Ok 'patchwatch: an untouched upstream file reports OK' }
+else { Bad 'patchwatch: an untouched upstream file reports OK' "reported $s" }
+
+# The one that matters: the author ships an update.
+Set-Content -LiteralPath $upstream 'author: v2 with their own fix' -NoNewline
+$s = (Test-ModPatches -Quiet | Where-Object Name -eq 'T').State
+if ($s -eq 'CHANGED') { Ok 'patchwatch: an upstream update is detected' }
+else { Bad 'patchwatch: an upstream update is detected' "reported $s - a stale override would go unnoticed" }
+
+# Re-registering against the new version clears it, which is the re-derive loop.
+Register-ModPatch -Name 'T' -UpstreamPath $upstream -OverridePath $override -Note 'why' 6>$null | Out-Null
+$s = (Test-ModPatches -Quiet | Where-Object Name -eq 'T').State
+if ($s -eq 'OK') { Ok 'patchwatch: re-registering after re-deriving clears the warning' }
+else { Bad 'patchwatch: re-registering after re-deriving clears the warning' "reported $s" }
+
+# An override that is not actually installed protects nothing.
+Remove-Item -LiteralPath $override -Force
+$s = (Test-ModPatches -Quiet | Where-Object Name -eq 'T').State
+if ($s -eq 'NOOVER') { Ok 'patchwatch: a missing override file is reported' }
+else { Bad 'patchwatch: a missing override file is reported' "reported $s" }
+
+Remove-Item -LiteralPath $upstream -Force
+$s = (Test-ModPatches -Quiet | Where-Object Name -eq 'T').State
+if ($s -eq 'GONE') { Ok 'patchwatch: an uninstalled upstream mod is reported' }
+else { Bad 'patchwatch: an uninstalled upstream mod is reported' "reported $s" }
+
+$script:PatchStore = Join-Path $env:LOCALAPPDATA 'cyberwise\patches.json'   # restore
+
 # =============================================================== manifest ====
 #
 # The manifest reads a manager's staging folder names, and Vortex's convention is

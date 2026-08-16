@@ -75,12 +75,21 @@ platform limitation. Capture stderr, check the exit code, confirm the process
 exists - then interpret.
 
 **Find out how the install is assembled before you trust the filesystem.** Manual,
-Vortex and MO2 present completely different pictures on disk, and nearly every
-technique here reads the disk. In particular, **an MO2 install may show you an
-almost empty game directory** - it virtualises mods through USVFS and its Root
-Builder plugin copies files in at launch and removes them when the game closes. On
-such an install "the file isn't there" is not evidence of anything. Detection recipe
-and per-manager consequences: `references/environment.md`.
+Vortex, MO2 and an automated **Wabbajack modlist** present completely different
+pictures on disk, and nearly every technique here reads the disk.
+
+In particular, **an MO2 install may show you an almost empty game directory** - it
+virtualises mods through USVFS and its Root Builder plugin copies files in at
+launch and removes them when the game closes. On such an install "the file isn't
+there" is not evidence of anything. Detection recipe and per-manager
+consequences: `references/environment.md`.
+
+**On a Wabbajack modlist, updating the list DELETES every mod that is not part of
+the new version** - including any fix you add for them. Anything meant to survive
+must be named `[NoDelete] ...`, and `[NoDelete]` mods re-sort alphabetically
+afterwards, so the order needs to live in the name too (`[NoDelete] [0000] ...`).
+Establish whether you are on one **before** building somebody a fix, or you are
+handing them something with a lifespan of one update.
 
 **Confirm the mod is actually deployed before theorising about why it fails.**
 Hours have gone into explaining the behaviour of a mod that was staged in a mod
@@ -157,6 +166,14 @@ because an unlisted archive sorts last and loses.
 | tool | what it does |
 |---|---|
 | `tools/ModFileBackup.ps1` | snapshot / diff / restore for any file you are about to edit in place |
+| `tools/ModPatchWatch.ps1` | register every patch and override, then sweep for the ones whose upstream file has changed |
+
+**Fixing another author's mod? Register it.** `Register-ModPatch` records the hash
+of their file as it was when you patched it; `Test-ModPatches` re-checks after any
+mod update and reports `CHANGED`, `GONE` or `NOOVER`. Without that, an override
+silently keeps winning over every fix the author ships afterwards - which is the
+one failure mode that makes overriding a whole file risky at all. See
+`references/environment.md`.
 
 Dot-source it (`. tools\ModFileBackup.ps1`) and use `Set-ModFileContent` instead
 of `Set-Content` for anything inside a user's install. It prints the diff, takes

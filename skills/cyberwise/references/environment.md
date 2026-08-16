@@ -120,6 +120,71 @@ If you are unsure whether a given install virtualises, the quick test is: with t
 game closed, does `archive\pc\mod` contain the archives the user says are enabled?
 If not, you are outside the VFS and must change approach.
 
+## Wabbajack modlists - a fourth mode, and the one that deletes your work
+
+A **Wabbajack** list (Project Ultrapunk is the prominent Cyberpunk 2077 one) is
+not a fourth mod manager - it is an automated installer that builds a curated
+**MO2** install. So everything in the MO2 section applies, plus one rule that
+overrides most of this page:
+
+> **Updating the list DELETES every mod that is not part of the new version.**
+
+That includes every fix, override and patch mod you added. It is not a bug and
+there is no undo; it is how the list guarantees a reproducible install.
+
+### The affordance: `[NoDelete]`
+
+Mods whose **name begins with `[NoDelete]`** survive the update. Anything you add
+to a Wabbajack list must be named that way, or the next list update removes it
+silently and the problem it fixed comes back with no explanation.
+
+```
+[NoDelete] My Borg4a Fix
+[NoDelete] Config Files
+```
+
+**Two consequences that are easy to miss:**
+
+- **`[NoDelete]` mods re-sort alphabetically after an update**, so your carefully
+  chosen priority is lost even though the mods survived. The convention is to
+  number them - `[NoDelete] [0000]`, `[NoDelete] [0001]` - so the order is part
+  of the name. Ultrapunk points at a "NoDelete Tagger and Indexer" plugin that
+  automates the numbering.
+- **Load order changing silently is a load-order bug**, so re-check conflicts
+  after any list update, exactly as you would after installing a mod.
+
+### What this changes about fixing another author's mod
+
+Everything above about overrides still holds, with one addition that comes first:
+**name the override mod `[NoDelete] ...`**. An untagged override is not a durable
+fix on a Wabbajack list - it is a fix with a lifespan of one update.
+
+Register it with `ModPatchWatch.ps1` as well. The sweep tells you when the
+upstream file changed; the tag is what stops your fix being deleted before you
+get the chance to look.
+
+### Detecting one
+
+Look for MO2 mods whose names start with `[NoDelete]`, a `.wabbajack` file, or an
+MO2 install living inside the list's own folder rather than a user-chosen one.
+**Ask if unsure** - it changes what advice is safe.
+
+### Say the support boundary out loud
+
+These lists are curated wholes, and their authors generally state that problems
+caused by added mods are the user's own responsibility. A user who adds mods on
+your advice has stepped outside the list's support, and they should know that
+before they do it, not when they go asking its maintainers for help.
+
+Ultrapunk also requires **a clean Cyberpunk 2077 install with no leftover mod
+files** before installing - relevant when a user is moving to a list from a
+hand-built load order, because leftovers in the game directory are exactly the
+kind of thing no manager owns.
+
+*Verified against the Project Ultrapunk guide, August 2026. Conventions can
+differ between lists - check the list's own documentation before relying on the
+details here.*
+
 ## A manager only owns what it deployed
 
 Files written **directly into the game directory** are invisible to the manager
@@ -175,8 +240,33 @@ tweak folder loads last and wins without a manager conflict rule and without
 touching the original at all. Where the format only replaces whole files, the
 trade-off below applies.
 
-For whole-file cases, the honest answer depends on one question: **would you
-notice if their update silently lost to your copy?**
+### Register it, then the silent failure stops being silent
+
+The objection to overriding a whole file is that their next update loses to your
+copy **without anything saying so**. That danger comes entirely from not
+noticing, so remove the not-noticing:
+
+```powershell
+. tools\ModPatchWatch.ps1
+Register-ModPatch -Name '<what>' -UpstreamPath '<their file>' -OverridePath '<yours>' -Note '<why>'
+Test-ModPatches      # the sweep - run after ANY mod update
+```
+
+`Register-ModPatch` records the hash of the author's file **as it was when you
+patched it**. The sweep re-hashes and reports `CHANGED` when they ship a new
+version, `GONE` when the mod is uninstalled or restructured, and `NOOVER` when
+your override file is not actually there.
+
+**Do this for every patch and every override, without exception.** An
+unregistered override is exactly the thing that quietly reimposes old behaviour
+for months. A registered one is a line of output after an update.
+
+With the sweep in place, an override is the better choice almost everywhere: it
+survives the update *and* you find out that it did. Reserve the in-place patch
+for cases where you would rather the fix be destroyed than be stale.
+
+For whole-file cases, the remaining question is: **would you notice if their
+update silently lost to your copy?** With registration, the answer is yes.
 
 | | override mod | re-appliable patch |
 |---|---|---|
