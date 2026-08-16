@@ -42,9 +42,13 @@ Then restart your agent. Full detail, including the tray app, is further down.
 
 ## What it looks like
 
-Abridged from a real session on an 850-mod install. **The bracketed notes are
-what the skill adds** — an assistant without it can still read files, but it does
-not know which files, or which of the plausible answers is the wrong one.
+A walkthrough on a real 850-mod install. **The questions are staged; every number
+and finding is real output** from the tools in this repo, run against that
+install. Abridged for length.
+
+**The bracketed notes are what the skill adds** — an assistant without it can
+still read files, but it does not know which files, or which of the plausible
+answers is the wrong one.
 
 ---
 
@@ -203,8 +207,16 @@ summary** puts the last ten crashes on the clipboard as plain text — which is
 what someone actually needs when they go and ask for help.
 
 `CyberwiseTray.exe --selftest` prints everything it can see, and prints
-`NOT FOUND` rather than a plausible default. See `app/README.md`, including what
-is deliberately not done yet: it is unsigned, so SmartScreen will warn.
+`NOT FOUND` rather than a plausible default. See `app/README.md`.
+
+**The tray is entirely optional** — every tool works without it. It exists so
+somebody who never opens a terminal can see whether recording is happening.
+
+**There is deliberately no prebuilt download.** An unsigned installer from an
+unknown publisher is exactly what modders are right to refuse, and offering one
+would ask for trust this repo has not earned. Build it yourself in one command,
+from source you can read — or skip it. If you ask your assistant for the tray, it
+will build it for you rather than hand you instructions.
 
 ## Nothing here modifies your install — but an assistant will
 
