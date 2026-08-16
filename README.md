@@ -103,6 +103,39 @@ To install by hand instead, copy each directory under `skills/` into
 you ask about Cyberpunk 2077 mod problems; you can also invoke one directly, e.g.
 `/cyberwise-conflicts`.
 
+## Tests
+
+```powershell
+.\tests\Test-Family.ps1       # structural validation of the family
+.\tests\Test-Validator.ps1    # proves the validator above can actually fail
+```
+
+A skill family breaks *silently*. A `references/foo.md` that no longer exists, a
+frontmatter `name` that stopped matching its directory, a route to a renamed
+skill - none of it errors. The skill loads and quietly cannot find the thing it
+just told the model to go and read. Splitting cyberwise into eight parts produced
+exactly one of those; it was caught by hand, and the point of `Test-Family.ps1`
+is that the next one is caught by the machine.
+
+It checks twelve things, including that every reference and tool a `SKILL.md`
+names resolves inside that skill, that every shipped reference is actually
+mentioned by its owner, that every topic skill is reachable from the front door,
+that every reference carries its own **Verified** / **Re-check after a patch**
+stamp, and that no absolute user path has leaked into a public repo.
+
+`Test-Validator.ps1` exists because a validator that has only ever returned green
+is indistinguishable from one that returns green unconditionally. It copies the
+family to a temp directory, injects one real fault at a time - a moved reference,
+a renamed skill, a `.ps1` that no longer parses - and asserts that *the check
+which owns that fault* is the one that reports, then that the tree comes back
+clean afterwards. It found two bugs in the validator it tests.
+
+Neither needs anything installed. Pester would be a dependency, and the family's
+whole position is that PowerShell is already on the machine.
+
+**Adding a skill?** Run both. The reachability and routing checks will tell you
+what you forgot to wire into the front door.
+
 ## Scope and honesty
 
 - Written against **patch 2.31**. Paths and behaviours drift between patches, and
