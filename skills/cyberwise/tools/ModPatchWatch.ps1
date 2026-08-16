@@ -94,6 +94,26 @@ function Register-ModPatch {
 
     if (-not (Test-Path -LiteralPath $UpstreamPath)) { throw "no upstream file at: $UpstreamPath" }
 
+    # Keep a COPY of their file as it was, not just its hash.
+    #
+    # When the sweep later says CHANGED, the question is never "did it change" -
+    # it is "does my change still apply, and did they fix it themselves?". That
+    # needs their-old against their-new, which needs their-old to still exist.
+    # A hash tells you something moved; the snapshot tells you what.
+    #
+    # This exists to make the JUDGEMENT fast, not to enable an automatic merge.
+    # See Show-ModPatchDrift, and the warning above it.
+    $snapDir = Join-Path (Split-Path -Parent $script:PatchStore) 'upstream'
+    if (-not (Test-Path -LiteralPath $snapDir)) { New-Item -ItemType Directory -Path $snapDir -Force | Out-Null }
+    $safe = ($Name -replace '[^A-Za-z0-9._-]', '_')
+    $snap = Join-Path $snapDir "$safe.upstream"
+    $srcItem = Get-Item -LiteralPath $UpstreamPath
+    if ($srcItem.Length -le 5MB) {
+        Copy-Item -LiteralPath $UpstreamPath -Destination $snap -Force
+    } else {
+        $snap = $null   # too big to be a text patch target; hash-only is honest
+    }
+
     $entry = [pscustomobject]@{
         Name         = $Name
         Kind         = if ($OverridePath) { 'override' } else { 'in-place' }
@@ -101,6 +121,7 @@ function Register-ModPatch {
         UpstreamSha  = (Get-FileHash -LiteralPath $UpstreamPath -Algorithm SHA256).Hash
         UpstreamSize = (Get-Item -LiteralPath $UpstreamPath).Length
         OverridePath = if ($OverridePath) { $OverridePath } else { $null }
+        Snapshot     = $snap
         RecordedUtc  = (Get-Date).ToUniversalTime().ToString('s') + 'Z'
         Note         = $Note
     }
@@ -119,6 +140,59 @@ function Unregister-ModPatch {
     if ($keep.Count -eq $all.Count) { Write-Warning "nothing registered as '$Name'"; return }
     Save-ModPatchStore $keep
     Write-Host "unregistered '$Name'" -ForegroundColor Green
+}
+
+function Show-ModPatchDrift {
+    <#
+    .SYNOPSIS
+        Show what the AUTHOR changed since you patched their file.
+    .DESCRIPTION
+        Run this when the sweep says CHANGED. It diffs their file as it was when
+        you patched it against their file now - so you can see what they did, and
+        judge whether your change still applies, still belongs somewhere else, or
+        is no longer needed because they fixed it themselves.
+
+        ** NEVER AUTO-APPLY THE OLD PATCH TO THE NEW FILE. **
+
+        This is deliberate and it is not laziness. A patch is a semantic change
+        to code that has since moved. Re-applying it mechanically either fails -
+        which is fine - or SUCCEEDS IN THE WRONG PLACE, which is silent and
+        worse. Fuzzy or context-matched patching exists precisely to land a hunk
+        somewhere plausible, and "plausible" is not "correct" in someone else's
+        refactored file.
+
+        Three questions, in order, every time:
+
+          1. **Did they fix it themselves?** Then retire the patch:
+             Unregister-ModPatch, and uninstall the override. This is the happy
+             outcome and it is easy to miss while concentrating on re-applying.
+          2. **Does the thing you changed still exist**, under that name, doing
+             that job? A rename or a restructure can make an old patch
+             meaningless while still applying cleanly.
+          3. **Re-derive from their new file** - read it, make the change again,
+             rebuild the override, then Register-ModPatch again to clear the flag.
+
+        No -AutoFix switch will ever be added here, and one should not be.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $Name)
+
+    $p = Get-ModPatch -Name $Name | Select-Object -First 1
+    if (-not $p) { throw "nothing registered as '$Name'" }
+    if (-not $p.Snapshot -or -not (Test-Path -LiteralPath $p.Snapshot)) {
+        throw "no snapshot of their original file for '$Name' - registered before snapshots, or the file was too large. Re-derive by reading their file directly."
+    }
+    if (-not (Test-Path -LiteralPath $p.UpstreamPath)) { throw "their file is gone: $($p.UpstreamPath)" }
+
+    $backup = Join-Path $PSScriptRoot 'ModFileBackup.ps1'
+    if (-not (Test-Path -LiteralPath $backup)) { throw "ModFileBackup.ps1 not found beside this script" }
+    . $backup
+
+    Write-Host ''
+    Write-Host "what the AUTHOR changed since you patched '$Name':" -ForegroundColor Cyan
+    Write-Host "  yours was for: $($p.Note)" -ForegroundColor DarkGray
+    Show-ModFileDiff -Path $p.Snapshot -NewFile $p.UpstreamPath | Out-Null
+    Write-Host 'Re-derive from their new file. Do not replay the old edit blindly.' -ForegroundColor Yellow
 }
 
 function Test-ModPatches {
