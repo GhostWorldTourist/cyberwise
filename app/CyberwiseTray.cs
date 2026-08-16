@@ -111,6 +111,10 @@ namespace Cyberwise
         public string GameRoot = "";
         public string WatchDir = "";
         public string Watcher  = "";
+        // Start watching as soon as the tray starts. On by default: someone who
+        // installed a crash watcher wants it watching, and an icon that sits
+        // there recording nothing until you find the right menu item is a trap.
+        public bool AutoStartWatcher = true;
 
         public static string Path
         {
@@ -137,6 +141,8 @@ namespace Cyberwise
                     if (k.Equals("GameRoot", StringComparison.OrdinalIgnoreCase)) c.GameRoot = v;
                     else if (k.Equals("WatchDir", StringComparison.OrdinalIgnoreCase)) c.WatchDir = v;
                     else if (k.Equals("Watcher", StringComparison.OrdinalIgnoreCase)) c.Watcher = v;
+                    else if (k.Equals("AutoStartWatcher", StringComparison.OrdinalIgnoreCase))
+                        c.AutoStartWatcher = !(v.Equals("false", StringComparison.OrdinalIgnoreCase) || v == "0");
                 }
             }
             c.FillDefaults();
@@ -153,6 +159,8 @@ namespace Cyberwise
             sb.AppendLine("WatchDir=" + WatchDir);
             sb.AppendLine("# Watcher: full path to Watch-Crashes.ps1.");
             sb.AppendLine("Watcher=" + Watcher);
+            sb.AppendLine("# AutoStartWatcher: begin watching as soon as Cyberwise starts.");
+            sb.AppendLine("AutoStartWatcher=" + (AutoStartWatcher ? "true" : "false"));
             File.WriteAllText(Path, sb.ToString());
         }
 
@@ -229,7 +237,6 @@ namespace Cyberwise
 
     internal sealed class TrayApp : IDisposable
     {
-        private const string TaskName = "Cyberwise crash watch";
 
         private readonly NotifyIcon _icon;
         private readonly ContextMenuStrip _menu;
@@ -258,7 +265,7 @@ namespace Cyberwise
             _miCrashes = new ToolStripMenuItem("Crashes: …")   { Enabled = false };
 
             _miStartStop = new ToolStripMenuItem("Start watching", null, OnStartStop);
-            _miAtLogon   = new ToolStripMenuItem("Start automatically at logon", null, OnToggleAtLogon)
+            _miAtLogon   = new ToolStripMenuItem("Start Cyberwise when I log in", null, OnToggleAtLogon)
                            { CheckOnClick = false };
 
             _menu.Items.Add(title);
@@ -296,6 +303,15 @@ namespace Cyberwise
             // visible and editable, rather than living only in memory where a
             // user cannot see what was guessed on their behalf.
             if (!File.Exists(Config.Path)) { try { _cfg.Save(); } catch { } }
+
+            // Start watching without being asked. This is what makes autostart
+            // mean something: after a reboot the icon returns AND the recording
+            // resumes, rather than the icon returning and quietly recording
+            // nothing until someone notices.
+            if (_cfg.AutoStartWatcher && File.Exists(_cfg.Watcher) && !WatcherRunning())
+            {
+                try { StartWatcher(silent: true); } catch { }
+            }
 
             if (string.IsNullOrWhiteSpace(_cfg.GameRoot))
             {
@@ -380,7 +396,7 @@ namespace Cyberwise
             _miGame.Text      = "Game: "    + (game ? "running" : "not running");
             _miCrashes.Text   = "Crashes recorded: " + crashes;
             _miStartStop.Text = watching ? "Stop watching" : "Start watching";
-            _miAtLogon.Checked = TaskExists();
+            _miAtLogon.Checked = AutoStartEnabled();
 
             _icon.Text = Truncate("Cyberwise - " + (watching ? "watching" : "not watching")
                                   + (game ? ", game running" : "") + " - " + crashes + " crash(es)");
@@ -403,10 +419,11 @@ namespace Cyberwise
             Refresh();
         }
 
-        private void StartWatcher()
+        private void StartWatcher(bool silent = false)
         {
             if (!File.Exists(_cfg.Watcher))
             {
+                if (silent) return;
                 MessageBox.Show("Cannot find Watch-Crashes.ps1.\n\nExpected at:\n" + _cfg.Watcher +
                                 "\n\nOpen Settings and set the Watcher path.",
                                 "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -436,13 +453,14 @@ namespace Cyberwise
                 // reporting a watcher that is not there is the failure this
                 // whole application exists to prevent.
                 Thread.Sleep(1200);
-                if (!WatcherRunning())
+                if (!WatcherRunning() && !silent)
                     MessageBox.Show("The watcher was launched but is not running.\n\n" +
                                     "Check the paths in Settings, especially if any contain unusual characters.",
                                     "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {
+                if (silent) return;
                 MessageBox.Show("Could not start the watcher:\n\n" + ex.Message,
                                 "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -470,51 +488,70 @@ namespace Cyberwise
             }
         }
 
-        private static bool TaskExists()
+        // AUTOSTART VIA THE PER-USER RUN KEY, NOT A SCHEDULED TASK.
+        //
+        // The first version used `schtasks /Create /SC ONLOGON`, which failed
+        // with "Access is denied" even in the user's own session: creating a
+        // task in the root folder generally wants elevation, and this is a
+        // per-user tray app that should never ask for admin. HKCU\...\Run needs
+        // no elevation ever, is the ordinary mechanism for exactly this, and is
+        // visible to the user in Task Manager > Startup where they can turn it
+        // off without coming back here.
+        //
+        // It also autostarts the TRAY rather than the watcher directly. The tray
+        // then starts the watcher itself, so there is one thing to supervise
+        // instead of two, and the icon comes back after a reboot - which is what
+        // someone means by "start automatically" anyway.
+        private const string RunKey   = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string RunValue = "Cyberwise";
+
+        private static string ExePath { get { return Application.ExecutablePath; } }
+
+        private static bool AutoStartEnabled()
         {
             try
             {
-                var p = Run("schtasks.exe", "/Query /TN \"" + TaskName + "\"");
-                return p.ExitCode == 0;
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, false))
+                    return k != null && k.GetValue(RunValue) != null;
             }
             catch { return false; }
         }
 
         private void OnToggleAtLogon(object sender, EventArgs e)
         {
-            if (TaskExists())
+            try
             {
-                var p = Run("schtasks.exe", "/Delete /TN \"" + TaskName + "\" /F");
-                if (p.ExitCode != 0)
-                    MessageBox.Show("Could not remove the logon task:\n\n" + p.Error, "Cyberwise",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-            else
-            {
-                if (!File.Exists(_cfg.Watcher))
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, true))
                 {
-                    MessageBox.Show("Set the Watcher path in Settings first.", "Cyberwise",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-                // schtasks needs the whole command as ONE argument, so the inner
-                // quotes are doubled. Getting this wrong registers a task that
-                // silently never runs.
-                var inner = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden"
-                          + " -File \\\"" + _cfg.Watcher + "\\\""
-                          + " -Dir \\\"" + _cfg.WatchDir + "\\\""
-                          + (string.IsNullOrWhiteSpace(_cfg.GameRoot) ? "" : " -GameRoot \\\"" + _cfg.GameRoot + "\\\"");
-                var p = Run("schtasks.exe",
-                    "/Create /SC ONLOGON /TN \"" + TaskName + "\" /TR \"" + inner + "\" /F /RL LIMITED");
+                    if (k == null) throw new Exception("could not open the Run key");
 
-                if (p.ExitCode != 0)
-                    MessageBox.Show("Could not create the logon task:\n\n" + p.Error +
-                                    "\n\nThis can be blocked by company policy. The watcher still works while " +
-                                    "Cyberwise is running - it just will not start by itself after a reboot.",
+                    if (AutoStartEnabled())
+                    {
+                        k.DeleteValue(RunValue, false);
+                    }
+                    else
+                    {
+                        // Quoted: the path may contain spaces, and an unquoted
+                        // Run entry silently starts the wrong thing or nothing.
+                        k.SetValue(RunValue, "\"" + ExePath + "\"");
+                        _cfg.AutoStartWatcher = true;
+                        try { _cfg.Save(); } catch { }
+                    }
+                }
+
+                // Confirm rather than assume: reporting a setting that did not
+                // take is the failure this app exists to prevent elsewhere.
+                bool want = !_miAtLogon.Checked;
+                if (AutoStartEnabled() != want)
+                    MessageBox.Show("Windows did not accept the change to startup settings.",
                                     "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                else if (!TaskExists())
-                    MessageBox.Show("The task was reported as created but is not there afterwards.",
-                                    "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Could not change the startup setting:\n\n" + ex.Message +
+                                "\n\nCyberwise still works while it is open - it just will not " +
+                                "start by itself after a reboot.",
+                                "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             Refresh();
         }
@@ -636,7 +673,7 @@ namespace Cyberwise
                 : cfg.Watcher + (File.Exists(cfg.Watcher) ? "" : "  (MISSING)")));
             sb.AppendLine("  watcher       : " + (WatcherRunning() ? "running" : "not running"));
             sb.AppendLine("  game          : " + (GameRunning() ? "running" : "not running"));
-            sb.AppendLine("  logon task    : " + (TaskExists() ? "registered" : "not registered"));
+            sb.AppendLine("  start at logon: " + (AutoStartEnabled() ? "yes (HKCU Run)" : "no"));
 
             var crashDir = string.IsNullOrWhiteSpace(cfg.WatchDir) ? null : Path.Combine(cfg.WatchDir, "crashinfo");
             int n = (crashDir != null && Directory.Exists(crashDir))

@@ -80,13 +80,29 @@ the assembly attributes, so there is no separate `.rc` file to keep in sync.
 
 - **Watcher / Game / Crashes recorded** — live status, refreshed every 5 s
 - **Start / Stop watching**
-- **Start automatically at logon** — registers a scheduled task via `schtasks`
+- **Start Cyberwise when I log in** — a per-user `HKCU\...\Run` entry, no admin needed
 - **Copy crash summary** — the last ten crashes as plain text, for pasting when
   asking someone for help. That is the action this audience actually needs next.
 - **Open crash folder**, **Settings…**, **Reload settings**, **Exit**
 
 Exit leaves the watcher running on purpose: quitting the UI should not silently
 stop a recording someone is relying on.
+
+### Why autostart is a Run key and not a scheduled task
+
+The first version registered a `schtasks /SC ONLOGON` task and failed with
+**"Could not create the logon task: ERROR: Access is denied"** — in the user's
+own session, not a sandbox. Creating a task in the root folder generally wants
+elevation, and a per-user tray app should never ask for admin.
+
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` needs no elevation ever, is
+the ordinary mechanism for exactly this, and shows up in Task Manager ▸ Startup
+where someone can turn it off without coming back here.
+
+It also autostarts **the tray**, not the watcher — so there is one thing to
+supervise instead of two. `AutoStartWatcher=true` in the settings then starts
+the recording as the tray comes up, because an icon that returns after a reboot
+and quietly records nothing is worse than no icon at all.
 
 ## Self-test
 
@@ -95,7 +111,7 @@ stop a recording someone is relying on.
 ```
 
 Prints everything the app can see — detected game root and version, watcher
-script, whether the watcher and game are running, whether the logon task exists,
+script, whether the watcher and game are running, whether autostart is on,
 and the crashes on file. It reports what it **found**, and prints `NOT FOUND`
 rather than a plausible default, because a wrong guess presented confidently is
 worse than a blank.
@@ -112,6 +128,7 @@ are visible and editable rather than living only in memory:
 GameRoot=C:\...\Cyberpunk 2077
 WatchDir=C:\...\Cyberpunk 2077\_crashwatch
 Watcher=C:\...\Watch-Crashes.ps1
+AutoStartWatcher=true
 ```
 
 The game root is found from Steam's registry entry (including alternate library
