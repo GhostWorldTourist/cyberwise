@@ -32,6 +32,20 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
+// Windows shows an executable's FileDescription - not its filename - in
+// Settings > Taskbar > "Select which icons appear on the taskbar", in Task
+// Manager, and in the file's own properties. With no version resource it falls
+// back to "CyberwiseTray.exe", which looks like something that installed itself
+// without asking. AssemblyTitle becomes FileDescription; csc builds the Win32
+// version resource from these attributes, so no separate .rc file is needed.
+[assembly: System.Reflection.AssemblyTitle("Cyberwise")]
+[assembly: System.Reflection.AssemblyDescription("Crash watcher and diagnostics for modded Cyberpunk 2077")]
+[assembly: System.Reflection.AssemblyProduct("Cyberwise")]
+[assembly: System.Reflection.AssemblyCompany("Ghost World Tourist")]
+[assembly: System.Reflection.AssemblyCopyright("MIT")]
+[assembly: System.Reflection.AssemblyVersion("2026.8.16.0")]
+[assembly: System.Reflection.AssemblyFileVersion("2026.8.16.0")]
+
 namespace Cyberwise
 {
     internal static class Program
@@ -53,6 +67,19 @@ namespace Cyberwise
             {
                 AttachConsole(ATTACH_PARENT_PROCESS);
                 Console.WriteLine(TrayApp.SelfTest());
+                return;
+            }
+
+            // --icon-preview <file.png> renders the icon at every tray size on
+            // both light and dark backgrounds. A 16 px icon cannot be judged from
+            // source, and this is the only honest way to check it is legible.
+            int pi = Array.FindIndex(args ?? new string[0],
+                a => a.Equals("--icon-preview", StringComparison.OrdinalIgnoreCase));
+            if (pi >= 0 && args.Length > pi + 1)
+            {
+                AttachConsole(ATTACH_PARENT_PROCESS);
+                TrayApp.WriteIconPreview(args[pi + 1]);
+                Console.WriteLine("wrote " + args[pi + 1]);
                 return;
             }
 
@@ -642,18 +669,165 @@ namespace Cyberwise
             }
         }
 
-        /// <summary>Draw the icon rather than ship a .ico, so state is a colour.</summary>
-        private static Icon MakeIcon(Color fill)
+        /// <summary>
+        /// A cybernetic eye, drawn at runtime so state is a colour rather than a
+        /// second asset to ship.
+        ///
+        /// DESIGNING FOR 16 PIXELS. At tray size there is room for roughly four
+        /// ideas, so they have to be the right four: a dark bezel to read as
+        /// hardware, a bright iris carrying the state colour, a SLIT pupil -
+        /// which is what makes it read as inhuman rather than as a dot - and one
+        /// specular pixel so it looks like a lens. Anything else (aperture
+        /// blades, circuitry, an eyelid) turns to mud at this size.
+        ///
+        /// Everything is proportional to the requested size because the tray asks
+        /// for 16, 20, 24 or 32 px depending on DPI, and a shape hard-coded for
+        /// 16 is a blurry mess when scaled up to 32.
+        ///
+        /// The bezel is near-black with a light top edge: the tray background can
+        /// be light OR dark, and an icon that relies on contrast with only one of
+        /// them disappears on the other half of all machines.
+        /// </summary>
+        internal static Bitmap DrawEye(int size, Color iris)
         {
-            using (var bmp = new Bitmap(16, 16))
+            var bmp = new Bitmap(size, size);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.Clear(Color.Transparent);
-                using (var b = new SolidBrush(fill)) g.FillEllipse(b, 2, 2, 12, 12);
-                using (var p = new Pen(Color.FromArgb(200, 0, 0, 0), 1)) g.DrawEllipse(p, 2, 2, 12, 12);
+
+                float s = size;
+
+                // ALMOND, not a circle. At 16 px the outline is most of what the
+                // eye has to say, and a lens shape says "eye" instantly where a
+                // disc says "status dot". The first version was a disc and read
+                // as exactly that.
+                float mid = s * 0.5f;
+                float tipL = s * 0.035f, tipR = s * 0.965f;
+                float top = s * 0.175f, bot = s * 0.825f;
+
+                using (var lens = new System.Drawing.Drawing2D.GraphicsPath())
+                {
+                    lens.AddBezier(tipL, mid, s * 0.26f, top, s * 0.74f, top, tipR, mid);
+                    lens.AddBezier(tipR, mid, s * 0.74f, bot, s * 0.26f, bot, tipL, mid);
+                    lens.CloseFigure();
+
+                    // A pale sclera is what keeps this legible on a DARK taskbar.
+                    // A dark-on-dark icon vanishes for half of all users, and no
+                    // amount of iris colour fixes that.
+                    using (var sclera = new SolidBrush(Color.FromArgb(255, 222, 229, 238)))
+                        g.FillPath(sclera, lens);
+
+                    // Iris clipped to the lens, so it fills the eye edge to edge
+                    // the way a slit-pupil predator's does.
+                    var saved = g.Clip;
+                    g.SetClip(lens, System.Drawing.Drawing2D.CombineMode.Intersect);
+
+                    float id = s * 0.58f;
+                    var irisRect = new RectangleF((s - id) / 2f, (s - id) / 2f, id, id);
+                    using (var b = new SolidBrush(iris)) g.FillEllipse(b, irisRect);
+                    using (var rim = new Pen(Color.FromArgb(120, 0, 0, 0), Math.Max(1f, s * 0.05f)))
+                        g.DrawEllipse(rim, irisRect);
+
+                    // Slit pupil - the one feature doing the "not human" work.
+                    float pw = Math.Max(1.5f, s * 0.115f);
+                    float ph = s * 0.56f;
+                    using (var pupil = new SolidBrush(Color.FromArgb(255, 8, 9, 11)))
+                        g.FillEllipse(pupil, (s - pw) / 2f, (s - ph) / 2f, pw, ph);
+
+                    g.Clip = saved;
+
+                    // Dark outline last, over everything: this is what holds the
+                    // shape together on a LIGHT taskbar.
+                    using (var edge = new Pen(Color.FromArgb(255, 18, 20, 24), Math.Max(1f, s * 0.062f)))
+                        g.DrawPath(edge, lens);
+                }
+
+                // Specular highlight - but ONLY above 16 px. At tray-default size
+                // it lands within a pixel of the slit and merges with it, reading
+                // as a notch bitten out of the pupil rather than as a highlight.
+                // A detail that turns to noise at the size the thing is actually
+                // used is worse than no detail.
+                if (s >= 20)
+                {
+                    float gd = Math.Max(1.3f, s * 0.10f);
+                    using (var glint = new SolidBrush(Color.FromArgb(225, 255, 255, 255)))
+                        g.FillEllipse(glint, s * 0.29f, s * 0.27f, gd, gd);
+                }
+            }
+            return bmp;
+        }
+
+        private static Icon MakeIcon(Color iris)
+        {
+            // Ask Windows what size the tray actually wants: 16 at 100% DPI, but
+            // 20/24/32 as scaling goes up. Drawing at the real size beats drawing
+            // 16 and letting it be stretched.
+            int size = SystemInformation.SmallIconSize.Width;
+            if (size < 16) size = 16;
+
+            using (var bmp = DrawEye(size, iris))
+            {
                 IntPtr h = bmp.GetHicon();
-                using (var tmp = Icon.FromHandle(h)) { return (Icon)tmp.Clone(); }
+                try { using (var tmp = Icon.FromHandle(h)) { return (Icon)tmp.Clone(); } }
+                finally { DestroyIcon(h); }
+            }
+        }
+
+        /// <summary>
+        /// Render the real icon code to a PNG contact sheet: every state, every
+        /// tray size, on both light and dark backgrounds, with 8x blow-ups.
+        /// Uses the SAME DrawEye the tray uses, so what you inspect is what
+        /// ships - a preview drawn by a second copy of the code would only prove
+        /// the copy looks right.
+        /// </summary>
+        public static void WriteIconPreview(string path)
+        {
+            int[] sizes = { 16, 20, 24, 32 };
+            var states = new[]
+            {
+                new { Name = "watching",     C = Color.FromArgb(0x35, 0xC7, 0x59) },
+                new { Name = "idle",         C = Color.FromArgb(0xC9, 0x9A, 0x2E) },
+                new { Name = "losing",       C = Color.FromArgb(0xE0, 0x3B, 0x3B) },
+            };
+            var backgrounds = new[] { Color.FromArgb(0xF3, 0xF3, 0xF3), Color.FromArgb(0x20, 0x20, 0x20) };
+
+            int cell = 150, rowH = 150;
+            using (var sheet = new Bitmap(cell * states.Length + 90, rowH * backgrounds.Length + 30))
+            using (var g = Graphics.FromImage(sheet))
+            using (var font = new Font("Segoe UI", 9))
+            {
+                g.Clear(Color.FromArgb(0x80, 0x80, 0x80));
+                for (int bi = 0; bi < backgrounds.Length; bi++)
+                {
+                    using (var bg = new SolidBrush(backgrounds[bi]))
+                        g.FillRectangle(bg, 0, 30 + bi * rowH, sheet.Width, rowH);
+
+                    for (int si = 0; si < states.Length; si++)
+                    {
+                        int x = 60 + si * cell, y = 40 + bi * rowH;
+                        var label = new SolidBrush(bi == 0 ? Color.Black : Color.White);
+                        if (bi == 0) g.DrawString(states[si].Name, font, label, x, 8);
+
+                        // actual sizes, in a row
+                        int ax = x;
+                        foreach (var sz in sizes)
+                        {
+                            using (var b = DrawEye(sz, states[si].C)) g.DrawImageUnscaled(b, ax, y + 40 - sz);
+                            ax += sz + 6;
+                        }
+                        // 16 px blown up 6x, nearest neighbour: shows exactly
+                        // which pixels are lit, which is what legibility is.
+                        using (var b = DrawEye(16, states[si].C))
+                        {
+                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                            g.DrawImage(b, new Rectangle(x, y + 46, 96, 96));
+                        }
+                        label.Dispose();
+                    }
+                }
+                sheet.Save(path, System.Drawing.Imaging.ImageFormat.Png);
             }
         }
 

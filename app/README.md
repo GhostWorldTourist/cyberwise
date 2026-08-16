@@ -21,7 +21,9 @@ not is worse than one that knows it has no data** — the next crash simply look
 like it produced no telemetry. So the icon reports watcher state continuously
 rather than assuming it.
 
-## The colours
+## The icon
+
+A slit-pupil eye, drawn at runtime so state is a colour rather than three files.
 
 | colour | meaning |
 |---|---|
@@ -32,6 +34,47 @@ rather than assuming it.
 Red is the only state that demands action, so it is the only one that gets a
 balloon notification. A new crash capture gets one too, naming the district and
 session length.
+
+### Designing for sixteen pixels
+
+There is room for about four ideas at tray size, so they have to be the right
+four: an **almond outline** (a disc reads as a status dot, a lens reads as an
+eye), a **bright iris** carrying the state colour, a **vertical slit** — the one
+feature doing all the "not human" work — and a **pale sclera**.
+
+The sclera is not decoration. A dark icon on a dark taskbar disappears for
+everyone using dark mode, and no amount of iris colour fixes it; the pale lens
+gives the shape something to read against, while the dark outline drawn over the
+top does the same job on a light taskbar. Both halves of that are load-bearing.
+
+The specular highlight is drawn **only above 16 px**. At tray-default size it
+lands within a pixel of the slit and merges with it, reading as a notch bitten
+out of the pupil. A detail that turns to noise at the size the thing is actually
+used is worse than no detail — which is also why there are no aperture blades,
+circuitry or eyelid, all of which were considered and all of which turn to mud.
+
+Everything is proportional to the requested size, because the tray asks for 16,
+20, 24 or 32 px depending on DPI and a shape hard-coded for 16 looks stretched
+at 32.
+
+```powershell
+.\bin\CyberwiseTray.exe --icon-preview out.png
+```
+
+Renders every state at every tray size, on both light and dark backgrounds, with
+6× blow-ups — using the **same** drawing code the tray uses, so what you inspect
+is what ships. A 16 px icon cannot be judged from source; this is the only
+honest way to check it is legible, and it took three passes. The first version
+was a plain disc, and the second put the highlight through the pupil.
+
+## What it is called
+
+The exe carries a version resource, so Windows shows it as **Cyberwise** — in
+Settings ▸ Taskbar ▸ *Select which icons appear on the taskbar*, in Task Manager,
+and in its own properties. Without one, Windows falls back to the filename
+(`CyberwiseTray.exe`), which reads like something that installed itself without
+asking. `AssemblyTitle` becomes `FileDescription`; `csc` builds the resource from
+the assembly attributes, so there is no separate `.rc` file to keep in sync.
 
 ## The menu
 
