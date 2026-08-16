@@ -1,6 +1,6 @@
 # Cyberwise
 
-A Claude Code skill for diagnosing modded **Cyberpunk 2077** installs.
+A family of Claude Code skills for diagnosing modded **Cyberpunk 2077** installs.
 
 It is not a modding tutorial. It is a set of field notes about the things that are
 counterintuitive, undocumented, or actively contradicted by popular advice - the
@@ -9,6 +9,38 @@ getting it wrong first on a real install (846 mods, around 700 archives) - but t
 notes are written for any install: 20 mods or 900, Vortex, MO2 or none at all,
 Steam, GOG or Epic, on whatever drive. Where a finding is specific to one manager
 or one scale, it says so.
+
+## The family
+
+`cyberwise` is the front door: the method rules that apply to every task, where
+each kind of mod lives on disk, and a routing table. The topic skills are
+separate so that reading about keybinds costs nothing when the question is about
+textures.
+
+| skill | use it when |
+|---|---|
+| `cyberwise` | always - the method rules the rest depend on |
+| `cyberwise-conflicts` | a mod does nothing; textures look wrong; load order; `.archive` internals |
+| `cyberwise-crashes` | crashes, hangs, failures to launch; log triage; bisecting |
+| `cyberwise-saves` | reading a save, appearance data, ACU presets |
+| `cyberwise-hotkeys` | what a key is bound to; generating a cheatsheet |
+| `cyberwise-reports` | mod inventory, system profile, any HTML/markdown deliverable |
+| `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua, finding game text |
+| `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
+
+**They are additive** - a hotkey sheet is also an HTML deliverable, so that job
+wants `cyberwise-hotkeys` and `cyberwise-reports`.
+
+Measured on the split, per task: the front door plus one topic skill and its
+reference costs **1,000-2,200 tokens less** than the old single skill did, because
+the old one carried every topic's prose on every invocation. The eight
+descriptions cost about 575 tokens of always-present listing, so it pays for
+itself on the first use in a session.
+
+Each skill owns its own `references/` and `tools/` outright - there is no shared
+directory, because eight copies of a reference is eight things to drift.
+`environment.md` is the one genuinely cross-cutting file and it lives in the
+front door.
 
 ## What it covers
 
@@ -28,7 +60,10 @@ or one scale, it says so.
 
 ## Included tools
 
-`tools/New-ModManifest.ps1` builds a readable inventory of an installed load order:
+Tools live with the skill that uses them: `cyberwise-hotkeys/tools/` and
+`cyberwise-reports/tools/`.
+
+`New-ModManifest.ps1` builds a readable inventory of an installed load order:
 every mod, what it deploys, its Nexus link and install date, and - with an API key -
 a one-line description of what it actually does. `-HideNSFW` omits adult content.
 
@@ -52,25 +87,28 @@ root, a viewport - and those defaults are the author's machine, not yours. Use
 Works with manual installs, Vortex and MO2 - though see the environment notes, because
 MO2 virtualises the filesystem and that changes how you diagnose anything.
 
-Copy the folder into your Claude Code skills directory:
-
-```
-# user-level, available everywhere
-~/.claude/skills/cyberwise/
-
-# or project-level
-<project>/.claude/skills/cyberwise/
+```powershell
+git clone https://github.com/GhostWorldTourist/cyberwise ~/repos/cyberwise
+cd ~/repos/cyberwise
+.\install.ps1          # -Remove to unlink
 ```
 
-Claude will load it when you ask about Cyberpunk 2077 mod problems. You can also
-invoke it directly with `/cyberwise`.
+That symlinks each skill under `skills/` into `~/.claude/skills/`, so edits to
+this repo take effect immediately with no reinstall step. It falls back to a
+directory junction where a symlink would need elevation. Then open `/hooks` once,
+or restart, so Claude Code picks them up.
+
+To install by hand instead, copy each directory under `skills/` into
+`~/.claude/skills/` (or a project's `.claude/skills/`). Claude loads them when
+you ask about Cyberpunk 2077 mod problems; you can also invoke one directly, e.g.
+`/cyberwise-conflicts`.
 
 ## Scope and honesty
 
 - Written against **patch 2.31**. Paths and behaviours drift between patches, and
   they drift at very different rates.
 - **Every file carries its own verification stamp**, because references get read in
-  isolation - a model loading `references/crashes.md` never sees this README. Each
+  isolation - a model loading `cyberwise-crashes/references/crashes.md` never sees this README. Each
   one also has a **Re-check after a patch** line naming what to re-test first, so a
   new patch means triaging a handful of files rather than re-auditing everything.
   The highest-drift areas are flagged as such: save format first, then TweakDB
@@ -92,8 +130,8 @@ invoke it directly with `/cyberwise`.
 
   **The notes are the portable half, and they are portable today.** File formats,
   hash algorithms and diagnostic reasoning have no operating system. A
-  Linux/Proton user gets all of `references/` and none of `tools/`; the paths
-  there sit under the Proton prefix and none of that has been tested here.
+  Linux/Proton user gets every `references/` directory and none of the tools; the
+  paths there sit under the Proton prefix and none of that has been tested here.
 - Nothing here is a substitute for reading the logs. Several notes exist purely to
   say *which* log, because that is the part people skip.
 
