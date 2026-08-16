@@ -173,7 +173,16 @@ function Write-Bad     { param([string] $Text) Write-Host "  BAD  $Text" -Foregr
 $listPath = Join-Path $ModDir 'modlist.txt'
 if (-not (Test-Path -LiteralPath $listPath)) { throw "modlist.txt not found at $listPath" }
 
-$backupDir = Join-Path $PSScriptRoot 'backups'
+# Backups go with the other install records, NOT beside this script.
+#
+# $PSScriptRoot here is inside the skill - which is a link into a repo, or into
+# an installed copy. Writing backups there means they land in somebody's git
+# clone, or disappear when the skill is reinstalled or unlinked. A backup that
+# lives inside the thing that gets replaced is not a backup.
+#
+# modlist.txt is a deliberate custom order that nothing else can reconstruct, so
+# this one matters more than most.
+$backupDir = Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\modlist-backups'
 $lines     = [System.Collections.Generic.List[string]](Get-Content -LiteralPath $listPath)
 $onDisk    = (Get-ChildItem -LiteralPath $ModDir -Filter *.archive).Name
 $dirty     = $false

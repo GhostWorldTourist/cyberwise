@@ -820,9 +820,14 @@ namespace Cyberwise
                 // eye has to say, and a lens shape says "eye" instantly where a
                 // disc says "status dot". The first version was a disc and read
                 // as exactly that.
+                // Sized to fill the tile. The tray gives ~16 px and every pixel
+                // spent on margin is one not spent on the shape, so the lens runs
+                // almost edge to edge horizontally and takes about 74% of the
+                // height - enough for the slit to read, without the antialiased
+                // outline clipping at the boundary.
                 float mid = s * 0.5f;
-                float tipL = s * 0.035f, tipR = s * 0.965f;
-                float top = s * 0.175f, bot = s * 0.825f;
+                float tipL = s * 0.015f, tipR = s * 0.985f;
+                float top = s * 0.13f, bot = s * 0.87f;
 
                 using (var lens = new System.Drawing.Drawing2D.GraphicsPath())
                 {
@@ -841,7 +846,7 @@ namespace Cyberwise
                     var saved = g.Clip;
                     g.SetClip(lens, System.Drawing.Drawing2D.CombineMode.Intersect);
 
-                    float id = s * 0.58f;
+                    float id = s * 0.68f;
                     var irisRect = new RectangleF((s - id) / 2f, (s - id) / 2f, id, id);
                     using (var b = new SolidBrush(iris)) g.FillEllipse(b, irisRect);
                     using (var rim = new Pen(Color.FromArgb(120, 0, 0, 0), Math.Max(1f, s * 0.05f)))
@@ -849,7 +854,7 @@ namespace Cyberwise
 
                     // Slit pupil - the one feature doing the "not human" work.
                     float pw = Math.Max(1.5f, s * 0.115f);
-                    float ph = s * 0.56f;
+                    float ph = s * 0.62f;
                     using (var pupil = new SolidBrush(Color.FromArgb(255, 8, 9, 11)))
                         g.FillEllipse(pupil, (s - pw) / 2f, (s - ph) / 2f, pw, ph);
 

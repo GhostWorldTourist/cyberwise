@@ -11,6 +11,35 @@ notes are written for any install: 20 mods or 900, Vortex, MO2 or none at all,
 Steam, GOG or Epic, on whatever drive. Where a finding is specific to one manager
 or one scale, it says so.
 
+## What you need, before you get excited
+
+**Cyberwise is not a mod, a mod manager, or a program you run.** It is a set of
+notes and scripts that make an **AI coding assistant** competent at Cyberpunk
+2077 modding instead of confidently wrong about it.
+
+So it needs one of those, and **they are paid products**:
+
+- **Claude Code** (Anthropic) or **Codex** (OpenAI) — either works; installing is
+  a download and a sign-in, no terminal knowledge needed beyond that.
+- **Windows**, for the tools. The notes work anywhere.
+
+Once installed, you talk to it normally: *"my Borg-4a shotgun fires invisible
+bullets"*, *"which mod is making everyone grey"*, *"what is bound to F3"*. The
+skills load themselves when the subject comes up.
+
+**No agent? The notes are still worth reading.** Every `references/` file is
+plain markdown written for humans as much as machines - why `zzz_` prefixes are
+backwards, why a mod can be installed, enabled and doing nothing, why Windows
+Error Reporting never fires for this game. You lose the tools, not the knowledge.
+
+```powershell
+git clone https://github.com/GhostWorldTourist/cyberwise ~/repos/cyberwise
+cd ~/repos/cyberwise
+.\install.ps1            # links the skills into Claude Code and Codex
+```
+
+Then restart your agent. Full detail, including the tray app, is further down.
+
 ## The family
 
 `cyberwise` is the front door: the method rules that apply to every task, where
@@ -344,6 +373,20 @@ you what you forgot to wire into the front door.
   paths there sit under the Proton prefix and none of that has been tested here.
 - Nothing here is a substitute for reading the logs. Several notes exist purely to
   say *which* log, because that is the part people skip.
+- **All of this has only ever run on one machine.** One Windows 11 box, one
+  Vortex install, one storefront, one GPU vendor, one set of frameworks. The test
+  suite runs against synthetic fixtures so it does not depend on that machine -
+  but "the tests pass" is not "it works on yours". Expect rough edges on a
+  different setup, and please report them rather than assuming it is you.
+- **The tray app is not code-signed.** SmartScreen will warn on first run, and a
+  tray app that spawns PowerShell and inspects other processes is a textbook
+  antivirus false positive. Signing needs a certificate and a verified identity.
+  You can read every line of `app/CyberwiseTray.cs` and build it yourself with
+  `app\build.ps1` - it compiles with the C# compiler already in Windows, so you
+  need nothing installed to check what you are running.
+- **Nothing here phones home.** The only network call any tool makes is to the
+  Nexus API, only when you supply an API key, and `-NoNexus` disables it outright.
+  The crash watcher and snapshots write to your own disk and nowhere else.
 
 ## Contributing
 

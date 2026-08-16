@@ -132,7 +132,7 @@ if ($Directory) {
             if ($names | Where-Object { -not $_.StartsWith($cand) }) { break }
             $prefix = $cand
         }
-        # Only cut on a word boundary - trimming "Val" off "Valkyrie"/"Valerie"
+        # Only cut on a word boundary - trimming "Val" off "Jackie"/"Jackson"
         # would be worse than leaving the names alone.
         if ($prefix -notmatch '[\s_-]$') { $prefix = '' }
     }

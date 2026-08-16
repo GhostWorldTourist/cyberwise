@@ -261,13 +261,13 @@ if ($cmp -match '\balpha\b' -and $cmp -match '\bbeta\b' -and $cmp -notmatch 'Nom
 }
 
 # A shared prefix that is not a whole word must be left alone - trimming "Val"
-# off "Valkyrie"/"Valerie" would mangle both names.
+# off "Jackie"/"Jackson" would mangle both names.
 $midWord = Join-Path $sandbox 'midword'
 New-Item -ItemType Directory -Path $midWord -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $midWord 'Valkyrie.preset') "LocKey#${hairHash}:1`n"
-Set-Content -LiteralPath (Join-Path $midWord 'Valerie.preset')  "LocKey#${hairHash}:2`n"
+Set-Content -LiteralPath (Join-Path $midWord 'Jackie.preset') "LocKey#${hairHash}:1`n"
+Set-Content -LiteralPath (Join-Path $midWord 'Jackson.preset')  "LocKey#${hairHash}:2`n"
 $mw = Get-Console { & $tools.Preset -Directory $midWord -Compare -GroupCsv $csv }
-if ($mw -match 'Valkyrie' -and $mw -match 'Valerie') {
+if ($mw -match 'Jackie' -and $mw -match 'Jackson') {
     Ok 'presets: a mid-word shared prefix is left intact'
 } else {
     Bad 'presets: a mid-word shared prefix is left intact' "names were trimmed at a non-word boundary`n$mw"
