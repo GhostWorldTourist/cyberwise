@@ -27,9 +27,34 @@
 #
 # So: register every patch and override, and run the sweep after any mod update.
 
-$script:PatchStore = Join-Path $env:LOCALAPPDATA 'cyberwise\patches.json'
+# WHERE THE RECORDS LIVE, and why it is not next to this script.
+#
+#   %USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\patches.json
+#
+# Beside the saves, in a namespace folder of our own - the same shape mod authors
+# use for their own data there. Three reasons, and the third is the point:
+#
+#   1. It describes THE INSTALL, not the tooling. It belongs with the game.
+#   2. It survives the tooling. Reinstalling, moving or deleting the skill does
+#      not lose the record of what was patched.
+#   3. **It is agent-neutral.** Claude Code and Codex both read this path, so
+#      work started under one is picked up by the other. A record kept in one
+#      agent's memory is invisible to the next one and is lost on a switch.
+#
+# NEVER put install records in the repo: they describe one person's machine.
+$script:PatchStore = Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\patches.json'
 
 function Get-ModPatchStorePath { $script:PatchStore }
+
+# One-time move from the old per-user location, so an existing record is not
+# orphaned by this change.
+$legacyStore = Join-Path $env:LOCALAPPDATA 'cyberwise\patches.json'
+if ((Test-Path -LiteralPath $legacyStore) -and -not (Test-Path -LiteralPath $script:PatchStore)) {
+    $dir = Split-Path -Parent $script:PatchStore
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    Move-Item -LiteralPath $legacyStore -Destination $script:PatchStore
+    Write-Host "moved the patch record to $script:PatchStore" -ForegroundColor DarkGray
+}
 
 function Get-ModPatch {
     <#  Registered patches, newest first. -Name filters.  #>

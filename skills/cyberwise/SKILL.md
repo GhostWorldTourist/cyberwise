@@ -133,6 +133,35 @@ out.
 build; documentation describes intent. When their observation contradicts your
 source, the source is what is wrong, and arguing the point is a waste of a turn.
 
+## Where records live - one place, agent-neutral
+
+Anything this family needs to **remember about an install** goes on disk, in the
+game's own data area, under a namespace folder of ours:
+
+```
+%USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\
+    patches.json      every patch and override, and the upstream hash it was made against
+```
+
+That location is chosen deliberately, and the third reason is the important one:
+
+1. **It describes the install, not the tooling**, so it belongs beside the saves -
+   the same shape mod authors already use for their own data there.
+2. **It outlives the tooling.** Reinstalling, moving or deleting these skills does
+   not lose the record of what was patched.
+3. **It is agent-neutral.** Claude Code and Codex read the same path, so work
+   begun under one is picked up by the other. A fact kept in one agent's memory is
+   invisible to the next and is lost the moment the user switches.
+
+**Never keep install records in the skill repo** - they describe one person's
+machine, and the repo is shared. And **never keep them only in conversation
+memory**: if the next session is a different agent, or the same agent after a
+reset, an unrecorded override becomes an invisible one.
+
+Write JSON, keep it small, and make each record say *why* as well as *what* - a
+future reader needs to judge whether the patch is still wanted, not just that it
+exists.
+
 ## Know where each kind of mod lives
 
 Not everything deploys to `archive\pc\mod`. A mod "missing" from there may simply
