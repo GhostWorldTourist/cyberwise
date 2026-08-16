@@ -36,6 +36,17 @@ Then **write down what you changed and why**, somewhere outside the mod folder.
 A hand-patch you cannot re-apply after an update is a fix with a short life and
 no memory of itself.
 
+**Better still, do not edit their file at all.** Ship the corrected file as its
+own small mod at the same relative path and let load order decide - the original
+stays untouched, their update cannot revert you, and removing the fix is one
+toggle. Where the patched file goes differs per manager, and on MO2 the usual
+"edit the deployed copy" advice is actively wrong: see *Fixing a bug in someone
+else''s mod* in the `cyberwise` skill''s `environment.md`.
+
+An override has its own failure mode worth stating to the user: it is **not**
+reverted by an update, so a fix that has since been superseded keeps winning
+silently. Re-check after the mod updates.
+
 ## Do not guess a record ID
 
 The single biggest time sink here is inventing a plausible-looking TweakDB ID.

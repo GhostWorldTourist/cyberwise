@@ -138,12 +138,58 @@ is clean, and the version they have is the version it believes they have.
 
 Two deliberate exceptions, both worth naming out loud when you take them:
 
-- **Patching another mod's own file in place**, when the fix genuinely is an edit
-  to their file. Where the manager deploys by **hardlink**, edit *both* the
-  deployed file and the staging copy - editing can break the link and leave them
-  independent, so the change silently vanishes at the next deploy.
+- **Fixing a bug in another mod's own file** - see below, because *where* you put
+  that fix depends entirely on the manager.
 - **Diagnostic tooling and backups the user has agreed to.** Keep them in clearly
   named folders that cannot be mistaken for mod content, and say they are there.
+
+## Fixing a bug in someone else's mod
+
+Authors ship broken YAML, wrong signatures and typos, and sometimes the fix
+genuinely is an edit to their file. **Prefer an override to an edit**, and where
+you cannot, know exactly which copy you are editing - it is different on every
+manager, and the wrong answer fails silently.
+
+### Prefer this: ship the fixed file as its own mod
+
+Give the corrected file the **same relative path** and let load order decide.
+The original is never touched, an update to it cannot revert your work, the fix
+is visible in the manager instead of hidden inside someone else's mod, and
+removing it is one toggle.
+
+- **MO2** - a new mod folder containing only the patched file, ordered to win.
+- **Vortex** - package it as a small mod and add a conflict rule so yours wins.
+- **Manual** - there is no manager to arbitrate, so this is not available; you
+  are editing in place, and the copy you keep is the only undo.
+
+**Same path, replacing their file - not an additional one.** A new `.reds` under
+a different name does not override anything; it *adds* a second definition, and
+redscript fails the whole compilation on the duplicate. The point is to win the
+same file, not to add a file.
+
+**And the catch, which matters more than the convenience:** an override is not
+reverted by their update, and that is not purely good. **A reverted patch shows
+the original bug, which is visible. A stale override silently reimposes old
+behaviour on new code**, which is not. One install carried a hand-edit long after
+the author shipped a real fix that did strictly more - the override kept winning,
+so the proper fix never took effect and nothing said so.
+
+So whichever route you take: **re-check after the mod updates**, and record what
+the patch was for, so the question "is this still needed?" is answerable.
+
+### If you must edit their file, edit the right copy
+
+| manager | where the file you edit lives |
+|---|---|
+| **MO2** | `mods\<mod name>\...` - the one and only copy. The game directory is a projection that does not exist with the game closed, and anything Root Builder copied in is discarded at exit. |
+| **Vortex** | staging **and** deployment are the same file under hardlink deployment - but editing can break the link and leave two independent copies, so write to both and verify. |
+| **Manual** | the game directory, because there is nowhere else. Nothing will revert it and nothing records it. |
+
+**On MO2 the "edit both copies" advice is not merely unnecessary, it is a trap** -
+following it means editing inside the game folder, where the change is discarded
+at exit. The user sees no effect and no error.
+
+Whatever you edit, snapshot it first with the front door's `ModFileBackup.ps1`.
 
 ## The mod's own settings UI writes on exit
 
