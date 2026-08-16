@@ -27,6 +27,10 @@
 #                 family's flagship method rule exists to prevent.
 #   no-hashtable  bindings.json parsed without -AsHashtable, which throws outright
 #                 on the case-colliding keys CET really ships.
+#   order-blind   load-order move detection switched off. Not a bug that shipped,
+#                 but the one finding the snapshot diff exists for: a mod whose
+#                 position changed is byte-identical on disk, so if the check is
+#                 wrong nothing else notices.
 #
 # The asi-ancestor mutation earned its place twice over: the first version of its
 # test asserted on the manifest's section headings and passed WITH THE BUG
@@ -44,6 +48,16 @@ $tmp  = Join-Path ([IO.Path]::GetTempPath()) ("cw-mutate-" + [guid]::NewGuid().T
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo 'skills') -Destination $tmp -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $repo 'tests')  -Destination $tmp -Recurse -Force
+
+# Anything at the REPO ROOT that Test-Tools reaches for has to come too, or the
+# baseline run fails and every mutation result below is meaningless. This broke
+# once when Test-Tools grew install-safety tests: it began calling
+# $Root\install.ps1, which was never copied, so the harness refused to proceed -
+# correctly, and loudly, which is the only reason it was noticed.
+foreach ($rootFile in 'install.ps1') {
+    $src = Join-Path $repo $rootFile
+    if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $tmp -Force }
+}
 
 $suite = Join-Path $tmp 'tests\Test-Tools.ps1'
 
@@ -74,12 +88,14 @@ $presetRel  = 'skills\cyberwise-saves\tools\Decode-Preset.ps1'
 $hotkeyRel   = 'skills\cyberwise-hotkeys\tools\Get-Hotkeys.ps1'
 $manifestRel = 'skills\cyberwise-reports\tools\New-ModManifest.ps1'
 $backupRel   = 'skills\cyberwise\tools\ModFileBackup.ps1'
+$compareRel  = 'skills\cyberwise-crashes\tools\Compare-InstallSnapshot.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
 Save-Original $hotkeyRel
 Save-Original $manifestRel
 Save-Original $backupRel
+Save-Original $compareRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -151,6 +167,11 @@ Assert-Detects 'restore overwriting without snapshotting what it replaced' $back
     'Backup-ModFile -Path $Path -Note "auto: state before restoring $($pick.SnapshotId)" -Vault $Vault -Force | Out-Null' `
     '# mutation: no pre-restore snapshot' `
     'restore snapshots the state it replaced'
+
+Assert-Detects 'load-order move detection switched off, hiding the invisible change' $compareRel `
+    'if ([Math]::Abs($d) -gt $MoveThreshold)' `
+    'if ($false)' `
+    'load-order move is detected'
 
 Assert-Detects 'the ASI ancestor guard removed, tagging every CET mod as a plugin too' $manifestRel `
     "if (-not `$other) { continue }" `
