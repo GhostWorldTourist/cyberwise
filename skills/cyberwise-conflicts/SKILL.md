@@ -49,6 +49,18 @@ rule itself:
   entries and then reports them as unlisted. Full detail and the sanity checks in
   `references/load-order.md`.
 
+**Never rewrite `modlist.txt` without a snapshot first.** It is a deliberate
+custom order that nothing else can reconstruct, and a bad rewrite silently
+reorders every conflict on the install. Use the front door's helper - it prints
+the diff, snapshots, and hands you the undo command:
+
+```powershell
+. <path-to>\cyberwise\tools\ModFileBackup.ps1
+Set-ModFileContent -Path "$GameRoot\archive\pc\mod\modlist.txt" -NewText $updated -Note 'why'
+```
+
+Show the user the diff and get agreement on *that*, not on the command.
+
 ## "Installed and enabled" is not "doing anything"
 
 An archive whose files are *all* owned by something earlier is **inert** - present,

@@ -111,8 +111,12 @@ Other traps in the same area:
 
 ## Running a watcher
 
-No such tool ships with this skill and none is standard - if you want one you write
-it, which is a few dozen lines. What it needs to do: sample every 15-30 s to CSV
+**This skill now ships one** - `tools/Watch-Crashes.ps1`, with
+`tools/Register-CrashWatch.ps1` to run it as a logon task that restarts itself.
+Prefer those over writing your own; the rest of this section explains what they
+do and why, which still matters when you are reading someone else's watcher.
+
+What such a tool needs to do: sample every 15-30 s to CSV
 (working set, private bytes, per-process and adapter GPU memory, free RAM, handle
 count, thread count), write a marker when the process disappears, and copy
 `CrashInfo.json` on death before the next crash overwrites it - **deduped on

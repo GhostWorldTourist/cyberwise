@@ -105,12 +105,22 @@ Check 'every references/*.md a SKILL.md names resolves inside that skill' {
     }
 }
 
-Check 'every tools/*.ps1 a SKILL.md names resolves inside that skill' {
+# A tool path is either in-skill (`tools/X.ps1`) or an explicit cross-skill
+# reference (`cyberwise/tools/X.ps1`). Both get resolved. The cross-skill form
+# exists so that one genuinely shared tool - the backup helper - can be cited by
+# the skills that need it without eight copies drifting apart.
+Check 'every tools/*.ps1 a SKILL.md names resolves' {
     foreach ($s in $withMd) {
         $md = Get-Content -LiteralPath (Join-Path $s.FullName 'SKILL.md') -Raw
-        foreach ($m in [regex]::Matches($md, '(tools[\\/][A-Za-z0-9._-]+\.ps1)')) {
-            $rel = $m.Groups[1].Value -replace '\\','/'
-            if (-not (Test-Path -LiteralPath (Join-Path $s.FullName $rel))) { "$($s.Name) -> $rel does not exist" }
+        foreach ($m in [regex]::Matches($md, '((?:cyberwise[a-z-]*[\\/])?tools[\\/][A-Za-z0-9._-]+\.ps1)')) {
+            $rel   = $m.Groups[1].Value -replace '\\','/'
+            $owner = $s.FullName
+            if ($rel -match '^(cyberwise[a-z-]*)/(.+)$') {
+                $ownerName = $matches[1]; $rel = $matches[2]
+                if ($skills.Name -notcontains $ownerName) { "$($s.Name) -> names skill '$ownerName', which does not exist"; continue }
+                $owner = (Join-Path $skillsRoot $ownerName)
+            }
+            if (-not (Test-Path -LiteralPath (Join-Path $owner $rel))) { "$($s.Name) -> $($m.Groups[1].Value) does not exist" }
         }
     }
 }
@@ -180,6 +190,24 @@ Check 'every Verified stamp names a patch version, or declares it needs none' {
             if ($matches[1] -match '\d+\.\d+') { continue }
             if ($head -match '(?i)nothing here depends on a game patch|does not depend on a game patch') { continue }
             "$($s.Name)/references/$($f.Name): Verified stamp has no version, and nothing declares the file patch-independent"
+        }
+    }
+}
+
+# --------------------------------------------------------------- safe edits --
+
+# A skill that tells the model to write into a user's install must name the
+# backup helper in the same file. Reference files get read in isolation, so
+# "the front door says to snapshot" is not protection when the model is looking
+# at this page and nothing else. Irreversible edits are the one failure mode
+# here with no recovery path.
+Check 'any skill that advises writing into an install names the backup helper' {
+    $writeVerbs = 'Set-Content|Out-File|WriteAllText|rewrit|patch .* in place|edit .* in place'
+    foreach ($s in $withMd) {
+        $md = Get-Content -LiteralPath (Join-Path $s.FullName 'SKILL.md') -Raw
+        if ($md -notmatch $writeVerbs) { continue }
+        if ($md -notmatch 'ModFileBackup|Set-ModFileContent|Restore-ModFile') {
+            "$($s.Name): advises an in-place write but never mentions ModFileBackup.ps1"
         }
     }
 }

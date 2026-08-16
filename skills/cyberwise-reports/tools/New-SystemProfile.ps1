@@ -556,4 +556,10 @@ footer span:last-child{margin-left:auto}
 
 Write-Host "$($flags.Count) flag(s) raised" -ForegroundColor $(if ($flags.Count) { 'Yellow' } else { 'Green' })
 
+# Exit 0 explicitly. Falling off the end leaves $LASTEXITCODE unset rather than
+# zero, so a caller that checks it - an installer, a tray app, CI - gets nothing
+# and cannot tell success from "never ran". Flags are findings about the machine,
+# not failures of this script, so they do not change the code.
+exit 0
+
 

@@ -20,6 +20,22 @@ A record ID noted under one patch is a lead, not a fact, on another. If the
 installed version differs from the stamp above, re-extract rather than trusting
 the note - which is the same rule as below, just with a reason to apply it.
 
+## Never patch another author's file in place without a snapshot
+
+Repairing someone else's `.yaml` is the most common mutating job in this topic,
+and a mod update silently reverts it - so the patch has to be re-appliable and
+the original has to survive. Use the front door's helper:
+
+```powershell
+. <path-to>\cyberwise\tools\ModFileBackup.ps1
+Show-ModFileDiff   -Path $yaml -NewText $fixed          # get agreement on THIS
+Set-ModFileContent -Path $yaml -NewText $fixed -Note 'fix <mod> <what>'
+```
+
+Then **write down what you changed and why**, somewhere outside the mod folder.
+A hand-patch you cannot re-apply after an update is a fix with a short life and
+no memory of itself.
+
 ## Do not guess a record ID
 
 The single biggest time sink here is inventing a plausible-looking TweakDB ID.

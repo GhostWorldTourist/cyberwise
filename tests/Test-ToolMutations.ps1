@@ -73,11 +73,13 @@ $saveRel    = 'skills\cyberwise-saves\tools\Expand-Save.ps1'
 $presetRel  = 'skills\cyberwise-saves\tools\Decode-Preset.ps1'
 $hotkeyRel   = 'skills\cyberwise-hotkeys\tools\Get-Hotkeys.ps1'
 $manifestRel = 'skills\cyberwise-reports\tools\New-ModManifest.ps1'
+$backupRel   = 'skills\cyberwise\tools\ModFileBackup.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
 Save-Original $hotkeyRel
 Save-Original $manifestRel
+Save-Original $backupRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -139,6 +141,16 @@ Assert-Detects 'redaction bypassed in the public-facing report' $profileRel `
     'if ($NoRedact) { return $s }' `
     'return $s' `
     'redacts the install path'
+
+Assert-Detects 'the diff preview reading its new text from a bad sub-expression' $backupRel `
+    '$newRaw = if ($NewFile) { [IO.File]::ReadAllText($NewFile) } else { $NewText }' `
+    '$newRaw = $null   # mutation: what the broken (if ...) sub-expression yielded' `
+    'diff counts the actual change'
+
+Assert-Detects 'restore overwriting without snapshotting what it replaced' $backupRel `
+    'Backup-ModFile -Path $Path -Note "auto: state before restoring $($pick.SnapshotId)" -Vault $Vault -Force | Out-Null' `
+    '# mutation: no pre-restore snapshot' `
+    'restore snapshots the state it replaced'
 
 Assert-Detects 'the ASI ancestor guard removed, tagging every CET mod as a plugin too' $manifestRel `
     "if (-not `$other) { continue }" `

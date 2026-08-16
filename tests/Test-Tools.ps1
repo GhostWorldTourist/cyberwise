@@ -273,6 +273,82 @@ if ($mw -match 'Valkyrie' -and $mw -match 'Valerie') {
     Bad 'presets: a mid-word shared prefix is left intact' "names were trimmed at a non-word boundary`n$mw"
 }
 
+# ================================================================= backups ===
+#
+# The undo gap. Nothing in this family modifies a user's install, but an
+# assistant following it will - modlist.txt, another author's .yaml, user.ini -
+# and those edits have no undo. These tests exist because the FIRST version of
+# Show-ModFileDiff reported "3 lines removed, 0 added" for a one-line insertion:
+# `(if (...) {...} else {...})` is not a valid sub-expression in PowerShell, so
+# the new text came back empty. The write was correct; only the PREVIEW lied.
+#
+# A preview that lies is worse than no preview, because it is the thing the user
+# is being asked to approve.
+
+. (Join-Path $Root 'skills\cyberwise\tools\ModFileBackup.ps1')
+
+$vault = Join-Path $sandbox 'vault'
+$mf    = Join-Path $sandbox 'modlist.txt'
+$orig  = "#early.archive`nb.archive`nc.archive"
+Set-Content -LiteralPath $mf -Value $orig -NoNewline
+
+# --- the diff must be arithmetically true ---------------------------------
+$d = Show-ModFileDiff -Path $mf -NewText "#early.archive`nb.archive`nZZZ.archive`nc.archive" 6>$null
+$problems = @(
+    if (-not $d.Changed)   { 'an inserted line was reported as no change' }
+    if ($d.Added   -ne 1)  { "reported $($d.Added) lines added, expected 1" }
+    if ($d.Removed -ne 0)  { "reported $($d.Removed) lines removed, expected 0 - the preview is lying about the edit" }
+)
+if ($problems) { Bad 'backups: the diff counts the actual change' ($problems -join "`n") }
+else           { Ok  'backups: the diff counts the actual change' }
+
+# A preview must not touch the file.
+if ((Get-Content -LiteralPath $mf -Raw) -eq $orig) { Ok 'backups: a preview writes nothing' }
+else { Bad 'backups: a preview writes nothing' 'Show-ModFileDiff modified the file' }
+
+# An identical write is not a change, and must not burn a snapshot.
+$same = Show-ModFileDiff -Path $mf -NewText $orig 6>$null
+if (-not $same.Changed) { Ok 'backups: an identical write reports no change' }
+else { Bad 'backups: an identical write reports no change' 'a no-op edit was reported as a change' }
+
+# --- write, then undo ------------------------------------------------------
+$updated = "#early.archive`nb.archive`nZZZ.archive`nc.archive"
+$snap = Set-ModFileContent -Path $mf -NewText $updated -Note 'test' -Vault $vault -Confirm:$false 6>$null
+if ((Get-Content -LiteralPath $mf -Raw) -eq $updated) { Ok 'backups: the safe write actually writes' }
+else { Bad 'backups: the safe write actually writes' 'the file was not updated' }
+
+Restore-ModFile -Path $mf -Vault $vault -Confirm:$false 6>$null | Out-Null
+if ((Get-Content -LiteralPath $mf -Raw) -eq $orig) { Ok 'backups: restore returns the original bytes' }
+else { Bad 'backups: restore returns the original bytes' "got: $(Get-Content -LiteralPath $mf -Raw)" }
+
+# Restoring must itself be undoable, or picking the wrong snapshot is a dead end.
+if ((Get-ModFileBackup -Path $mf -Vault $vault).Count -ge 2) {
+    Ok 'backups: a restore snapshots the state it replaced'
+} else {
+    Bad 'backups: a restore snapshots the state it replaced' 'restore left no way back to the pre-restore contents'
+}
+
+# --- the vault must not live in the install --------------------------------
+# A manager purge or redeploy owns the game tree and will take the backups with
+# it. Default vault must be outside it.
+$defaultVault = Get-ModBackupVault
+if ($defaultVault -like "*$([IO.Path]::DirectorySeparatorChar)Cyberpunk 2077*") {
+    Bad 'backups: the default vault is outside the game directory' "vault resolves to $defaultVault"
+} elseif ($defaultVault -like "$env:LOCALAPPDATA*") {
+    Ok 'backups: the default vault is outside the game directory'
+} else {
+    Bad 'backups: the default vault is outside the game directory' "unexpected vault location: $defaultVault"
+}
+
+# --- refuse to swallow an archive ------------------------------------------
+$big = Join-Path $sandbox 'huge.archive'
+$fs = [IO.File]::Create($big); $fs.SetLength(60MB); $fs.Close()
+$threw = $false
+try { Backup-ModFile -Path $big -Vault $vault -ErrorAction Stop | Out-Null } catch { $threw = $true }
+if ($threw) { Ok 'backups: an oversized file is refused without -Force' }
+else { Bad 'backups: an oversized file is refused without -Force' 'a 60 MB file was copied into the vault silently' }
+Remove-Item -LiteralPath $big -Force
+
 # =============================================================== manifest ====
 #
 # The manifest reads a manager's staging folder names, and Vortex's convention is

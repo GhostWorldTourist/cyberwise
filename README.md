@@ -58,9 +58,38 @@ front door.
 | **Environment** | telling manual / Vortex / MO2 apart and why it changes everything; resolving an internal name back to a findable mod; reading real settings vs shipped defaults; redscript as an all-or-nothing gate; tooling traps |
 
 
+## Nothing here modifies your install — but an assistant will
+
+That distinction is the most important one in this repo. Every tool below only
+writes its own reports. The edits that carry risk are the ones an assistant makes
+by hand while following the notes: rewriting `modlist.txt`, patching another
+author's `.yaml`, editing `user.ini`.
+
+Those have no undo, and **irreversibility is the real hazard — not whether you
+understood the command you approved.** A confused *yes* to a read-only command
+costs nothing. A confused *yes* to a modlist rewrite costs a load order that
+nothing can reconstruct. No permission dialog, in any client, fixes that.
+
+So `cyberwise/tools/ModFileBackup.ps1` ships as part of the method:
+
+```powershell
+. tools\ModFileBackup.ps1
+Show-ModFileDiff   -Path $f -NewText $updated              # preview, writes nothing
+Set-ModFileContent -Path $f -NewText $updated -Note 'why'  # snapshot, then write
+Restore-ModFile    -Path $f                                # undo
+```
+
+**Approval belongs on the diff, not the command.** Someone who cannot read
+PowerShell can still read "this line becomes that line", and that is the only
+version of consent worth having. Snapshots live under
+`%LOCALAPPDATA%\cyberwise\backups` — deliberately outside the game directory,
+which a mod manager may purge or redeploy over. A restore snapshots what it
+replaced, so picking the wrong version is not a second dead end.
+
 ## Included tools
 
-Tools live with the skill that uses them: `cyberwise-hotkeys/tools/`,
+Tools live with the skill that uses them: `cyberwise/tools/` (the backup helper
+above, which is cross-cutting), `cyberwise-hotkeys/tools/`,
 `cyberwise-reports/tools/` and `cyberwise-saves/tools/`.
 
 `New-ModManifest.ps1` builds a readable inventory of an installed load order:
@@ -85,6 +114,16 @@ install, from all five stores that hold them, rendered as a cheatsheet),
 wrong, redacted by default because the markdown is meant for pasting in public),
 `Measure-PageFit.ps1` (does a generated page fit a stated viewport) and
 `NexusCredential.ps1` (stores a Nexus API key in Windows Credential Manager).
+
+`cyberwise-crashes/tools/` carries `Watch-Crashes.ps1`, which samples the running
+game to CSV and captures its own post-mortem telemetry on death, and
+`Register-CrashWatch.ps1`, which registers that as a logon task so it restarts
+itself and survives a reboot. The game catches its own fault and exits, so
+nothing reaches Windows Error Reporting — `CrashInfo.json` is the only
+first-party evidence, and it is overwritten on the next crash. **The capture is
+deduped on `crashVisitId`**: an unconditional copy re-saves the same record after
+every clean quit, which on one install turned 2 real crashes into 21 files and a
+cluster that never happened.
 
 `cyberwise-saves/tools/` carries `Expand-Save.ps1`, which decompresses a `sav.dat`
 into one flat searchable blob, and `Decode-Preset.ps1`, which turns ACU `.preset`
@@ -178,6 +217,13 @@ passed - but a mod is filed under its *primary* footprint, and CET wins that
 ordering with or without the bug. Only reintroducing the defect showed the test
 was watching a surface where it could never appear. The spurious label shows up
 in the meta line as `CET+ASI`, which is what the test checks now.
+
+The backup helper is covered too, and one of those tests exists because the first
+version of `Show-ModFileDiff` **lied**: it reported "3 lines removed, 0 added"
+for a one-line insertion, because `(if (...) {...} else {...})` is not a valid
+sub-expression in PowerShell and the new text came back empty. The write itself
+was correct — only the preview was wrong, which is exactly the thing the user is
+asked to approve. A preview that lies is worse than no preview at all.
 
 It also builds a five-store keybind fixture - a mod shipping `IK_F3`, a
 `user.ini` rebinding it to `IK_F7`, a `buttonGroup` indirection in the cache, and

@@ -52,6 +52,34 @@ GPU memory hard, so a reading taken during it proves nothing.
 `references/crashes.md` covers the crash report the game writes itself, why
 Windows Error Reporting never fires for it, and the measurement traps.
 
+## Tools
+
+| tool | what it does |
+|---|---|
+| `tools/Watch-Crashes.ps1` | samples the running game to CSV and captures its post-mortem on death |
+| `tools/Register-CrashWatch.ps1` | registers the watcher as a logon task so it survives death and reboot |
+
+```powershell
+.\tools\Register-CrashWatch.ps1 -Dir "<somewhere writable>" -GameRoot "<game>"
+.\tools\Register-CrashWatch.ps1 -Status      # registered? running?
+.\tools\Register-CrashWatch.ps1 -Remove
+```
+
+Three things about this that are not obvious:
+
+- **The capture is deduped on `crashVisitId`.** `CrashInfo.json` is overwritten
+  per crash but never deleted, so a watcher that copies it on every exit
+  re-saves the same record after each normal quit. See `references/crashes.md` -
+  that mistake produced 21 files holding 2 real crashes and a fabricated cluster.
+- **Register it rather than launching it.** A shell-launched watcher dies with
+  the shell, on reboot, and silently on error. Worse, **an assistant may be
+  unable to start one at all** - a sandboxed tool session can reap the process
+  tree when the call returns, so `Start-Process` reports success and nothing
+  runs. The task scheduler owns the process instead.
+- **Verify it is actually running**, with `-Status`. Match the process on its
+  `-File` argument; a bare script-name substring also matches the query asking
+  the question, which cheerfully reports a watcher that is not there.
+
 ## Reference material
 
 | file | covers |

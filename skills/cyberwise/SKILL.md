@@ -45,6 +45,35 @@ locations, hard-coded paths - not on every trivial question.
 `ProductVersion` is the patch number directly (`2.31`); `FileVersion` is a build
 string (`3.0.5294808`) and is not what anyone means by "the patch".
 
+**Snapshot before every in-place write, and show a diff before you ask.** Nothing
+in this family modifies a user's install - but *you* will, by hand: rewriting
+`modlist.txt`, patching another author's `.yaml`, editing `user.ini`. Those edits
+have no undo, and that - not whether the user understood the command - is the
+real hazard. A confused "yes" to a read-only command costs nothing; a confused
+"yes" to a modlist rewrite costs the load order.
+
+```powershell
+. tools\ModFileBackup.ps1
+Show-ModFileDiff  -Path $f -NewText $updated        # preview, writes nothing
+Set-ModFileContent -Path $f -NewText $updated -Note 'why'   # snapshot, then write
+Restore-ModFile   -Path $f                          # undo, newest snapshot
+```
+
+**Ask for approval on the diff, not on the command.** Someone who cannot read
+PowerShell can still read "this line becomes that line", and that is the only
+version of consent that means anything here. Backups live under
+`%LOCALAPPDATA%\cyberwise\backups` - never inside the game directory, which a
+manager may purge or redeploy over.
+
+**When a command produces nothing, prove it ran before you interpret the
+nothing.** An empty result is not evidence; it is the absence of evidence, and it
+looks identical whether the thing did not happen or the command never executed.
+Twice in this project a silent parse failure was read as a finding - `#` treated
+as a comment in `modlist.txt` produced 61 fabricated faults, and a path
+containing a space made `Start-Process` fail so quietly it was mistaken for a
+platform limitation. Capture stderr, check the exit code, confirm the process
+exists - then interpret.
+
 **Find out how the install is assembled before you trust the filesystem.** Manual,
 Vortex and MO2 present completely different pictures on disk, and nearly every
 technique here reads the disk. In particular, **an MO2 install may show you an
@@ -122,6 +151,22 @@ that compares deployed archives against installed copies - a manager's staging
 folders, or a manual installer's own record - reports it as an orphan. Never prune
 its entry as stale, and note it still needs a permanent slot in `modlist.txt`,
 because an unlisted archive sorts last and loses.
+
+## Tools here
+
+| tool | what it does |
+|---|---|
+| `tools/ModFileBackup.ps1` | snapshot / diff / restore for any file you are about to edit in place |
+
+Dot-source it (`. tools\ModFileBackup.ps1`) and use `Set-ModFileContent` instead
+of `Set-Content` for anything inside a user's install. It prints the diff, takes
+a timestamped snapshot, then writes - and tells you the exact `Restore-ModFile`
+command to undo it. `-WhatIf` shows the diff and stops, which is the right first
+call.
+
+It refuses files over 50 MB without `-Force`, because `.archive` files run to
+gigabytes and are never hand-edited - a backup tool that fills the disk is its
+own kind of damage.
 
 ## Which skill covers it
 
