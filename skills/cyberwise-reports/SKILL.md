@@ -44,6 +44,12 @@ naming is Vortex's; MO2 folder names are user-editable, so expect name-only for
 renamed folders. `-NexusApiKey` adds summaries, author, category and the real
 adult-content flag, cached so re-runs are free. `-HideNSFW` omits adult mods.
 
+**`-NoNexus` guarantees no network call.** A key stored in Credential Manager is
+picked up automatically, so without this switch "I did not pass a key" is not the
+same as "it stayed offline". Use it for a quick inventory, on a metered or
+offline connection, or any time reaching a third-party API is not something the
+user asked for.
+
 Two things before trusting the NSFW filter, both measured on one 846-mod install:
 
 - **Without an API key it is a name heuristic and it under-detects.** It caught

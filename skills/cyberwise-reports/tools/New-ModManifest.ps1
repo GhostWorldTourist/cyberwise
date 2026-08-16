@@ -40,6 +40,11 @@
     manifest still generates; it just has no descriptions and NSFW filtering
     falls back to a name heuristic that is clearly labelled as approximate.
 
+.PARAMETER NoNexus
+    Never contact Nexus, even if a key is stored in Credential Manager. Produces
+    the tier 1 manifest only - name, id, version, install date, footprint - with
+    no network access at all.
+
 .PARAMETER HideNSFW
     Omit adult-flagged mods entirely. With an API key this uses Nexus's own
     contains_adult_content flag. Without one it uses a keyword heuristic, which
@@ -48,6 +53,7 @@
 .EXAMPLE
     .\New-ModManifest.ps1
     .\New-ModManifest.ps1 -NexusApiKey abc123 -HideNSFW -Out manifest.md
+    .\New-ModManifest.ps1 -NoNexus -Out inventory.md
 #>
 
 [CmdletBinding()]
@@ -56,6 +62,8 @@ param(
     [string] $GameRoot,
     [string] $Game        = 'cyberpunk2077',
     [string] $NexusApiKey,
+    # Skip the Nexus lookup entirely, even if a key is stored. Tier 1 only.
+    [switch] $NoNexus,
     [switch] $HideNSFW,
     # Written to the current directory, not beside the script: the script may
     # live in a shared or read-only skill folder, and a manifest is a listing of
@@ -190,7 +198,13 @@ if ($mods.Count -gt 0 -and $withId -eq 0) {
 
 # Fall back to Windows Credential Manager so the key never has to be typed on a
 # command line, pasted into a chat, or committed. See NexusCredential.ps1.
-if (-not $NexusApiKey) {
+#
+# -NoNexus opts out of tier 2 entirely. Without it, a stored credential means the
+# script reaches the network whether or not the caller wanted it to - which is
+# wrong for a quick inventory, wrong on a metered or offline connection, and
+# wrong in a test, where it would fetch real descriptions for invented mod ids.
+if ($NoNexus) { $NexusApiKey = $null }
+elseif (-not $NexusApiKey) {
     $credHelper = Join-Path $PSScriptRoot 'NexusCredential.ps1'
     if (Test-Path $credHelper) {
         . $credHelper

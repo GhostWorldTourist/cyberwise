@@ -60,8 +60,8 @@ front door.
 
 ## Included tools
 
-Tools live with the skill that uses them: `cyberwise-hotkeys/tools/` and
-`cyberwise-reports/tools/`.
+Tools live with the skill that uses them: `cyberwise-hotkeys/tools/`,
+`cyberwise-reports/tools/` and `cyberwise-saves/tools/`.
 
 `New-ModManifest.ps1` builds a readable inventory of an installed load order:
 every mod, what it deploys, its Nexus link and install date, and - with an API key -
@@ -71,7 +71,13 @@ It needs no credentials for the basics, because a manager that installed from Ne
 encodes `<Display Name>-<NexusID>-<version>-<timestamp>` into the staging folder
 name. It reads a manager's staging root: the Vortex layout is found automatically,
 MO2 needs `-StagingRoot` pointed at its `mods\` folder, and a fully manual install
-has no staging tree for it to read.
+has no staging tree for it to read. Folders that do not match the convention are
+still listed, from the folder name alone - a mod dropped from an inventory is a
+mod nobody knows they have.
+
+`-NoNexus` guarantees it stays offline. A key stored in Credential Manager is
+used automatically, so omitting `-NexusApiKey` is not the same as making no
+network call.
 
 Also included: `Get-Hotkeys.ps1` / `New-HotkeySheet.ps1` (every keybind on an
 install, from all five stores that hold them, rendered as a cheatsheet),
@@ -159,6 +165,19 @@ the things that broke before: that `#` and `!` are **filename** characters in
 `modlist.txt` rather than comment markers, that the LZ4 decoder handles a match
 overlapping its own output, that the Discord-facing markdown carries no path or
 username, and that an unknown preset hash is printed rather than dropped.
+
+A synthetic staging tree covers the manifest: that a hyphenated name like
+`Cyber-Engine-Tweaks-107-1-35-1-...` still resolves to id 107, that a version of
+`2k` survives, that a non-conforming MO2 or hand-unzipped folder still lists, and
+that a CET mod is not also tagged an ASI plugin - `bin\x64\plugins` is an
+*ancestor* of the CET mods path, so a naive existence check catches every one.
+
+That last one is a good illustration of why the mutation suite exists. The first
+version of the test asserted on the section headings, which looked right and
+passed - but a mod is filed under its *primary* footprint, and CET wins that
+ordering with or without the bug. Only reintroducing the defect showed the test
+was watching a surface where it could never appear. The spurious label shows up
+in the meta line as `CET+ASI`, which is what the test checks now.
 
 It also builds a five-store keybind fixture - a mod shipping `IK_F3`, a
 `user.ini` rebinding it to `IK_F7`, a `buttonGroup` indirection in the cache, and

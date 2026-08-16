@@ -19,6 +19,11 @@
 # So these tests build synthetic installs and run the real scripts against them.
 # No game, no hardware assumptions, no network. Fixtures are per-test and torn
 # down; nothing is written outside the temp directory.
+#
+# THE NO-NETWORK RULE IS LOAD-BEARING. New-ModManifest picks up a Nexus key from
+# Credential Manager on its own, so the manifest fixture MUST pass -NoNexus - the
+# first run of it fetched real descriptions for six invented mod ids off the live
+# API. A test suite that calls somebody else's server is not a test suite.
 
 [CmdletBinding()]
 param(
@@ -266,6 +271,105 @@ if ($mw -match 'Valkyrie' -and $mw -match 'Valerie') {
     Ok 'presets: a mid-word shared prefix is left intact'
 } else {
     Bad 'presets: a mid-word shared prefix is left intact' "names were trimmed at a non-word boundary`n$mw"
+}
+
+# =============================================================== manifest ====
+#
+# The manifest reads a manager's staging folder names, and Vortex's convention is
+# the only reason tier 1 works without credentials:
+#
+#     <Display Name>-<NexusID>-<version>-<unix timestamp>
+#
+# Nothing enforces it. An MO2 folder or a hand-unzipped one simply does not
+# match, and the rule that matters is that those still LIST - a mod dropped from
+# an inventory is a mod nobody knows they have.
+
+$stage = Join-Path $sandbox 'staging'
+function New-StagedMod {
+    param([string]$Folder, [string[]]$Files)
+    foreach ($f in $Files) {
+        $full = Join-Path (Join-Path $stage $Folder) $f
+        New-Item -ItemType Directory -Path (Split-Path $full) -Force | Out-Null
+        Set-Content -LiteralPath $full 'x' -NoNewline
+    }
+}
+
+# A name with hyphens in it, so the lazy match has to find the RIGHT id.
+New-StagedMod 'Cyber-Engine-Tweaks-107-1-35-1-1750000000' @('bin\x64\plugins\cyber_engine_tweaks\mods\foo\init.lua')
+# Version segments are not always numeric - "2k" and "1-0-beta" are real.
+New-StagedMod 'Preem Textures-777-2k-1750000000'          @('archive\pc\mod\y.archive')
+New-StagedMod 'Better Handling-1234-2-1-0-1750000000'     @('archive\pc\mod\x.archive')
+# No Vortex convention at all: MO2, or unzipped by hand.
+New-StagedMod 'ManuallyUnzippedMod'                       @('r6\scripts\a.reds')
+# A genuine ASI, which must not be confused with the CET case above.
+New-StagedMod 'RealAsi-42-1-0-1750000000'                 @('bin\x64\plugins\thing.asi')
+New-StagedMod 'NothingKnown-66-1-0-1750000000'            @('readme.txt')
+
+$manifestTool = Join-Path $Root 'skills\cyberwise-reports\tools\New-ModManifest.ps1'
+$mdOut  = Join-Path $sandbox 'manifest.md'
+$htmOut = Join-Path $sandbox 'manifest.html'
+
+# -NoNexus is mandatory here. With a key in Credential Manager the tool would
+# reach the live API and fetch real descriptions for these invented ids - slow,
+# non-deterministic, and rude to somebody else's server.
+$mmConsole = Get-Console {
+    & $manifestTool -StagingRoot $stage -Out $mdOut -HtmlOut $htmOut -NoNexus `
+        -CachePath (Join-Path $sandbox 'mm-cache.json') -OverridePath (Join-Path $sandbox 'nsfw.json')
+}
+$mm = Get-Content -LiteralPath $mdOut -Raw
+
+# Sections are '## <kind>  (n)'; split so a mod filed under the wrong one shows.
+$sections = @{}
+$curKind = $null
+foreach ($line in ($mm -split "`r?`n")) {
+    if ($line -match '^##\s+(\S+)') { $curKind = $matches[1]; $sections[$curKind] = @(); continue }
+    if ($curKind -and $line -match '^\*\*') { $sections[$curKind] += $line }
+}
+
+$problems = @(
+    if ($mm -notmatch '\*\*6\*\* mods listed') { 'not all six staged folders were listed' }
+    # The lazy name match must not stop at the first hyphen.
+    if ($mm -notmatch 'Cyber-Engine-Tweaks\]\(https://www\.nexusmods\.com/cyberpunk2077/mods/107\)') {
+        'a hyphenated mod name did not resolve to the right Nexus id'
+    }
+    if ($mm -notmatch 'v2k')     { 'a non-numeric version ("2k") was lost or mangled' }
+    if ($mm -notmatch 'v2\.1\.0'){ 'a dashed version (2-1-0) did not become 2.1.0' }
+)
+if ($problems) { Bad 'manifest: Vortex folder names parse into name, id and version' ($problems -join "`n") }
+else           { Ok  'manifest: Vortex folder names parse into name, id and version' }
+
+# The one that matters most: a non-conforming folder must still appear.
+if ($mm -match '\*\*ManuallyUnzippedMod\*\*') {
+    Ok 'manifest: a folder with no Vortex convention still lists'
+} else {
+    Bad 'manifest: a folder with no Vortex convention still lists' 'an MO2/hand-unzipped mod was dropped from the inventory entirely'
+}
+
+# bin\x64\plugins is an ANCESTOR of the CET mods path, so a naive Test-Path tags
+# every CET mod as an ASI plugin as well.
+#
+# Section headings alone cannot show this: a mod is filed under its PRIMARY
+# footprint, and CET wins that ordering either way. The spurious second label
+# only surfaces in the meta line, which joins multiple footprints as "CET+ASI".
+# Asserting on the section would pass while the bug was present - it did.
+$asi = $sections['ASI']
+$cet = $sections['CET']
+$problems = @(
+    if (-not ($cet -match 'Cyber-Engine-Tweaks')) { 'the CET mod was not filed under CET' }
+    if ($mm -match 'CET\+ASI')                    { 'the CET mod was ALSO tagged ASI - bin\x64\plugins matched as an ancestor' }
+    if (-not ($asi -match 'RealAsi'))             { 'a real .asi plugin was not tagged ASI' }
+)
+if ($problems) { Bad 'manifest: a CET mod is not mistaken for an ASI plugin' ($problems -join "`n") }
+else           { Ok  'manifest: a CET mod is not mistaken for an ASI plugin' }
+
+if ($sections['other'] -match 'NothingKnown') { Ok 'manifest: an unrecognised layout is filed as other, not dropped' }
+else { Bad 'manifest: an unrecognised layout is filed as other, not dropped' 'the mod with no known deploy path vanished' }
+
+# -NoNexus has to mean NO network, including the stored-credential path.
+if ($mmConsole -match '(?i)unique ids|Credential Manager') {
+    Bad 'manifest: -NoNexus makes no network call' "the tool still went looking for a key or ids:`n$mmConsole"
+} else {
+    Ok 'manifest: -NoNexus makes no network call'
 }
 
 # ================================================================ hotkeys ====

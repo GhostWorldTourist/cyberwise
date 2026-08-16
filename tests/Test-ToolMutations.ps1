@@ -18,6 +18,20 @@
 #   no-redact     redaction bypassed in a report designed to be pasted publicly.
 #   drop-unknown  unrecognised preset hashes silently dropped, so a preset
 #                 reports as smaller than it is rather than showing ?<hash>.
+#   asi-ancestor  the guard that stops bin\x64\plugins matching as an ANCESTOR of
+#                 the CET mods path, which tags every CET mod an ASI plugin too.
+#   greedy-name   the folder-name pattern anchored greedily, so a mod whose name
+#                 contains hyphens resolves to the wrong Nexus id.
+#   ini-ignored   user.ini overrides skipped, so a mod's SHIPPED default is
+#                 reported as the user's own binding - the exact failure the
+#                 family's flagship method rule exists to prevent.
+#   no-hashtable  bindings.json parsed without -AsHashtable, which throws outright
+#                 on the case-colliding keys CET really ships.
+#
+# The asi-ancestor mutation earned its place twice over: the first version of its
+# test asserted on the manifest's section headings and passed WITH THE BUG
+# PRESENT, because a mod is filed under its primary footprint and CET outranks
+# ASI either way. Reintroducing the defect is what exposed the test as blind.
 
 [CmdletBinding()]
 param()
@@ -40,7 +54,8 @@ function Invoke-Suite {
     # Running the baseline and then a mutated copy in one session made the LZ4
     # mutation appear undetectable when the test detects it perfectly well.
     # -Quick drops the headless-browser checks: no mutation here can reach them,
-    # and this function runs nine times.
+    # and this runs twice per mutation plus a baseline, so the browser launches
+    # would dominate the runtime for no coverage.
     $out = & pwsh -NoProfile -NonInteractive -File $suite -Root $tmp -Quick 2>&1 | Out-String
     [pscustomobject]@{ Code = $LASTEXITCODE; Text = $out }
 }
@@ -56,11 +71,13 @@ function Restore-All   { foreach ($k in $pristine.Keys) { $pristine[$k] | Set-Co
 $profileRel = 'skills\cyberwise-reports\tools\New-SystemProfile.ps1'
 $saveRel    = 'skills\cyberwise-saves\tools\Expand-Save.ps1'
 $presetRel  = 'skills\cyberwise-saves\tools\Decode-Preset.ps1'
-$hotkeyRel  = 'skills\cyberwise-hotkeys\tools\Get-Hotkeys.ps1'
+$hotkeyRel   = 'skills\cyberwise-hotkeys\tools\Get-Hotkeys.ps1'
+$manifestRel = 'skills\cyberwise-reports\tools\New-ModManifest.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
 Save-Original $hotkeyRel
+Save-Original $manifestRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -122,6 +139,16 @@ Assert-Detects 'redaction bypassed in the public-facing report' $profileRel `
     'if ($NoRedact) { return $s }' `
     'return $s' `
     'redacts the install path'
+
+Assert-Detects 'the ASI ancestor guard removed, tagging every CET mod as a plugin too' $manifestRel `
+    "if (-not `$other) { continue }" `
+    "if (-not `$other) { }" `
+    'not mistaken for an ASI plugin'
+
+Assert-Detects 'the folder-name pattern anchored greedily, so hyphenated names lose their id' $manifestRel `
+    '^(?<name>.+?)-(?<id>\d+)-(?<ver>.*?)-(?<ts>\d{10})$' `
+    '^(?<name>.+)-(?<id>\d+)-(?<ver>.*?)-(?<ts>\d{10})$' `
+    'parse into name, id and version'
 
 Assert-Detects "user.ini overrides ignored, so shipped defaults are reported as the user's" $hotkeyRel `
     'if ($ov -and $overrides.ContainsKey($ov)) {' `
