@@ -180,6 +180,15 @@ namespace Cyberwise
             if (string.IsNullOrWhiteSpace(WatchDir) && !string.IsNullOrWhiteSpace(GameRoot))
                 WatchDir = System.IO.Path.Combine(GameRoot, "_crashwatch");
 
+            // A REMEMBERED PATH THAT NO LONGER EXISTS IS WORSE THAN NO PATH.
+            // The settings file survives moving, reinstalling or deleting the
+            // copy it was written by - so an installed build happily inherits a
+            // Watcher path pointing into a repo that has since been tidied away.
+            // The tray then checks File.Exists, finds nothing, and silently does
+            // not watch: no icon change, no message, no recording.
+            // Forget it and re-derive instead.
+            if (!string.IsNullOrWhiteSpace(Watcher) && !File.Exists(Watcher)) { Watcher = ""; }
+
             if (string.IsNullOrWhiteSpace(Watcher))
             {
                 // Beside the exe first (the installed layout), then the repo
@@ -316,9 +325,17 @@ namespace Cyberwise
             // mean something: after a reboot the icon returns AND the recording
             // resumes, rather than the icon returning and quietly recording
             // nothing until someone notices.
-            if (_cfg.AutoStartWatcher && File.Exists(_cfg.Watcher) && !WatcherRunning())
+            if (_cfg.AutoStartWatcher && !WatcherRunning())
             {
-                try { StartWatcher(silent: true); } catch { }
+                if (File.Exists(_cfg.Watcher)) { try { StartWatcher(silent: true); } catch { } }
+                else
+                {
+                    // Say it. Silently not watching is the failure this app is
+                    // for; it must never be the thing doing it.
+                    _icon.ShowBalloonTip(10000, "Cyberwise",
+                        "Cannot find the crash watcher script, so nothing is being recorded. "
+                        + "Open Settings and check the Watcher path.", ToolTipIcon.Error);
+                }
             }
 
             // Say so at startup if the logon entry is stale. This is the one

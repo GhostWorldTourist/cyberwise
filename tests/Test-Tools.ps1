@@ -544,6 +544,41 @@ if ($hkErr) {
     }
 }
 
+# ============================================================== install ======
+#
+# The destructive bug this guards: an installed copy running its own uninstaller
+# deleted every cyberwise* skill link BY NAME, including links belonging to a
+# different copy. On a machine where someone also had the repo linked for
+# development, uninstalling the app silently removed their links too. It
+# happened during the first test of the installer, on a real machine.
+
+$homeA = Join-Path $sandbox 'agentHomeA'
+$copyB = Join-Path $sandbox 'otherCopy'
+New-Item -ItemType Directory -Path (Join-Path $copyB 'skills\cyberwise') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $copyB 'skills\cyberwise\SKILL.md') 'placeholder' -NoNewline
+Copy-Item -LiteralPath (Join-Path $Root 'install.ps1') -Destination $copyB -Force
+
+# Link from THIS repo into a throwaway agent home...
+& (Join-Path $Root 'install.ps1') -ClaudeHome $homeA -ClaudeOnly *>$null
+$before = @(Get-ChildItem (Join-Path $homeA 'skills') -Directory -ErrorAction SilentlyContinue).Count
+
+# ...then let a DIFFERENT copy run its uninstall against the same home.
+& (Join-Path $copyB 'install.ps1') -ClaudeHome $homeA -ClaudeOnly -Remove *>$null
+$after = @(Get-ChildItem (Join-Path $homeA 'skills') -Directory -ErrorAction SilentlyContinue).Count
+
+if ($before -gt 0 -and $after -eq $before) {
+    Ok 'install: another copy''s uninstall leaves these links alone'
+} else {
+    Bad 'install: another copy''s uninstall leaves these links alone' `
+        "had $before links, $after remain - an unrelated uninstall deleted them"
+}
+
+# And its own uninstall must still work, or the guard is too strong.
+& (Join-Path $Root 'install.ps1') -ClaudeHome $homeA -ClaudeOnly -Remove *>$null
+$own = @(Get-ChildItem (Join-Path $homeA 'skills') -Directory -ErrorAction SilentlyContinue).Count
+if ($own -eq 0) { Ok 'install: a copy can still remove its own links' }
+else { Bad 'install: a copy can still remove its own links' "$own links left after removing with the owning copy" }
+
 # ============================================================== watcher ======
 #
 # Several independent things can start a watcher - the tray, a logon Run entry,

@@ -34,6 +34,18 @@ if (-not (Test-Path -LiteralPath $csc)) {
 
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 $exe = Join-Path $OutDir 'CyberwiseTray.exe'
+
+# A running tray holds a lock on its own exe, and csc fails with "the process
+# cannot access the file" - which reads like a permissions problem rather than
+# "your app is running". Stop only the instance we are about to overwrite,
+# matched by path, so a copy running from somewhere else is left alone.
+Get-Process CyberwiseTray -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path -eq $exe } |
+    ForEach-Object {
+        Write-Host "stopping the running tray (pid $($_.Id)) so its exe can be replaced" -ForegroundColor DarkGray
+        $_ | Stop-Process -Force
+    }
+Start-Sleep -Milliseconds 300
 $src = Join-Path $PSScriptRoot 'CyberwiseTray.cs'
 
 # /target:winexe = no console window flashing up behind the tray icon.

@@ -42,6 +42,23 @@ function Install-Family {
             if (Test-Path -LiteralPath $link) {
                 $item = Get-Item -LiteralPath $link -Force
                 if (-not $item.LinkType) { Write-Warning "  $($skill.Name) is a real directory, not a link - leaving it"; continue }
+
+                # ONLY REMOVE LINKS THAT POINT AT *THIS* COPY.
+                #
+                # An installed copy running its own uninstaller used to delete
+                # every cyberwise* link by name, which on a machine where someone
+                # also has the repo linked for development deleted THEIR links
+                # too - silently, as a side effect of uninstalling something
+                # else. It happened here, during the first test of the installer.
+                #
+                # A link pointing somewhere else belongs to another install and
+                # is none of our business.
+                $actual = try { [IO.Path]::GetFullPath([string]@($item.Target)[0], (Split-Path -Parent $link)) } catch { $null }
+                if ($actual -and $actual -ne [IO.Path]::GetFullPath($target)) {
+                    Write-Host "  skipped $($skill.Name) - points at another copy ($actual)" -ForegroundColor DarkGray
+                    continue
+                }
+
                 # Remove-Item on a junction deletes the LINK, not the target - but
                 # be explicit about it, because getting this wrong deletes the repo.
                 [IO.Directory]::Delete($link, $false)

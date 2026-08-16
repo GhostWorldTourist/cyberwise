@@ -197,11 +197,49 @@ on this project before it was understood.
 substring.** A bare match also matches the process doing the asking, which
 reports a watcher that is not there.
 
+## The installer
+
+```powershell
+.\build-installer.ps1      # -> dist\Cyberwise-Setup-<version>.exe   (~2 MB)
+```
+
+Needs Inno Setup, which is one command and installs per-user:
+
+```powershell
+winget install --id JRSoftware.InnoSetup
+```
+
+**It never asks for admin.** `PrivilegesRequired=lowest`, everything per-user:
+the app in `%LOCALAPPDATA%\Programs\Cyberwise`, the skills in the user's own
+profile, autostart in `HKCU`. An unsigned installer that also throws a UAC shield
+is exactly where this audience stops.
+
+Three optional tasks, and the first two are checked by default: start at logon,
+install the skills for Claude Code and Codex, create a desktop shortcut.
+
+Skills are linked by **the repo's own `install.ps1`**, shipped inside the
+install, rather than a second implementation in Pascal. One linking
+implementation to keep correct instead of two to drift apart.
+
+### It killed the author's skill links the first time it was tested
+
+Worth recording, because it is the sharpest bug this project has produced.
+
+The uninstaller ran `install.ps1 -Remove`, which deleted every `cyberwise*` link
+**by name**. On a machine where the author also had the repo linked for
+development, uninstalling a throwaway test install silently removed those links
+too — a destructive side effect on files the uninstall had nothing to do with.
+
+`install.ps1 -Remove` now removes only links that resolve to **its own** skills
+directory, and reports the ones it skipped. Both halves are tested: another
+copy's uninstall leaves these links alone, and a copy can still remove its own.
+
+The general shape is worth carrying: **an uninstaller that matches by name
+deletes other people's things.** Match by target.
+
 ## Not done yet
 
 - **Not code-signed.** SmartScreen will warn, and a tray app that spawns
   PowerShell and inspects other processes is a textbook antivirus false
   positive. Signing needs a certificate and a verified identity.
-- **No installer.** This builds an exe; it does not place it, create a Start
-  Menu entry, or install the skills.
 - **Only tested on one machine**, by the person who wrote it.
