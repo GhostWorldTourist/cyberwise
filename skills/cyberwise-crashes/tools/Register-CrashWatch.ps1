@@ -27,6 +27,7 @@ param(
     [string] $Dir,
     [string] $GameRoot,
     [string] $TaskName = 'Cyberwise crash watch',
+    [string] $RunValueName = 'Cyberwise crash watch',
     [int]    $IntervalSec = 15,
     [switch] $Status,
     [switch] $Remove
@@ -38,9 +39,24 @@ function Get-Task { Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyC
 
 # ------------------------------------------------------------------- status --
 
+$runKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+function Get-RunEntry { (Get-ItemProperty -Path $runKeyPath -Name $RunValueName -ErrorAction SilentlyContinue).$RunValueName }
+
 if ($Status) {
     $t = Get-Task
-    if (-not $t) { Write-Host "not registered ('$TaskName')" -ForegroundColor Yellow; exit 0 }
+    $run = Get-RunEntry
+    if (-not $t -and $run) {
+        Write-Host "registered as a logon Run entry '$RunValueName'" -ForegroundColor Green
+        Write-Host "  (starts at logon, but will NOT restart the watcher if it dies)" -ForegroundColor Yellow
+    }
+    if (-not $t -and -not $run) { Write-Host "not registered ('$TaskName')" -ForegroundColor Yellow }
+    if (-not $t) {
+        $live = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" -ErrorAction SilentlyContinue |
+                  Where-Object { $_.CommandLine -like '*-File*Watch-Crashes.ps1*' })
+        Write-Host "process   $(if ($live.Count) { "running (pid $($live[0].ProcessId))" } else { 'NOT running' })" `
+            -ForegroundColor $(if ($live.Count) { 'Green' } else { 'Yellow' })
+        exit 0
+    }
 
     $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
     Write-Host "task      $TaskName" -ForegroundColor Green
@@ -62,7 +78,11 @@ if ($Status) {
 # ------------------------------------------------------------------- remove --
 
 if ($Remove) {
-    if (-not (Get-Task)) { Write-Host "nothing to remove ('$TaskName' is not registered)"; exit 0 }
+    if (Get-RunEntry) {
+        Remove-ItemProperty -Path $runKeyPath -Name $RunValueName -ErrorAction SilentlyContinue
+        Write-Host "removed the logon Run entry '$RunValueName'" -ForegroundColor Green
+    }
+    if (-not (Get-Task)) { Write-Host "no scheduled task to remove"; exit 0 }
     if ($PSCmdlet.ShouldProcess($TaskName, 'unregister scheduled task')) {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
         Write-Host "removed '$TaskName'" -ForegroundColor Green
@@ -124,6 +144,33 @@ if ($PSCmdlet.ShouldProcess($TaskName, "register logon task running $watcher")) 
             -Description "Watches Cyberpunk 2077 for crashes and captures its post-mortem telemetry (cyberwise)." `
             -ErrorAction Stop | Out-Null
     } catch {
+        # FALL BACK TO THE PER-USER RUN KEY. Task creation in the root folder
+        # generally wants elevation, and this fails with "Access is denied" even
+        # in the user's own session - observed on a normal desktop, not a
+        # sandbox. HKCU\...\Run needs no elevation ever and is the ordinary
+        # mechanism for a per-user autostart, so a denied task is a reason to use
+        # the simpler thing rather than a reason to give up.
+        #
+        # What it loses: the task scheduler's restart-on-failure. A Run entry
+        # starts the watcher once per logon and that is all. Say so, rather than
+        # letting the user believe they got supervision they did not.
+        Write-Warning "scheduled task refused ($($_.Exception.Message.Trim())) - falling back to a logon Run entry."
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        $cmd    = "powershell.exe " + ($args -join ' ')
+        try {
+            New-ItemProperty -Path $runKey -Name $RunValueName -Value $cmd -PropertyType String -Force -ErrorAction Stop | Out-Null
+            if (-not (Get-ItemProperty -Path $runKey -Name $RunValueName -ErrorAction SilentlyContinue)) {
+                throw "the Run value is not there after writing it"
+            }
+            Write-Host "registered a logon Run entry '$RunValueName' instead" -ForegroundColor Green
+            Write-Host "  NOTE: this starts the watcher at logon but will NOT restart it if it dies." -ForegroundColor Yellow
+            Write-Host "  remove   .\Register-CrashWatch.ps1 -Remove"
+            Write-Host "  output   $Dir"
+            exit 0
+        } catch {
+            Write-Warning "the Run entry failed too: $($_.Exception.Message)"
+        }
+
         throw ("could not register '$TaskName': $($_.Exception.Message)`n" +
                "Task creation can be blocked by policy, by a restricted/sandboxed session, or by an " +
                "account without the right. Run this from a normal PowerShell window; if it still fails, " +

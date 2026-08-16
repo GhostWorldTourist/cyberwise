@@ -119,6 +119,20 @@ worse than a blank.
 It is a `winexe` with no console of its own, so it attaches to the parent
 console to print. Run it from a terminal and the output appears there.
 
+**It cannot be piped**, and that surprises people. A GUI-subsystem executable
+does not block the shell — `& .\CyberwiseTray.exe --selftest | Out-String`
+returns immediately with nothing, because the shell has already moved on and the
+text goes to the console buffer rather than to a stream PowerShell is capturing.
+To capture it:
+
+```powershell
+Start-Process .\bin\CyberwiseTray.exe --selftest -NoNewWindow -Wait `
+    -RedirectStandardOutput out.txt
+```
+
+The same applies to `--icon-preview`: without `-Wait` you will check for the PNG
+before it has been written.
+
 ## Settings
 
 `%APPDATA%\cyberwise\tray.ini`, written on first run so the auto-detected values

@@ -544,6 +544,81 @@ if ($hkErr) {
     }
 }
 
+# ================================================================== tray =====
+#
+# The tray app is the only compiled thing here, and it is what a non-technical
+# user actually touches. Building it in the suite catches a C# break that no
+# PowerShell test would, and --selftest exercises the detection paths end to end
+# without needing anyone to look at a tray menu.
+
+$csc = @(
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe')
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+
+if ($Quick) {
+    Skip 'tray: builds and self-reports' '-Quick was passed'
+} elseif (-not $csc) {
+    Skip 'tray: builds and self-reports' 'no .NET Framework C# compiler on this machine'
+} else {
+    $trayOut = Join-Path $sandbox 'traybin'
+    $build   = Join-Path $Root 'app\build.ps1'
+    $buildLog = Get-Console { & $build -OutDir $trayOut }
+    $trayExe = Join-Path $trayOut 'CyberwiseTray.exe'
+
+    if (-not (Test-Path -LiteralPath $trayExe)) {
+        Bad 'tray: builds' $buildLog
+    } else {
+        Ok 'tray: builds'
+
+        # Windows shows FileDescription - not the filename - in taskbar settings
+        # and Task Manager. Without the version resource it reads as
+        # "CyberwiseTray.exe", which looks like something that installed itself.
+        $desc = (Get-Item -LiteralPath $trayExe).VersionInfo.FileDescription
+        if ($desc -eq 'Cyberwise') { Ok 'tray: the exe identifies itself as Cyberwise' }
+        else { Bad 'tray: the exe identifies itself as Cyberwise' "FileDescription is '$desc'" }
+
+        # A /target:winexe does NOT block the shell - `& $exe` returns immediately
+        # and its console output cannot be piped, because AttachConsole writes to
+        # the console buffer rather than to a redirectable stdout that PowerShell
+        # is capturing. Start-Process -Wait with an explicit redirect gets both
+        # the ordering and the text.
+        $stFile = Join-Path $sandbox 'selftest.txt'
+        Start-Process -FilePath $trayExe -ArgumentList '--selftest' -NoNewWindow -Wait `
+            -RedirectStandardOutput $stFile
+        $st = if (Test-Path -LiteralPath $stFile) { Get-Content -LiteralPath $stFile -Raw } else { '' }
+        $problems = @(
+            if ($st -notmatch '(?m)^\s*game root\s*:')      { 'self-test does not report a game root' }
+            if ($st -notmatch '(?m)^\s*watcher\s*:')        { 'self-test does not report watcher state' }
+            if ($st -notmatch '(?m)^\s*start at logon\s*:') { 'self-test does not report the autostart setting' }
+            if ($st -notmatch '(?m)^\s*crashes\s*:')        { 'self-test does not report a crash count' }
+        )
+        if ($problems) { Bad 'tray: --selftest reports the fields support needs' ($problems -join "`n") }
+        else           { Ok  'tray: --selftest reports the fields support needs' }
+
+        # The icon cannot be judged from source, but it CAN be checked for the
+        # one failure that matters mechanically: rendering nothing at all.
+        $png = Join-Path $sandbox 'icon.png'
+        Start-Process -FilePath $trayExe -ArgumentList '--icon-preview', "`"$png`"" -NoNewWindow -Wait
+        if (-not (Test-Path -LiteralPath $png)) {
+            Bad 'tray: the icon renders' 'no preview file was produced'
+        } else {
+            Add-Type -AssemblyName System.Drawing
+            $img = [System.Drawing.Image]::FromFile($png)
+            try {
+                # Sample the middle of the first state swatch; a blank render
+                # would leave the background colour everywhere.
+                $distinct = @{}
+                for ($x = 60; $x -lt 150; $x += 3) {
+                    for ($y = 40; $y -lt 130; $y += 3) { $distinct[$img.GetPixel($x, $y).ToArgb()] = 1 }
+                }
+                if ($distinct.Count -ge 5) { Ok 'tray: the icon renders more than a flat swatch' }
+                else { Bad 'tray: the icon renders more than a flat swatch' "only $($distinct.Count) distinct colours in the sampled area" }
+            } finally { $img.Dispose() }
+        }
+    }
+}
+
 # ================================================================ page fit ===
 #
 # The trap this guards: scrollHeight has the viewport as its floor, so
