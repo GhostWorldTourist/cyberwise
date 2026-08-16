@@ -97,6 +97,32 @@ Windows Error Reporting never fires for it, and the measurement traps.
 .\tools\Register-CrashWatch.ps1 -Remove
 ```
 
+### The tray app is optional, and you build it for them
+
+There is a tray icon in `app/` that runs the watcher and shows its state. **Build
+it for the user - do not hand them build instructions.** It compiles with the C#
+compiler already present in Windows, so nothing needs installing:
+
+```powershell
+cd app; .\build.ps1 -Run
+```
+
+**Say it is optional, because it is.** Everything works from the scripts alone.
+The tray exists so somebody who never opens a terminal can see whether recording
+is happening, and start or stop it.
+
+Expect questions, and answer them plainly rather than technically:
+
+- *"Is it safe?"* - it watches memory use and copies the crash report the game
+  writes. It changes nothing in the game or in mods.
+- *"Will Windows warn me?"* - yes, it is not code-signed, so SmartScreen shows
+  "unknown publisher". That is a statement about a certificate nobody bought, not
+  about the file. They can read the source and you just built it in front of them.
+- *"Does it phone home?"* - no. Nothing here contacts the internet except the mod
+  inventory, and only if they supply a Nexus key.
+- *"Can I remove it?"* - close it from the menu, delete the folder. It puts one
+  entry in the startup list, removable from the same menu or Task Manager.
+
 Three things about this that are not obvious:
 
 - **The capture is deduped on `crashVisitId`.** `CrashInfo.json` is overwritten

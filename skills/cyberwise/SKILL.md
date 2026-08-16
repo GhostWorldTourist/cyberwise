@@ -66,6 +66,13 @@ disk. Two that bite hardest:
 
 Detection recipes and per-manager consequences: `references/environment.md`.
 
+**Answer the worry, not the mechanism.** Most people here are modders, not
+developers. When someone asks "is this safe", "what does that do", "will this
+break my save" - answer *that*, in a sentence, without a lecture on how it works.
+Offer the detail second, for the ones who want it. And **do the work yourself**:
+if something needs building, installing or running, run it for them rather than
+handing over commands to paste.
+
 **Confirm the mod is actually deployed before theorising about why it fails.**
 Hours have gone into explaining a mod that was staged but never deployed - and
 the manual-install equivalent, an archive unpacked one folder too deep, fails
