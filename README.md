@@ -1,6 +1,7 @@
 # Cyberwise
 
-A family of Claude Code skills for diagnosing modded **Cyberpunk 2077** installs.
+A family of skills for diagnosing modded **Cyberpunk 2077** installs, for
+**Claude Code and Codex**.
 
 It is not a modding tutorial. It is a set of field notes about the things that are
 counterintuitive, undocumented, or actively contradicted by popular advice - the
@@ -145,18 +146,27 @@ MO2 virtualises the filesystem and that changes how you diagnose anything.
 ```powershell
 git clone https://github.com/GhostWorldTourist/cyberwise ~/repos/cyberwise
 cd ~/repos/cyberwise
-.\install.ps1          # -Remove to unlink
+.\install.ps1          # -Remove to unlink, -ClaudeOnly to skip Codex
 ```
 
-That symlinks each skill under `skills/` into `~/.claude/skills/`, so edits to
-this repo take effect immediately with no reinstall step. It falls back to a
-directory junction where a symlink would need elevation. Then open `/hooks` once,
-or restart, so Claude Code picks them up.
+**Works with Claude Code and Codex**, from one repo. Each skill under `skills/`
+is symlinked into `~/.claude/skills/` *and* `~/.codex/skills/` (or
+`$CODEX_HOME/skills`), so edits take effect immediately with no reinstall step
+and the two agents cannot drift apart. It falls back to a directory junction
+where a symlink would need elevation.
+
+Then: open `/hooks` once or restart Claude Code, and restart Codex so it
+refreshes its global skill catalog.
+
+Every skill carries an `agents/openai.yaml` giving Codex its display name and
+description — without one a skill still loads but shows up as a bare directory
+name, so the validator requires it and checks that its `default_prompt` names
+its own skill rather than a copy-pasted neighbour's.
 
 To install by hand instead, copy each directory under `skills/` into
-`~/.claude/skills/` (or a project's `.claude/skills/`). Claude loads them when
-you ask about Cyberpunk 2077 mod problems; you can also invoke one directly, e.g.
-`/cyberwise-conflicts`.
+`~/.claude/skills/` (or a project's `.claude/skills/`) and `~/.codex/skills/`.
+Either agent loads them when you ask about Cyberpunk 2077 mod problems; you can
+also invoke one directly, e.g. `/cyberwise-conflicts`.
 
 ## Tests
 

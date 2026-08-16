@@ -144,6 +144,20 @@ Assert-Catches 'a hardcoded absolute user path' 'no absolute user' `
     { ($frontOrig + "`nRun it from $leak.`n") | Set-Content -LiteralPath $front -NoNewline } `
     { $frontOrig | Set-Content -LiteralPath $front -NoNewline }
 
+# -- codex --------------------------------------------------------------------
+$yaml     = Join-Path $S 'cyberwise-hotkeys\agents\openai.yaml'
+$yamlOrig = Get-Content -LiteralPath $yaml -Raw
+
+Assert-Catches 'a skill with no Codex manifest' 'Codex manifest' `
+    { Rename-Item -LiteralPath $yaml -NewName 'openai.parked' } `
+    { Rename-Item -LiteralPath (Join-Path (Split-Path $yaml) 'openai.parked') -NewName 'openai.yaml' }
+
+# A copy-pasted manifest that kept another skill's name points Codex elsewhere,
+# which is worse than a missing one: it looks correct and routes wrong.
+Assert-Catches 'a Codex manifest whose default_prompt names another skill' 'Codex manifest' `
+    { $yamlOrig.Replace('$cyberwise-hotkeys', '$cyberwise-saves') | Set-Content -LiteralPath $yaml -NoNewline } `
+    { $yamlOrig | Set-Content -LiteralPath $yaml -NoNewline }
+
 # -- structure ---------------------------------------------------------------
 $doomed     = Join-Path $S 'cyberwise-tweaks\SKILL.md'
 $doomedOrig = Get-Content -LiteralPath $doomed -Raw

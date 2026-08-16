@@ -194,6 +194,28 @@ Check 'every Verified stamp names a patch version, or declares it needs none' {
     }
 }
 
+# ---------------------------------------------------------------- codex -----
+
+# The family installs into Codex as well as Claude Code. Codex reads
+# agents/openai.yaml for the name and description it shows; a skill without one
+# still loads but presents as a bare directory name, so a new skill that forgets
+# it is invisible in one of the two agents it claims to support.
+Check 'every skill carries a Codex manifest with the three interface fields' {
+    foreach ($s in $skills) {
+        $yaml = Join-Path $s.FullName 'agents\openai.yaml'
+        if (-not (Test-Path -LiteralPath $yaml)) { "$($s.Name): no agents/openai.yaml"; continue }
+        $text = Get-Content -LiteralPath $yaml -Raw
+        foreach ($field in 'display_name', 'short_description', 'default_prompt') {
+            if ($text -notmatch "(?m)^\s*$field\s*:\s*\S") { "$($s.Name)/agents/openai.yaml: no $field" }
+        }
+        # The prompt references the skill by name; a copy-paste that kept another
+        # skill's name sends Codex somewhere else entirely.
+        if ($text -match '(?m)^\s*default_prompt\s*:\s*"([^"]*)"' -and $matches[1] -notmatch [regex]::Escape("`$$($s.Name)")) {
+            "$($s.Name)/agents/openai.yaml: default_prompt does not reference `$$($s.Name)"
+        }
+    }
+}
+
 # --------------------------------------------------------------- safe edits --
 
 # A skill that tells the model to write into a user's install must name the
