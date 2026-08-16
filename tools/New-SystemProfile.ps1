@@ -106,7 +106,26 @@ if (-not $GameRoot -or -not (Test-Path -LiteralPath (Join-Path $GameRoot 'bin\x6
 }
 $GameRoot = (Resolve-Path -LiteralPath $GameRoot).Path
 
+# For measured quantities - free space, pagefile, total archive size - where the
+# exact figure is the point.
 function GB { param([double]$bytes) if ($bytes -le 0) { '?' } else { '{0:N1} GB' -f ($bytes / 1GB) } }
+
+# For INSTALLED CAPACITY - system RAM and VRAM - where the exact figure is noise.
+# Windows reports RAM the OS can address, not what is in the slots: a 64 GB
+# machine reports 61.6 GB because firmware and integrated graphics reserve the
+# rest, and a 32 GB card reports 31.8. Printing those raw invites "why does it
+# say 61.6, did a stick fail?" - a question about the reporting, not the machine.
+# Snap to the nearest real capacity people actually buy, and only when the value
+# is close enough that the snap is safe; anything else rounds normally, so a
+# genuinely odd configuration still shows as odd.
+$stdCapacity = 1,2,3,4,6,8,10,11,12,16,20,24,32,40,48,64,80,96,128,192,256
+function Cap {
+    param([double]$bytes)
+    if ($bytes -le 0) { return '?' }
+    $g = $bytes / 1GB
+    foreach ($s in $stdCapacity) { if ($g -le $s -and $g -ge $s * 0.88) { return "$s GB" } }
+    return '{0:N0} GB' -f $g
+}
 function Ver {
     param([string]$relPath)
     $p = Join-Path $GameRoot $relPath
@@ -286,7 +305,7 @@ if ($vram -gt 0 -and $archBytes -gt 0) {
     }
 }
 if ($ramBytes -gt 0 -and $ramBytes -lt 16GB) {
-    Add-Flag "**System RAM $(GB $ramBytes).** A heavily modded install regularly exceeds this; the shortfall lands on the pagefile and shows up as stutter or out-of-memory crashes."
+    Add-Flag "**System RAM $(Cap $ramBytes).** A heavily modded install regularly exceeds this; the shortfall lands on the pagefile and shows up as stutter or out-of-memory crashes."
 }
 if (-not $pfAuto -and $pfBytes -gt 0 -and $pfBytes -lt 8GB) {
     Add-Flag "**Fixed pagefile of $(GB $pfBytes).** Modded CP2077 commits far more than it resident-uses. A small fixed pagefile produces crashes that look random and are not - let Windows manage it, or set 16 GB+."
@@ -352,8 +371,8 @@ function Pad { param([string]$k, $v, [int]$w = 12) '{0} {1}' -f $k.PadRight($w),
 
 $machineLines = @(
     Pad 'CPU'    "$($cpu.Name.Trim()) ($($cpu.NumberOfCores)c/$($cpu.NumberOfLogicalProcessors)t)"
-    Pad 'RAM'    (GB $ramBytes)
-    Pad 'GPU'    "$gpuName - $(if ($vram) { GB $vram } else { 'VRAM unknown' }) - driver $gpuDriver"
+    Pad 'RAM'    (Cap $ramBytes)
+    Pad 'GPU'    "$gpuName - $(if ($vram) { Cap $vram } else { 'VRAM unknown' }) - driver $gpuDriver"
     Pad 'OS'     "$($os.Caption -replace 'Microsoft ','') build $($os.BuildNumber)"
     Pad 'Pagefile' $(if ($pfAuto) { "system-managed ($(GB $pfBytes))" } else { "fixed $(GB $pfBytes)" })
     Pad 'Game drive' "$letter`: $media - $(GB $freeBytes) free"
@@ -536,3 +555,5 @@ footer span:last-child{margin-left:auto}
 }
 
 Write-Host "$($flags.Count) flag(s) raised" -ForegroundColor $(if ($flags.Count) { 'Yellow' } else { 'Green' })
+
+
