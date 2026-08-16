@@ -22,7 +22,43 @@ crash** - snapshot it immediately or you lose the previous one. It contains:
 
 **Crash locations across sessions are the single best lead.** If they cluster, it
 is a streaming-sector or archive problem in that district. If they scatter, it is
-systemic.
+systemic. That only holds if the records are genuinely distinct - see below.
+
+### Dedupe the captures, or you will invent crashes
+
+**The file is overwritten on each crash, but it is NOT deleted on a clean exit.**
+It sits there holding the last crash indefinitely. So a watcher that copies it
+whenever the process disappears re-saves the *same* record after every normal
+quit, each time under a new timestamped filename.
+
+This is not cosmetic. On the install this was written against, **21 captured
+files were 2 real crashes** - one copied 9 times, one 12. A location analysis
+over that folder "finds" a 9-hit cluster in one district that is a single event
+counted nine times, and the conclusion (streaming-sector problem, go bisect
+archives in Little China) is entirely manufactured.
+
+**Dedupe on `crashVisitId`**, which the game issues per crash. Keep a list of the
+ids already captured and skip anything already on it:
+
+```powershell
+$pm  = (Get-Content $CrashInfo -Raw | ConvertFrom-Json).Data.postMortem
+$ids = if (Test-Path $seen) { @(Get-Content $seen) } else { @() }
+if ($ids -contains $pm.crashVisitId) { 'clean exit - already on file' }
+else { Copy-Item ... ; Add-Content $seen $pm.crashVisitId }
+```
+
+Two more things that follow from it:
+
+- **Name the capture after `timeCrash`, not the copy time.** The watcher notices
+  death whenever it next polls, which can be minutes late, and a filename built
+  from that time makes the crash look like it happened then.
+- **Record a verdict per session.** Otherwise "the process is gone" is all you
+  have, and a normal quit is indistinguishable from a crash in your own logs.
+
+**When you inherit an existing capture folder, count the DISTINCT records before
+reading anything into it.** Hash the files or group by `crashVisitId` first. A
+folder of near-identically-named JSON files looks like a rich dataset and may be
+two events.
 
 ## Windows Error Reporting will never help you
 
@@ -79,7 +115,10 @@ No such tool ships with this skill and none is standard - if you want one you wr
 it, which is a few dozen lines. What it needs to do: sample every 15-30 s to CSV
 (working set, private bytes, per-process and adapter GPU memory, free RAM, handle
 count, thread count), write a marker when the process disappears, and copy
-`CrashInfo.json` on death before the next crash overwrites it.
+`CrashInfo.json` on death before the next crash overwrites it - **deduped on
+`crashVisitId`**, or the capture folder fills with copies of one crash. See
+"Dedupe the captures" above; this is the single easiest way to build a watcher
+that produces confident nonsense.
 
 **If you build it in PowerShell, `Start-Job` does not work.** Background jobs are
 children of the calling PowerShell session and die when the call returns. Launch
@@ -92,6 +131,14 @@ Start-Process powershell.exe -WindowStyle Hidden -ArgumentList `
 
 The same applies to any agent-launched helper: if it is a child of the session that
 started it, it dies with that session.
+
+**An agent may not be able to start it at all.** In a sandboxed or supervised
+tool session the whole process tree can be reaped when the call returns, so
+`Start-Process` reports success and leaves nothing running. Verify it survived -
+check for the process by its `-File <watcher>` command line, not by a substring
+that your own query also matches - and if it did not, **hand the command to the
+user to run rather than retrying.** A watcher you believe is armed and is not is
+worse than none, because the next crash looks like it produced no telemetry.
 
 ## Single-variable testing
 
