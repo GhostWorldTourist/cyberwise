@@ -8,6 +8,14 @@ description: Diagnose Cyberpunk 2077 crashes, hangs and failures to launch on a 
 > **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
 > **Re-check after a patch:** Confirm log paths and the crash-report filename first; those move between versions.
 
+**Check the patch version before hunting for a log** - the paths and the
+crash-report filename move between versions, and a log you cannot find reads as
+a log that was never written:
+
+```powershell
+(Get-Item "$GameRoot\bin\x64\Cyberpunk2077.exe").VersionInfo.ProductVersion
+```
+
 Load `cyberwise` alongside this for the method rules. Two matter enormously here:
 
 - **Reproduce before bisecting.** One crash is not a deterministic fault. Bisect

@@ -28,6 +28,23 @@ a twenty-mod list, they just fire less often.
 These cost the most time when skipped, and they apply to **every** task below -
 they are why this front door exists rather than eight independent skills.
 
+**Read the installed patch version before trusting anything stamped with one.**
+It costs one line, so there is no excuse for skipping it:
+
+```powershell
+(Get-Item "$GameRoot\bin\x64\Cyberpunk2077.exe").VersionInfo.ProductVersion   # -> 2.31
+```
+
+These notes were verified against the version in each file's **Verified:** stamp.
+If the install reports a *higher* version, say so before answering: the reasoning
+still holds, but paths, record IDs and offsets may have moved, and the file's
+**Re-check after a patch** line names what to re-test first. Do this whenever a
+task depends on a stamped fact - save offsets, TweakDB record IDs, crash log
+locations, hard-coded paths - not on every trivial question.
+
+`ProductVersion` is the patch number directly (`2.31`); `FileVersion` is a build
+string (`3.0.5294808`) and is not what anyone means by "the patch".
+
 **Find out how the install is assembled before you trust the filesystem.** Manual,
 Vortex and MO2 present completely different pictures on disk, and nearly every
 technique here reads the disk. In particular, **an MO2 install may show you an

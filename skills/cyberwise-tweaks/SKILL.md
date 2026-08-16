@@ -10,6 +10,16 @@ description: Author TweakXL/TweakDB edits and CET Lua for Cyberpunk 2077 - findi
 
 Load `cyberwise` alongside this for the method rules.
 
+**Check the patch version before reusing any noted record ID:**
+
+```powershell
+(Get-Item "$GameRoot\bin\x64\Cyberpunk2077.exe").VersionInfo.ProductVersion
+```
+
+A record ID noted under one patch is a lead, not a fact, on another. If the
+installed version differs from the stamp above, re-extract rather than trusting
+the note - which is the same rule as below, just with a reason to apply it.
+
 ## Do not guess a record ID
 
 The single biggest time sink here is inventing a plausible-looking TweakDB ID.

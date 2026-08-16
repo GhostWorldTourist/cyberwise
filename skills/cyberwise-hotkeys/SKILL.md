@@ -12,6 +12,14 @@ Load `cyberwise` alongside this for the method rules - in particular **never
 quote a mod's shipped defaults as the user's configuration**, of which this whole
 topic is the worst case.
 
+`Get-Hotkeys.ps1` reads all five stores in the right precedence, so use it rather
+than transcribing by hand. If you are decoding a packed CET value yourself, check
+the patch first - the bit layout is an internal format:
+
+```powershell
+(Get-Item "$GameRoot\bin\x64\Cyberpunk2077.exe").VersionInfo.ProductVersion
+```
+
 ## Never hand-transcribe a keybind. There are five stores.
 
 They disagree on format, and only one of them holds what the player actually

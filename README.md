@@ -75,8 +75,18 @@ has no staging tree for it to read.
 
 Also included: `Get-Hotkeys.ps1` / `New-HotkeySheet.ps1` (every keybind on an
 install, from all five stores that hold them, rendered as a cheatsheet),
+`New-SystemProfile.ps1` (a machine and install profile that says what is likely
+wrong, redacted by default because the markdown is meant for pasting in public),
 `Measure-PageFit.ps1` (does a generated page fit a stated viewport) and
 `NexusCredential.ps1` (stores a Nexus API key in Windows Credential Manager).
+
+`cyberwise-saves/tools/` carries `Expand-Save.ps1`, which decompresses a `sav.dat`
+into one flat searchable blob, and `Decode-Preset.ps1`, which turns ACU `.preset`
+files into readable appearance fields. Expand-Save hand-rolls an LZ4 **block**
+decoder because .NET has none and the chunks are blocks rather than frames, so a
+general LZ4 library will refuse them.
+
+**Decoded saves are personal data.** Write them to a temp path; never into a repo.
 
 **Pass your own paths.** These scripts carry defaults - a game root, a staging
 root, a viewport - and those defaults are the author's machine, not yours. Use
@@ -106,9 +116,15 @@ you ask about Cyberpunk 2077 mod problems; you can also invoke one directly, e.g
 ## Tests
 
 ```powershell
-.\tests\Test-Family.ps1       # structural validation of the family
-.\tests\Test-Validator.ps1    # proves the validator above can actually fail
+.\tests\Test-Family.ps1         # structural validation of the family
+.\tests\Test-Validator.ps1      # proves the validator above can actually fail
+.\tests\Test-Tools.ps1          # runs the tools against synthetic installs
+.\tests\Test-ToolMutations.ps1  # reintroduces shipped bugs, expects to be caught
 ```
+
+The two halves check different things, and the second is the one that matters
+more. **Structure is not behaviour, and parsing is not working.** Every defect
+these tools have actually shipped parsed perfectly and was filed correctly.
 
 A skill family breaks *silently*. A `references/foo.md` that no longer exists, a
 frontmatter `name` that stopped matching its directory, a route to a renamed
@@ -117,11 +133,16 @@ just told the model to go and read. Splitting cyberwise into eight parts produce
 exactly one of those; it was caught by hand, and the point of `Test-Family.ps1`
 is that the next one is caught by the machine.
 
-It checks twelve things, including that every reference and tool a `SKILL.md`
+It checks thirteen things, including that every reference and tool a `SKILL.md`
 names resolves inside that skill, that every shipped reference is actually
 mentioned by its owner, that every topic skill is reachable from the front door,
 that every reference carries its own **Verified** / **Re-check after a patch**
 stamp, and that no absolute user path has leaked into a public repo.
+
+One of those is about drift: a **Verified** stamp must name a comparable version
+number, *or* the file must say in as many words that nothing in it depends on a
+game patch. "Verified: recently" is not a stamp, and the distinction between "not
+patch-dependent" and "nobody wrote down which patch" is the whole point.
 
 `Test-Validator.ps1` exists because a validator that has only ever returned green
 is indistinguishable from one that returns green unconditionally. It copies the
@@ -130,11 +151,38 @@ a renamed skill, a `.ps1` that no longer parses - and asserts that *the check
 which owns that fault* is the one that reports, then that the tree comes back
 clean afterwards. It found two bugs in the validator it tests.
 
-Neither needs anything installed. Pester would be a dependency, and the family's
-whole position is that PowerShell is already on the machine.
+### Testing the tools
 
-**Adding a skill?** Run both. The reachability and routing checks will tell you
-what you forgot to wire into the front door.
+`Test-Tools.ps1` builds synthetic installs in a temp directory and runs the real
+scripts against them - no game, no hardware assumptions, no network. It covers
+the things that broke before: that `#` and `!` are **filename** characters in
+`modlist.txt` rather than comment markers, that the LZ4 decoder handles a match
+overlapping its own output, that the Discord-facing markdown carries no path or
+username, and that an unknown preset hash is printed rather than dropped.
+
+It also builds a five-store keybind fixture - a mod shipping `IK_F3`, a
+`user.ini` rebinding it to `IK_F7`, a `buttonGroup` indirection in the cache, and
+a `bindings.json` with keys differing only in case - and asserts the user's
+rebind wins. That is the family's flagship rule (*never quote a mod's shipped
+defaults as the user's configuration*) and this is the only place it is
+mechanically enforced. An unbound CET entry must stay unreported, too: a key the
+tool fails to find reads as a key that is **free**.
+
+`Test-ToolMutations.ps1` reintroduces each of those bugs verbatim into a copy and
+asserts that the test which owns it fails. Reintroducing the `#` bug reproduces
+its original signature exactly - three modlist entries counted instead of four,
+two archives reported unlisted instead of one.
+
+It runs each suite in a **fresh process**, which is not optional:
+`Expand-Save.ps1` compiles its LZ4 decoder with `Add-Type`, and a compiled type
+cannot be replaced once loaded, so an in-process re-run silently keeps the first
+version's decoder and the mutation looks undetectable.
+
+None of it needs anything installed. Pester would be a dependency, and the
+family's whole position is that PowerShell is already on the machine.
+
+**Adding a skill?** Run all four. The reachability and routing checks will tell
+you what you forgot to wire into the front door.
 
 ## Scope and honesty
 

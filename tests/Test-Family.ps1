@@ -161,6 +161,29 @@ Check 'every reference file carries a Verified + Re-check header' {
     }
 }
 
+# A stamp is only useful if it can be compared against what the machine reports,
+# so a version-bound file has to carry an actual version number - "Verified:
+# recently" is not a stamp. This is what makes the one-line ProductVersion check
+# in the front door actionable rather than decorative.
+#
+# Not every file IS version-bound: report-design.md is about browsers and human
+# readers and would be dishonest carrying a game version. Those must say so
+# explicitly, so the reader can tell the difference between "not patch-dependent"
+# and "nobody wrote down which patch".
+Check 'every Verified stamp names a patch version, or declares it needs none' {
+    foreach ($s in $skills) {
+        $refDir = Join-Path $s.FullName 'references'
+        if (-not (Test-Path -LiteralPath $refDir)) { continue }
+        foreach ($f in (Get-ChildItem -LiteralPath $refDir -Filter *.md)) {
+            $head = (Get-Content -LiteralPath $f.FullName -TotalCount 8) -join "`n"
+            if ($head -notmatch '\*\*Verified:\*\*([^\r\n]*)') { continue }
+            if ($matches[1] -match '\d+\.\d+') { continue }
+            if ($head -match '(?i)nothing here depends on a game patch|does not depend on a game patch') { continue }
+            "$($s.Name)/references/$($f.Name): Verified stamp has no version, and nothing declares the file patch-independent"
+        }
+    }
+}
+
 # ------------------------------------------------------------------- tools --
 
 Check 'every shipped .ps1 parses' {
