@@ -160,8 +160,23 @@ going to compile.
 
 ### Then choose by how much of their file you are replacing
 
-Neither option below is right in general, and the honest answer depends on one
-question: **would you notice if their update silently lost to your copy?**
+**First check whether the format lets you override PART of their file**, because
+that changes the answer completely:
+
+| format | granularity | consequence |
+|---|---|---|
+| **TweakXL YAML** | per **record**, last loaded wins | Ship a file setting only the broken record. Everything else of theirs stays live, including changes they make later. Staleness barely applies - **this is the good case.** |
+| **`.archive`** | per **file inside it** | Override one texture without touching the rest. Also fine. |
+| **redscript `.reds`** | whole file only | Replacing it means every future fix its author ships loses to your copy. |
+| **CET Lua** | whole file only | Same. |
+
+Where you can override a *record* rather than a *file*, take it - a `zzz_`-named
+tweak folder loads last and wins without a manager conflict rule and without
+touching the original at all. Where the format only replaces whole files, the
+trade-off below applies.
+
+For whole-file cases, the honest answer depends on one question: **would you
+notice if their update silently lost to your copy?**
 
 | | override mod | re-appliable patch |
 |---|---|---|
