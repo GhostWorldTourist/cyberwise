@@ -108,6 +108,54 @@ wants both (impossible; say so instead of shuffling). Afterwards, **re-scan for
 newly inert archives** - promoting one mod can silently kill a third party nobody
 mentioned. `references/load-order.md`.
 
+## Tools
+
+| tool | what it does |
+|---|---|
+| `tools/Repair-LoadOrder.ps1` | audits `modlist.txt` and the archives against each other, and can repair the order |
+
+```powershell
+.\tools\Repair-LoadOrder.ps1              # report only
+.\tools\Repair-LoadOrder.ps1 -Fix         # reorder, and place unlisted archives
+.\tools\Repair-LoadOrder.ps1 -SkipScan    # inventory and rules only, no index reads
+```
+
+Three independent checks: **inventory** (entries with no file, archives with no
+entry), **precedence** against standing rules, and a **collision scan** that reads
+every archive index and flags **inert** archives - every file they carry owned by
+something earlier, so the mod is installed, enabled and contributing nothing. It
+locates the game from the storefront registry; `-ModDir` overrides. Exit 0 clean,
+1 issues.
+
+**Run it after any mod change.** Whatever rewrites `modlist.txt` appends new
+archives at the *end*, which under earlier-wins is the bottom of the stack - so
+every newly installed mod starts out losing every file it contests.
+
+**It ships with no precedence rules, deliberately.** Rules are one install's
+settled conflicts; applying somebody else's would reorder mods a user does not
+have. Theirs live in a data file beside their game:
+
+```
+<game>\_loadorder\loadorder-rules.psd1
+```
+
+```powershell
+@{
+    Rules = @(
+        @{ Before = 'specific_retex.archive'
+           After  = 'catch_all_aio.archive'
+           Why    = 'an AIO should lose to anything specific' }
+    )
+    BenignInert      = @{ 'some.archive' = 'why being inert is fine here' }
+    RuntimeGenerated = @{ 'other.archive' = 'why it appears and vanishes' }
+}
+```
+
+**Add a rule whenever a conflict is settled by hand**, or the next redeploy
+undoes the decision silently. The two suppression maps stop known-harmless cases
+counting as problems - the script ships only the entries that are facts about
+public mods, not preferences.
+
 ## Reference material
 
 | file | covers |

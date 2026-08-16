@@ -110,3 +110,37 @@ WolvenKit.CLI hash "<depot\path>"
   instead.
 - `HandleId` values must be unique across the whole file. Cloning a block without
   renumbering produces a file that converts but behaves oddly.
+
+## "Scale this prop" is four separate edits
+
+Resizing a placed object is not one number. Missing any of these leaves a prop
+that looks resized until you look properly.
+
+1. **Mesh** - `visualScale` on `entPhysicalMeshComponent`, in the `.app`. This is
+   *all* it scales.
+2. **Light** - `entLightComponent`: `radius`, `sourceRadius`, `capsuleLength`,
+   `areaRectSideA/B`, **and its `localTransform` offset**. The offset matters
+   most: left alone, the light stays where it was and hangs outside a shrunken
+   object entirely. Offsets are `FixedPoint` - **bits = metres x 131072**.
+3. **Particle size** - a `CEvaluatorVectorConst` under `size`, in the `.effect`.
+   Effects are often referenced by **hash**: extract with `--hash`, edit a copy
+   under your own path, then repoint the `.app`'s ResourcePath from
+   `$storage: uint64` to `$storage: string`.
+4. **Effect anchors** - slot `relativePosition` values, plus the effect
+   descriptor's own `relativePositions`.
+
+**Anchors do not scale with the mesh, and not by the factor you expect.** On one
+prop reduced to a third, the anchors needed dividing by **1.5**, not 3 - the
+model hangs below its origin, so shrinking pulls the body toward the origin while
+anchors move on a different curve. There is no deriving this from the file.
+
+**Ship a bracket of variants as separate appearances and look at them.** Five
+variants cost the same as one once the build is scripted, and it ends the
+one-guess-per-round-trip ping-pong that otherwise eats an evening.
+
+Effects do **not** spawn from `entSlotComponent`: the effect descriptor's
+`placementTags` name the slots. `isAutoSpawn` is the real on/off flag - renaming
+an `_autospawn` tag does nothing.
+
+Building on top of someone else's assets without editing their files is covered
+in the `cyberwise` skill's `environment.md` - use your own depot prefix.

@@ -1,6 +1,6 @@
 ---
 name: cyberwise-tweaks
-description: Author TweakXL/TweakDB edits and CET Lua for Cyberpunk 2077 - finding the real record ID rather than guessing it, what the CET console can and cannot do, and locating the game's own text strings. Use when writing or repairing a .yaml tweak, running console commands, or hunting for an in-game string or record.
+description: Author Cyberpunk 2077 mods that are code rather than assets - TweakXL/TweakDB records, CET Lua, and redscript that changes world state. Covers finding the real record ID rather than guessing it, what the CET console can and cannot do, reading the game's own shipped script dump for real signatures, and locating in-game text. Use when writing or repairing a .yaml tweak or a .reds script, running console commands, or hunting for an in-game string or record.
 ---
 
 # Cyberwise: TweakDB and CET Lua
@@ -57,3 +57,4 @@ limits worth knowing before writing a script that cannot work.
 |---|---|
 | `references/tweakdb-and-text.md` | TweakXL authoring, finding real record IDs, locating game text |
 | `references/cet-lua.md` | CET sandbox limits, console cheats that work and that don't |
+| `references/redscript.md` | writing `.reds` that changes world state - the shipped script dump, addressing objects, undoing only your own change |

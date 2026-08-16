@@ -86,6 +86,16 @@ Both learned by breaking a working file:
 
 Always re-read the ArchiveXL log after editing a sector patch.
 
+**It works on another mod's sector, not just a vanilla one.** `nodeDeletions` is
+documented against vanilla sector paths, but pointing it at a path a *mod* added
+works too - confirmed in game by deleting props from a modded interior.
+
+That is worth knowing for what it saves: removing objects from someone else's mod
+needs **no repacking of their archive at all**. Ship a companion `.xl` that sorts
+after theirs, and the edit survives every update of the mod it modifies, because
+their files are never touched. Editing their archive instead is undone by the
+next update and has to be redone by hand each time.
+
 ## Bisecting responsibly
 
 - Reproduce the fault at least twice before halving anything.

@@ -120,6 +120,44 @@ If you are unsure whether a given install virtualises, the quick test is: with t
 game closed, does `archive\pc\mod` contain the archives the user says are enabled?
 If not, you are outside the VFS and must change approach.
 
+## A manager only owns what it deployed
+
+Files written **directly into the game directory** are invisible to the manager
+that is supposed to be running the install. A purge, a redeploy, or an update of
+the mod they belong to silently reverts or orphans them, and the deployed state
+drifts from staging with nothing reporting it.
+
+This bites hardest when it appears to work. On one install a working version of a
+hand-built mod existed **only** as loose files in `r6\tweaks`, while staging still
+held the superseded version - so the next deploy quietly restored the old one and
+the "fixed" mod stopped being fixed, for reasons nothing explained.
+
+**Package a mod as a zip and let the user install it through their manager**
+rather than writing into the game folder. Then the manager owns it, an uninstall
+is clean, and the version they have is the version it believes they have.
+
+Two deliberate exceptions, both worth naming out loud when you take them:
+
+- **Patching another mod's own file in place**, when the fix genuinely is an edit
+  to their file. Where the manager deploys by **hardlink**, edit *both* the
+  deployed file and the staging copy - editing can break the link and leave them
+  independent, so the change silently vanishes at the next deploy.
+- **Diagnostic tooling and backups the user has agreed to.** Keep them in clearly
+  named folders that cannot be mistaken for mod content, and say they are there.
+
+## The mod's own settings UI writes on exit
+
+Where mods share a settings framework, the in-game panel is the source of truth
+and it **writes its config file when the session ends**. An edit made externally
+while the game is running is overwritten on exit with no error - the change simply
+is not there next time, and the obvious conclusion ("the setting does not work")
+is wrong.
+
+So **report what differs and which setting controls it, then stop.** A diff of
+intent against saved values is genuinely useful; a blind write to the config file
+is a change the user did not see, may lose anyway, and cannot easily undo. Offer
+to write it only if they ask for that.
+
 ## Files created in-game are not backed up by the manager
 
 Presets, saved configurations and script libraries written by mods at runtime are
@@ -243,6 +281,19 @@ silently dropped 20 tweaks and an archive that nothing else supplied. The correc
 setup was to install **both** and decide explicitly which copy of the shared script
 survived - a conflict rule in Vortex, mod priority in MO2, or, installing by hand,
 keeping only the intended copy of the contested file.
+
+**Record the file SIZE of the copy that should win.** When two builds of the same
+filename contend, size is usually the only way to tell which one is deployed -
+they have the same name, the same path, and often the same timestamp. Note the
+byte count once, and a redeploy that silently flips the winner becomes a
+one-command check instead of an invisible behaviour change:
+
+```powershell
+(Get-Item "$GameRoot\<contested file>").Length
+```
+
+This matters most for the files nothing warns you about: a script that changes
+behaviour reports no error when the other build wins, it just behaves differently.
 
 When two builds of the same filename exist, **file size is the identity tell**.
 Record the byte counts; if the number flips after a redeploy, behaviour changed
