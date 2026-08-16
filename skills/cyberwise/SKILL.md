@@ -29,74 +29,47 @@ These cost the most time when skipped, and they apply to **every** task below -
 they are why this front door exists rather than eight independent skills.
 
 **Read the installed patch version before trusting anything stamped with one.**
-It costs one line, so there is no excuse for skipping it:
 
 ```powershell
 (Get-Item "$GameRoot\bin\x64\Cyberpunk2077.exe").VersionInfo.ProductVersion   # -> 2.31
 ```
 
-These notes were verified against the version in each file's **Verified:** stamp.
-If the install reports a *higher* version, say so before answering: the reasoning
-still holds, but paths, record IDs and offsets may have moved, and the file's
-**Re-check after a patch** line names what to re-test first. Do this whenever a
-task depends on a stamped fact - save offsets, TweakDB record IDs, crash log
-locations, hard-coded paths - not on every trivial question.
+Every reference here carries a **Verified:** stamp. If the install reports a
+higher version, say so before answering - the reasoning holds, but offsets,
+record IDs and paths may have moved. (`FileVersion` is a build string and is not
+what anyone means by "the patch".)
 
-`ProductVersion` is the patch number directly (`2.31`); `FileVersion` is a build
-string (`3.0.5294808`) and is not what anyone means by "the patch".
+**Snapshot before every in-place write, and get approval on the DIFF, not the
+command.** Nothing in this family modifies an install - but you will, by hand,
+and those edits have no undo. Someone who cannot read PowerShell can still read
+"this line becomes that line", and that is the only consent worth having.
+`tools/ModFileBackup.ps1` does preview / snapshot / write / restore.
 
-**Snapshot before every in-place write, and show a diff before you ask.** Nothing
-in this family modifies a user's install - but *you* will, by hand: rewriting
-`modlist.txt`, patching another author's `.yaml`, editing `user.ini`. Those edits
-have no undo, and that - not whether the user understood the command - is the
-real hazard. A confused "yes" to a read-only command costs nothing; a confused
-"yes" to a modlist rewrite costs the load order.
+**When a command produces nothing, prove it ran before interpreting the
+nothing.** An empty result is the *absence* of evidence and looks identical
+whether the thing did not happen or the command never executed. Twice here a
+silent parse failure was read as a finding - `#` treated as a comment in
+`modlist.txt` produced 61 fabricated faults, and a path containing a space made
+`Start-Process` fail so quietly it was mistaken for a platform limit. Capture
+stderr, check the exit code, confirm the process exists.
 
-```powershell
-. tools\ModFileBackup.ps1
-Show-ModFileDiff  -Path $f -NewText $updated        # preview, writes nothing
-Set-ModFileContent -Path $f -NewText $updated -Note 'why'   # snapshot, then write
-Restore-ModFile   -Path $f                          # undo, newest snapshot
-```
+**Find out how the install is assembled before you trust the filesystem** -
+manual, Vortex, MO2 and Wabbajack lists show completely different pictures on
+disk. Two that bite hardest:
 
-**Ask for approval on the diff, not on the command.** Someone who cannot read
-PowerShell can still read "this line becomes that line", and that is the only
-version of consent that means anything here. Backups live under
-`%LOCALAPPDATA%\cyberwise\backups` - never inside the game directory, which a
-manager may purge or redeploy over.
+- **An MO2 install may show an almost empty game directory** (USVFS + Root
+  Builder). "The file isn't there" proves nothing.
+- **On a Wabbajack list, updating the list DELETES every mod not in the new
+  version**, including any fix you add. Survivors must be named `[NoDelete] ...`,
+  and those re-sort alphabetically, so order lives in the name too. Establish
+  this *before* building anyone a fix.
 
-**When a command produces nothing, prove it ran before you interpret the
-nothing.** An empty result is not evidence; it is the absence of evidence, and it
-looks identical whether the thing did not happen or the command never executed.
-Twice in this project a silent parse failure was read as a finding - `#` treated
-as a comment in `modlist.txt` produced 61 fabricated faults, and a path
-containing a space made `Start-Process` fail so quietly it was mistaken for a
-platform limitation. Capture stderr, check the exit code, confirm the process
-exists - then interpret.
-
-**Find out how the install is assembled before you trust the filesystem.** Manual,
-Vortex, MO2 and an automated **Wabbajack modlist** present completely different
-pictures on disk, and nearly every technique here reads the disk.
-
-In particular, **an MO2 install may show you an almost empty game directory** - it
-virtualises mods through USVFS and its Root Builder plugin copies files in at
-launch and removes them when the game closes. On such an install "the file isn't
-there" is not evidence of anything. Detection recipe and per-manager
-consequences: `references/environment.md`.
-
-**On a Wabbajack modlist, updating the list DELETES every mod that is not part of
-the new version** - including any fix you add for them. Anything meant to survive
-must be named `[NoDelete] ...`, and `[NoDelete]` mods re-sort alphabetically
-afterwards, so the order needs to live in the name too (`[NoDelete] [0000] ...`).
-Establish whether you are on one **before** building somebody a fix, or you are
-handing them something with a lifespan of one update.
+Detection recipes and per-manager consequences: `references/environment.md`.
 
 **Confirm the mod is actually deployed before theorising about why it fails.**
-Hours have gone into explaining the behaviour of a mod that was staged in a mod
-manager but never deployed to the game - and the manual-install equivalent, an
-archive unpacked one folder too deep, fails just as silently. Check the file is on
-disk under the game directory - or, on a virtualising setup, check the manager's
-own view. Every time.
+Hours have gone into explaining a mod that was staged but never deployed - and
+the manual-install equivalent, an archive unpacked one folder too deep, fails
+just as silently. On a virtualising setup, check the manager's own view.
 
 **Reproduce before bisecting.** One crash or hang is not a deterministic fault.
 Confirm it repeats before halving anything, or you will bisect noise and "fix" it
@@ -135,32 +108,18 @@ source, the source is what is wrong, and arguing the point is a waste of a turn.
 
 ## Where records live - one place, agent-neutral
 
-Anything this family needs to **remember about an install** goes on disk, in the
-game's own data area, under a namespace folder of ours:
+Anything this family must **remember about an install** goes on disk beside the
+game's own data, never in the repo and never only in conversation:
 
 ```
 %USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\
-    patches.json      every patch and override, and the upstream hash it was made against
 ```
 
-That location is chosen deliberately, and the third reason is the important one:
-
-1. **It describes the install, not the tooling**, so it belongs beside the saves -
-   the same shape mod authors already use for their own data there.
-2. **It outlives the tooling.** Reinstalling, moving or deleting these skills does
-   not lose the record of what was patched.
-3. **It is agent-neutral.** Claude Code and Codex read the same path, so work
-   begun under one is picked up by the other. A fact kept in one agent's memory is
-   invisible to the next and is lost the moment the user switches.
-
-**Never keep install records in the skill repo** - they describe one person's
-machine, and the repo is shared. And **never keep them only in conversation
-memory**: if the next session is a different agent, or the same agent after a
-reset, an unrecorded override becomes an invisible one.
-
-Write JSON, keep it small, and make each record say *why* as well as *what* - a
-future reader needs to judge whether the patch is still wanted, not just that it
-exists.
+**It is agent-neutral**, which is the point: Claude Code and Codex read the same
+path, so work begun under one is picked up by the other. A fact held in one
+agent's memory is invisible to the next and lost the moment the user switches -
+and an unrecorded override is an invisible one. Rationale and the full layout:
+`references/environment.md`.
 
 ## Know where each kind of mod lives
 

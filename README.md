@@ -40,14 +40,18 @@ this game could ask, and states where something sits relative to canon exactly
 once without arguing about it. It lives here because this is where the Cyberpunk
 knowledge already is.
 
-Measured on the split, per task: the front door plus one topic skill and its
-reference costs **1,000-2,200 tokens less** than the old single skill did, because
-the old one carried every topic's prose on every invocation. The eight
-descriptions cost about 575 tokens of always-present listing, so it pays for
-itself on the first use in a session.
+Measured, per task: the front door plus one topic skill and its reference costs
+**1,000-2,200 tokens less** than a single combined skill, which would carry every
+topic's prose on every invocation. The nine descriptions cost about **790 tokens**
+of always-present listing, so it pays for itself on the first use in a session.
+
+**The front door is the number to watch**, because it loads every time. It is
+about **1,750 words**; it reached 2,150 before being trimmed back. Method rules
+belong there as terse imperatives - the worked examples and the reasoning behind
+them belong in `environment.md`, which is only read when it is needed.
 
 Each skill owns its own `references/` and `tools/` outright - there is no shared
-directory, because eight copies of a reference is eight things to drift.
+directory, because nine copies of a reference is nine things to drift.
 `environment.md` is the one genuinely cross-cutting file and it lives in the
 front door.
 
@@ -99,7 +103,9 @@ understood the command you approved.** A confused *yes* to a read-only command
 costs nothing. A confused *yes* to a modlist rewrite costs a load order that
 nothing can reconstruct. No permission dialog, in any client, fixes that.
 
-So `cyberwise/tools/ModFileBackup.ps1` ships as part of the method:
+So two tools ship as part of the method — `ModFileBackup.ps1` for the edit
+itself, and `ModPatchWatch.ps1` to notice later when the file you patched has
+changed underneath you:
 
 ```powershell
 . tools\ModFileBackup.ps1
@@ -115,10 +121,30 @@ version of consent worth having. Snapshots live under
 which a mod manager may purge or redeploy over. A restore snapshots what it
 replaced, so picking the wrong version is not a second dead end.
 
+**And register every patch**, so a sweep can tell you when the author ships a new
+version of a file you changed:
+
+```powershell
+. tools\ModPatchWatch.ps1
+Register-ModPatch -Name 'x' -UpstreamPath '<their file>' -OverridePath '<yours>' -Note 'why'
+Test-ModPatches                 # after any mod update
+Show-ModPatchDrift -Name 'x'    # what THEY changed, when it says CHANGED
+```
+
+An in-place patch is wiped by their update, which is **loud**. An override is
+*not* wiped, which is **silent** — your old copy keeps winning and every fix they
+ship afterwards loses to it. Registration turns the second into the first, which
+is what makes overriding somebody else's file a reasonable thing to do at all.
+
+**Re-deriving is judgement work and is never automated.** Replaying an old edit
+against a refactored file either fails — fine — or succeeds in the wrong place,
+which is silent and worse. The tool shows you what changed; it does not guess.
+
 ## Included tools
 
 Tools live with the skill that uses them: `cyberwise/tools/` (the backup helper
 above, which is cross-cutting), `cyberwise-hotkeys/tools/`,
+`cyberwise-conflicts/tools/`, `cyberwise-crashes/tools/`,
 `cyberwise-reports/tools/` and `cyberwise-saves/tools/`.
 
 `New-ModManifest.ps1` builds a readable inventory of an installed load order:
@@ -212,11 +238,11 @@ these tools have actually shipped parsed perfectly and was filed correctly.
 A skill family breaks *silently*. A `references/foo.md` that no longer exists, a
 frontmatter `name` that stopped matching its directory, a route to a renamed
 skill - none of it errors. The skill loads and quietly cannot find the thing it
-just told the model to go and read. Splitting cyberwise into eight parts produced
+just told the model to go and read. Splitting cyberwise into parts produced
 exactly one of those; it was caught by hand, and the point of `Test-Family.ps1`
 is that the next one is caught by the machine.
 
-It checks thirteen things, including that every reference and tool a `SKILL.md`
+It checks fifteen things, including that every reference and tool a `SKILL.md`
 names resolves inside that skill, that every shipped reference is actually
 mentioned by its owner, that every topic skill is reachable from the front door,
 that every reference carries its own **Verified** / **Re-check after a patch**

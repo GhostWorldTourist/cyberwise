@@ -191,6 +191,32 @@ top of it.
 requirement and its support boundary - were read from that list's guide in August
 2026; other lists state their own.*
 
+## Where this family keeps its records
+
+```
+%USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\
+    patches.json            every patch and override, with the upstream hash it was made against
+    upstream\<name>.upstream  a copy of the author's file as it was when you patched it
+```
+
+Beside the game's own data, in a namespace folder of ours - the same shape mod
+authors use for their data there. Three reasons, and the third is why it is not
+in `%LOCALAPPDATA%`:
+
+1. **It describes the install, not the tooling**, so it belongs with the game.
+2. **It outlives the tooling.** Reinstalling, moving or deleting these skills
+   does not lose the knowledge of what was patched.
+3. **It is agent-neutral.** Claude Code and Codex read the same path, so work
+   begun under one is picked up by the other.
+
+**Never keep install records in the skill repo** - it is shared, and they
+describe one person's machine. **Never keep them only in conversation memory** -
+the next session may be a different agent, or the same one after a reset.
+
+Write JSON, keep it small, and make each record say *why* as well as *what*: a
+future reader has to judge whether a patch is still wanted, not merely that it
+exists.
+
 ## A manager only owns what it deployed
 
 Files written **directly into the game directory** are invisible to the manager
