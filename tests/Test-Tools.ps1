@@ -544,6 +544,49 @@ if ($hkErr) {
     }
 }
 
+# ============================================================== watcher ======
+#
+# Several independent things can start a watcher - the tray, a logon Run entry,
+# a scheduled task, a person at a prompt - and none knows about the others.
+# "Check, then start" is a race between any two, and losing it is quiet: two
+# watchers interleaving session CSVs in one folder.
+
+if ($Quick) {
+    Skip 'watcher: only one runs per output folder' '-Quick was passed'
+} else {
+    $watchTool = Join-Path $Root 'skills\cyberwise-crashes\tools\Watch-Crashes.ps1'
+    $wdirA = Join-Path $sandbox 'watchA'
+    $wdirB = Join-Path $sandbox 'watchB'
+
+    function Start-TestWatcher {
+        param([string]$D)
+        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList `
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$watchTool`"", '-Dir', "`"$D`""
+    }
+    function Count-TestWatchers {
+        param([string]$Tag)
+        @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+          Where-Object { $_.CommandLine -like "*$Tag*" }).Count
+    }
+
+    Start-TestWatcher $wdirA; Start-TestWatcher $wdirA
+    Start-Sleep -Seconds 4
+    $a = Count-TestWatchers 'watchA'
+    if ($a -eq 1) { Ok 'watcher: a second launch for the same folder exits' }
+    else { Bad 'watcher: a second launch for the same folder exits' "$a watchers are running against one folder" }
+
+    # Keyed on the folder, not globally, so two game installs each get one.
+    Start-TestWatcher $wdirB
+    Start-Sleep -Seconds 3
+    $b = Count-TestWatchers 'watchB'
+    if ($b -eq 1) { Ok 'watcher: a different folder still gets its own watcher' }
+    else { Bad 'watcher: a different folder still gets its own watcher' "$b watchers for the second folder" }
+
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like '*watchA*' -or $_.CommandLine -like '*watchB*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
 # ================================================================== tray =====
 #
 # The tray app is the only compiled thing here, and it is what a non-technical

@@ -79,6 +79,17 @@ Three things about this that are not obvious:
 - **Verify it is actually running**, with `-Status`. Match the process on its
   `-File` argument; a bare script-name substring also matches the query asking
   the question, which cheerfully reports a watcher that is not there.
+- **Starting it twice is safe.** The watcher holds a mutex keyed on its output
+  folder and a second launch exits immediately, so the tray, a logon entry and
+  someone at a prompt cannot end up interleaving session CSVs. A second *game
+  install*, with its own folder, still gets its own watcher.
+
+**Task registration may simply be refused.** On the machine this was written
+against, `schtasks /Create` returns "Access is denied" both from an agent session
+and from an ordinary PowerShell window - so treat the scheduled task as the nice
+case, not the expected one. `Register-CrashWatch.ps1` falls back to a per-user
+`HKCU\...\Run` entry, which needs no elevation, and says plainly what that costs:
+the watcher starts at logon but nothing restarts it if it dies.
 
 ## Reference material
 

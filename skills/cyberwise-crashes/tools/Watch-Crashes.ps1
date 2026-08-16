@@ -47,6 +47,27 @@ param(
 $ErrorActionPreference = 'Continue'
 if (-not (Test-Path -LiteralPath $Dir)) { New-Item -ItemType Directory -Path $Dir -Force | Out-Null }
 
+# ONE WATCHER PER OUTPUT FOLDER, enforced here rather than by whoever launches it.
+#
+# There are now several things that can start a watcher - the tray app, a logon
+# Run entry, a scheduled task, a person at a prompt - and none of them knows
+# about the others. "Check whether one is running, then start one" is a race
+# between any two of them, and the failure is quiet: two watchers writing session
+# CSVs into the same folder, interleaved, each capturing the same crash.
+#
+# A named mutex settles it wherever the launch came from. It is keyed on the
+# OUTPUT FOLDER, not globally, so two game installs can each have their own.
+$mutexName = 'Global\CyberwiseWatch_' + [BitConverter]::ToString(
+    [Security.Cryptography.MD5]::Create().ComputeHash(
+        [Text.Encoding]::UTF8.GetBytes($Dir.ToLowerInvariant()))).Replace('-', '')
+
+$createdNew = $false
+$mutex = New-Object Threading.Mutex($true, $mutexName, [ref]$createdNew)
+if (-not $createdNew) {
+    Write-Host "another watcher is already running for $Dir - exiting" -ForegroundColor Yellow
+    exit 0
+}
+
 $crashDir = Join-Path $Dir 'crashinfo'
 $seenFile = Join-Path $crashDir 'captured-ids.txt'
 $ciPath   = Join-Path $env:LOCALAPPDATA 'CD Projekt Red\Cyberpunk 2077\CrashInfo.json'
