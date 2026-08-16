@@ -59,6 +59,26 @@ front door.
 | **Environment** | telling manual / Vortex / MO2 apart and why it changes everything; resolving an internal name back to a findable mod; reading real settings vs shipped defaults; redscript as an all-or-nothing gate; tooling traps |
 
 
+## A tray icon, for people who do not open terminals
+
+```powershell
+cd app; .\build.ps1 -Run
+```
+
+`app/` builds **CyberwiseTray.exe** (~22 KB, no runtime to install) — a system
+tray icon that runs the crash watcher and reports its state continuously.
+
+Green means watching. Amber means not watching with the game closed, so nothing
+is being missed. **Red means the game is running and the watcher is not**, which
+is the one state that is actively losing evidence and the only one that raises a
+notification. It can register the watcher as a logon task, and **Copy crash
+summary** puts the last ten crashes on the clipboard as plain text — which is
+what someone actually needs when they go and ask for help.
+
+`CyberwiseTray.exe --selftest` prints everything it can see, and prints
+`NOT FOUND` rather than a plausible default. See `app/README.md`, including what
+is deliberately not done yet: it is unsigned, so SmartScreen will warn.
+
 ## Nothing here modifies your install — but an assistant will
 
 That distinction is the most important one in this repo. Every tool below only
