@@ -76,8 +76,9 @@ archive conflict scan. Uninstalling on archive evidence alone has destroyed
 working functionality.
 
 **The same trap exists outside archives.** If redscript fails to compile, *every*
-`.reds` mod on the install is silently off, with no in-game sign - on one install
-that state went unnoticed for eight months. And a RED4ext plugin whose DLL fails to
+`.reds` mod on the install is silently off, with no in-game sign at all - no
+error, no warning, no missing-feature message. Nothing reports it, so the state
+persists until somebody thinks to look at the log. And a RED4ext plugin whose DLL fails to
 load never compiles its scripts either. Verify the thing is actually running before
 concluding anything from its behaviour - the compile-test recipe is in the
 `cyberwise` skill's `environment.md`, not this one.

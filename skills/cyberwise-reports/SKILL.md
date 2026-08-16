@@ -62,15 +62,23 @@ outside any repo and never commit it.
 
 ## Any generated page: measure it, do not eyeball it
 
-**Get the viewport from the user, not from the screen.**
+**Get the viewport from the user, not from the screen — and LAUNCH the probe
+yourself.** Do not print the command and wait. Run it, so a browser window opens
+on their machine; then ask them to size it the way they will actually read the
+page and read the two numbers back.
 
 ```powershell
-tools\Show-ViewportProbe.ps1        # they size a window; it reports its own viewport
+tools\Show-ViewportProbe.ps1        # RUN THIS FOR THEM - it opens the page itself
 tools\Measure-PageFit.ps1 -Path page.html -Width <w> -Height <h> -Screenshot -ShotPath shot.png
 ```
 
+"Run this and tell me the output" is a request for the user to do your job. The
+only time to hand over a command is when they have said they want to run it
+themselves.
+
 Detecting the display assumes maximised on the primary at 100% zoom, and cannot
-express "the little side panel" or "half-width on monitor 2" at all. Ask.
+express "the little side panel" or "half-width on monitor 2" at all. Ask - but do
+the opening.
 
 Then **say what that viewport implies** rather than silently designing to it: on
 a small one, agree what earns the top of the page and accept scrolling for the

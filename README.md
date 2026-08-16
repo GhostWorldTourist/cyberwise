@@ -40,6 +40,92 @@ cd ~/repos/cyberwise
 
 Then restart your agent. Full detail, including the tray app, is further down.
 
+## What it looks like
+
+Abridged from a real session on an 850-mod install. **The bracketed notes are
+what the skill adds** — an assistant without it can still read files, but it does
+not know which files, or which of the plausible answers is the wrong one.
+
+---
+
+**“can you just tell me if any mods are broken or conflicting? I don't know how
+to check that”**
+
+> Nothing is broken, and nothing is conflicting in a way that's costing you.
+>
+> **Your 233 script mods all loaded.** That matters because it's all-or-nothing:
+> if one script mod fails to compile, *every* script mod switches off, with no
+> message in the game. Yours reports "Compilation complete", so they're all live.
+>
+> **Load order is clean.** I scanned all 727 archives against each other — 67,490
+> individual files — looking for mods that are enabled but contributing nothing
+> because something else wins every file they touch. That's the silent failure
+> that looks like "I installed it and nothing happened."
+>
+> **Seven came up as contributing nothing, and all seven are fine.** Two are one
+> mod packaged twice; four are conflicts you already settled. One is a prop pack
+> whose real content isn't in the archive at all — it registers props into World
+> Builder through a separate file. Uninstalling it on "the archive does nothing"
+> evidence would have broken your prop browser.
+
+> *[Three things the skill supplied. That the redscript gate is all-or-nothing
+> and silent, so it must be checked first. That "inert archive" is even a
+> concept. And the rule that an inert **archive** is not an inert **mod** — which
+> is the difference between good advice and breaking somebody's prop browser.]*
+
+---
+
+**“what mods are changing the way vehicles handle?”**
+
+> Six, and they're not fighting each other — each adjusts different properties:
+> slope traction, steering response, downforce, differential overshoot, friction
+> multipliers, added gravity.
+>
+> They all write to the same vehicle *records*, which is why a conflict checker
+> flags them as overlapping — but they set **different properties inside** those
+> records, so nothing is overwritten. All six are in effect.
+>
+> Night City Traffic Overhaul also touches vehicles heavily, but it changes
+> traffic *behaviour*, not how your car feels.
+
+> *[The trap here is real: "touching the same record" and "fighting over the same
+> value" look identical in a conflict report, and only the second is a problem.
+> Assuming otherwise is how people uninstall four working mods to fix nothing.]*
+
+---
+
+**“my cars feel weird taking corners… they don't slide much so it feels really
+slow”**
+
+> Found it, and it's a single number. **Lonny Driving Tweaks** raises lateral
+> friction — literally how much the car resists sliding sideways:
+>
+> ```
+> Asphalt:  frictionLatMultiplier: 1.3   #1.2
+> Sand:     frictionLatMultiplier: 1.2   #0.65
+> ```
+>
+> On sand that's nearly double the sideways grip — sand is meant to be the
+> surface you slide on. That's your "doesn't slide, feels slow" exactly.
+>
+> I checked Cyber Grip too, since the name suggests it. **Not your problem** — it
+> sets `perfectSteeringFactor: 0`, which *removes* the game's steering assist and
+> makes cars looser, not tighter.
+>
+> Also: **you've never adjusted any of these in game.** I checked your saved
+> settings. What you're feeling is the authors' choices, not something you set
+> and forgot.
+
+> *[Two skill rules doing the work. "Never quote a mod's shipped defaults as the
+> user's configuration" — so the real settings file gets read first. And the
+> name-based guess (Cyber **Grip** causes grip) is exactly the wrong answer, ruled
+> out by reading the values instead of the name.]*
+
+The fix offered was a small companion mod setting those friction values, loading
+after Lonny so it wins — leaving Lonny's own file untouched, surviving its
+updates, and removable in one click. Registered, so if Lonny changes that file
+later you get told rather than silently keeping a stale copy.
+
 ## The family
 
 `cyberwise` is the front door: the method rules that apply to every task, where

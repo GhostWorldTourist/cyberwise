@@ -460,9 +460,13 @@ manager, find it on Nexus, and check its file list for parts they may not have.
 ## Redscript compilation is all-or-nothing
 
 **If redscript fails to compile, every single `.reds` mod is silently off.** Not
-degraded - off. There is no in-game indication. On one install this was true for
-**eight months** before anyone noticed, and during that time a whole category of
-mods appeared installed, enabled, and did nothing.
+degraded - off. There is **no in-game indication whatsoever**: no error, no
+warning, no missing-feature message. A whole category of mods appears installed
+and enabled while doing nothing, and nothing anywhere says so.
+
+Because only the log reports it, an install can sit in that state indefinitely -
+it is discovered when somebody looks, not when it happens. On one install the
+break was introduced by a mod change and found the next time the log was read.
 
 Check `r6\logs\redscript_*.log` for `Compilation complete` and a plausible source
 reference count. This should be among the first things verified on any install where
