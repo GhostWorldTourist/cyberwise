@@ -181,9 +181,15 @@ files** before installing - relevant when a user is moving to a list from a
 hand-built load order, because leftovers in the game directory are exactly the
 kind of thing no manager owns.
 
-*Verified against the Project Ultrapunk guide, August 2026. Conventions can
-differ between lists - check the list's own documentation before relying on the
-details here.*
+**`[NoDelete]` is Wabbajack itself, not one list's convention.** It works on any
+Wabbajack modlist, for any game - so this applies wherever a user's install came
+from a Wabbajack list, not only the Cyberpunk ones. The numbering habit
+(`[NoDelete] [0000]`) and the tagger plugins are community practice layered on
+top of it.
+
+*Wabbajack behaviour is general. The Ultrapunk specifics - its clean-install
+requirement and its support boundary - were read from that list's guide in August
+2026; other lists state their own.*
 
 ## A manager only owns what it deployed
 
