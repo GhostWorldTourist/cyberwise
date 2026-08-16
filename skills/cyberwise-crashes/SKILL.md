@@ -84,6 +84,30 @@ Three things about this that are not obvious:
   someone at a prompt cannot end up interleaving session CSVs. A second *game
   install*, with its own folder, still gets its own watcher.
 
+**"It stopped starting at logon" is almost always a moved folder.** Both
+autostart routes - the tray's toggle and this script's fallback - write an
+**absolute path** into `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+Move, rename or delete the folder and Windows fails to launch it at logon and
+says nothing whatsoever. There is no error, no log, no dialog: the icon just
+stops appearing, and if the watcher started from there the recording stops with
+it. Weeks of "crashes" can pass with nothing recorded.
+
+Check the entry against the filesystem before believing anything else:
+
+```powershell
+$v = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run').'Cyberwise'
+$v; Test-Path ($v -replace '"','')      # False = this is your problem
+```
+
+The tray detects this itself now - it warns at startup and `--selftest` reports
+the target path and flags a missing one - but a user who has not opened it will
+not have seen that. Turning the setting off and on again re-points it at the
+copy that is actually running.
+
+Anything installed by cloning a repo has this property. It is the strongest
+argument for a real installer: a copy in a stable location does not move when
+somebody tidies their projects folder.
+
 **Task registration may simply be refused.** On the machine this was written
 against, `schtasks /Create` returns "Access is denied" both from an agent session
 and from an ordinary PowerShell window - so treat the scheduled task as the nice

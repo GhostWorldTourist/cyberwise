@@ -639,6 +639,23 @@ if ($Quick) {
         if ($problems) { Bad 'tray: --selftest reports the fields support needs' ($problems -join "`n") }
         else           { Ok  'tray: --selftest reports the fields support needs' }
 
+        # A Run entry holds an absolute path, and a moved folder breaks logon
+        # startup with no error anywhere. The app has to notice that itself, or
+        # it is one more thing failing quietly.
+        $runK = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        $probe = 'CyberwiseTestAutostart'
+        try {
+            Set-ItemProperty -Path $runK -Name $probe -Value '"C:\definitely\not\here\CyberwiseTray.exe"'
+            $stale = Join-Path $sandbox 'stale.txt'
+            Start-Process -FilePath $trayExe -ArgumentList '--selftest', '--run-value', $probe `
+                -NoNewWindow -Wait -RedirectStandardOutput $stale
+            $staleTxt = if (Test-Path -LiteralPath $stale) { Get-Content -LiteralPath $stale -Raw } else { '' }
+            if ($staleTxt -match 'WARNING') { Ok 'tray: a stale logon path is reported, not ignored' }
+            else { Bad 'tray: a stale logon path is reported, not ignored' "no warning for a missing target:`n$staleTxt" }
+        } finally {
+            Remove-ItemProperty -Path $runK -Name $probe -ErrorAction SilentlyContinue
+        }
+
         # The icon cannot be judged from source, but it CAN be checked for the
         # one failure that matters mechanically: rendering nothing at all.
         $png = Join-Path $sandbox 'icon.png'

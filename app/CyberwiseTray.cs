@@ -56,6 +56,14 @@ namespace Cyberwise
         [STAThread]
         private static void Main(string[] args)
         {
+            args = args ?? new string[0];
+
+            // --run-value <name>: check a different Run entry than the real one.
+            // For tests, so proving the stale-path warning never involves
+            // breaking the user's own logon setting.
+            int rv = Array.FindIndex(args, a => a.Equals("--run-value", StringComparison.OrdinalIgnoreCase));
+            if (rv >= 0 && args.Length > rv + 1) TrayApp.RunValue = args[rv + 1];
+
             // --selftest prints what the app can see and exits. This is a
             // /target:winexe, so it has no console of its own - attaching to the
             // parent's lets it report into the terminal that launched it.
@@ -313,6 +321,13 @@ namespace Cyberwise
                 try { StartWatcher(silent: true); } catch { }
             }
 
+            // Say so at startup if the logon entry is stale. This is the one
+            // moment the user is looking, and the alternative is finding out
+            // weeks later that nothing has started since they moved a folder.
+            var autoProblem = AutoStartProblem();
+            if (autoProblem != null)
+                _icon.ShowBalloonTip(10000, "Cyberwise startup", autoProblem.Split('\n')[0], ToolTipIcon.Warning);
+
             if (string.IsNullOrWhiteSpace(_cfg.GameRoot))
             {
                 _icon.ShowBalloonTip(8000, "Cyberwise",
@@ -502,19 +517,64 @@ namespace Cyberwise
         // then starts the watcher itself, so there is one thing to supervise
         // instead of two, and the icon comes back after a reboot - which is what
         // someone means by "start automatically" anyway.
-        private const string RunKey   = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string RunValue = "Cyberwise";
+        private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+
+        // Not a const: --run-value lets a test point the autostart checks at a
+        // throwaway registry value instead of the user's real "Cyberwise" entry.
+        // A test that has to break someone's actual logon to prove a warning
+        // works is not a test anyone should run twice.
+        internal static string RunValue = "Cyberwise";
 
         private static string ExePath { get { return Application.ExecutablePath; } }
 
-        private static bool AutoStartEnabled()
+        private static bool AutoStartEnabled() { return AutoStartTarget() != null; }
+
+        /// <summary>The path the Run entry actually points at, or null if unset.</summary>
+        private static string AutoStartTarget()
         {
             try
             {
                 using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, false))
-                    return k != null && k.GetValue(RunValue) != null;
+                {
+                    var v = k == null ? null : k.GetValue(RunValue) as string;
+                    return string.IsNullOrWhiteSpace(v) ? null : v.Trim().Trim('"');
+                }
             }
-            catch { return false; }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Why this exists: a Run entry stores an ABSOLUTE PATH. Move, rename or
+        /// delete the folder the exe lives in and Windows simply fails to launch
+        /// it at logon and says nothing at all. The symptom is "the icon stopped
+        /// appearing", with no error anywhere to explain it - and if the watcher
+        /// was starting from here, the recording stops with it.
+        ///
+        /// Returns null when everything is fine, or a sentence describing the
+        /// problem. Checked at startup and reported by --selftest, because a
+        /// broken autostart that nothing detects is the same failure mode as a
+        /// watcher that is not running and nothing says so.
+        /// </summary>
+        private static string AutoStartProblem()
+        {
+            var target = AutoStartTarget();
+            if (target == null) return null;
+
+            if (!File.Exists(target))
+                return "Cyberwise is set to start when you log in, but the file it points at is gone:\n\n"
+                     + target + "\n\nIt was probably moved or renamed. Turn the setting off and on again "
+                     + "to point it at this copy.";
+
+            try
+            {
+                if (!string.Equals(Path.GetFullPath(target), Path.GetFullPath(ExePath),
+                                   StringComparison.OrdinalIgnoreCase))
+                    return "Logon startup points at a different copy of Cyberwise:\n\n" + target
+                         + "\n\nThis one is:\n\n" + ExePath
+                         + "\n\nThat is fine if you meant it - otherwise turn the setting off and on again.";
+            }
+            catch { }
+            return null;
         }
 
         private void OnToggleAtLogon(object sender, EventArgs e)
@@ -673,7 +733,11 @@ namespace Cyberwise
                 : cfg.Watcher + (File.Exists(cfg.Watcher) ? "" : "  (MISSING)")));
             sb.AppendLine("  watcher       : " + (WatcherRunning() ? "running" : "not running"));
             sb.AppendLine("  game          : " + (GameRunning() ? "running" : "not running"));
-            sb.AppendLine("  start at logon: " + (AutoStartEnabled() ? "yes (HKCU Run)" : "no"));
+            var target = AutoStartTarget();
+            sb.AppendLine("  start at logon: " + (target == null ? "no" : "yes -> " + target));
+            var problem = AutoStartProblem();
+            if (problem != null)
+                sb.AppendLine("  WARNING       : " + problem.Split('\n')[0].TrimEnd());
 
             var crashDir = string.IsNullOrWhiteSpace(cfg.WatchDir) ? null : Path.Combine(cfg.WatchDir, "crashinfo");
             int n = (crashDir != null && Directory.Exists(crashDir))

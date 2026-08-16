@@ -104,6 +104,23 @@ supervise instead of two. `AutoStartWatcher=true` in the settings then starts
 the recording as the tray comes up, because an icon that returns after a reboot
 and quietly records nothing is worse than no icon at all.
 
+### The path trap, and how it is caught
+
+A Run entry stores an **absolute path**. Move, rename or delete the folder this
+exe lives in and Windows fails to launch it at logon **silently** — no error, no
+log, no dialog. The icon simply stops appearing, and the recording stops with it.
+Someone can lose weeks of crash data to a tidy-up.
+
+Since this whole app exists to stop things failing quietly, it checks itself: at
+startup it warns if the logon entry points at a file that is gone or at a
+*different copy* of Cyberwise, and `--selftest` prints the target path with a
+`WARNING` line when it is wrong. Toggling the setting off and on re-points it at
+whichever copy is running.
+
+Running from a cloned repo makes this likely rather than theoretical — and
+`bin/` is gitignored, so a fresh clone has no exe until you run `build.ps1`.
+Both are arguments for a real installer putting a copy somewhere stable.
+
 ## Self-test
 
 ```powershell
