@@ -150,12 +150,46 @@ genuinely is an edit to their file. **Prefer an override to an edit**, and where
 you cannot, know exactly which copy you are editing - it is different on every
 manager, and the wrong answer fails silently.
 
-### Prefer this: ship the fixed file as its own mod
+### First: can you avoid touching their file at all?
+
+For a **game** class, write a normal mod that hooks it and none of this applies.
+For a class another **mod** declares, you cannot - see
+`cyberwise-tweaks/references/redscript.md`. Establish which you are dealing with
+before designing anything, or you will spend an evening on a hook that was never
+going to compile.
+
+### Then choose by how much of their file you are replacing
+
+Neither option below is right in general, and the honest answer depends on one
+question: **would you notice if their update silently lost to your copy?**
+
+| | override mod | re-appliable patch |
+|---|---|---|
+| their update | your copy keeps winning, **silently** | wipes your fix, **visibly** |
+| stale risk | high, and grows with file size | none - you always re-patch the new file |
+| effort per update | none, until it is wrong | one command, if you scripted it |
+| good for | small, self-contained files - a YAML typo, one record | whole system files, anything you replace wholesale |
+
+**A small data file: override.** One record or one obviously-wrong value, in a
+file you would re-read in seconds. Low stale risk, and the manager owns it.
+
+**A whole system file: patch it and script the re-apply.** Replacing five hundred
+lines to change three means every future fix its author ships loses to your copy,
+and nothing tells you. Being wiped by an update is *better* than that, because
+being wiped is obvious - the bug comes back and you know why. Write a re-apply
+script that brace-matches rather than string-matches fixed lines, so it still
+works after the author shuffles surrounding code, make it idempotent, and give it
+a revert.
+
+That "silently shipping stale code" failure is not theoretical: on one install a
+hand-edit kept winning long after the author released a proper fix that did
+strictly more, and nothing reported it.
+
+### The override, if you take it
 
 Give the corrected file the **same relative path** and let load order decide.
-The original is never touched, an update to it cannot revert your work, the fix
-is visible in the manager instead of hidden inside someone else's mod, and
-removing it is one toggle.
+The original is never touched, the fix is visible in the manager instead of
+hidden inside someone else's mod, and removing it is one toggle.
 
 - **MO2** - a new mod folder containing only the patched file, ordered to win.
 - **Vortex** - package it as a small mod and add a conflict rule so yours wins.

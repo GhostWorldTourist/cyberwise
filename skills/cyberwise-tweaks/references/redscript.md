@@ -27,6 +27,28 @@ order already manipulates the thing you are about to manipulate, its approach is
 proven against this game version in this environment. That is worth more than a
 tidier design you invented.
 
+## You cannot hook another mod's redscript class from a standalone mod
+
+This is the finding that decides how every "fix somebody else's mod" job gets
+done, so establish it before designing anything.
+
+`@wrapMethod` / `@replaceMethod` work against **game** classes. Against a class
+that another *mod* declares, they fail to compile. On one install this was tested
+three ways - wildcard import, fully-qualified target, explicit single import -
+and all three failed. The one apparent precedent in that load order, a mod
+wrapping another mod's controller, turned out to be **inside a `/* */` block**:
+its author had hit the same wall and commented it out rather than delete it.
+
+So the clean, polite option - a small mod that hooks their behaviour without
+touching their files - **is not available** for mod-declared classes. That is why
+patching their file, or overriding it wholesale, is the choice on the table at
+all. Do not spend an evening trying to make a hook compile before checking
+whether the target class belongs to the game or to a mod.
+
+**Check before promising.** If the class is declared in another mod's `.reds`,
+say so early and move to the real options rather than discovering it three
+compile failures later.
+
 ## Addressing a specific world object
 
 `EntityID.GetHash()` returns a **Uint32** and cannot identify an object uniquely.
