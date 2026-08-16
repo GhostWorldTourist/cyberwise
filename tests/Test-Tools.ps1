@@ -349,6 +349,63 @@ if ($threw) { Ok 'backups: an oversized file is refused without -Force' }
 else { Bad 'backups: an oversized file is refused without -Force' 'a 60 MB file was copied into the vault silently' }
 Remove-Item -LiteralPath $big -Force
 
+# ============================================================ snapshots ======
+#
+# The diff has to catch a LOAD ORDER move: the file is byte-identical, its
+# timestamp is unchanged, and only its position in modlist.txt differs - so it
+# now wins or loses files it did not before, with no evidence anywhere on disk.
+# That is the change this tool exists for, and the one a hash-based approach
+# misses entirely.
+
+$snapTool = Join-Path $Root 'skills\cyberwise-crashes\tools\New-InstallSnapshot.ps1'
+$cmpTool  = Join-Path $Root 'skills\cyberwise-crashes\tools\Compare-InstallSnapshot.ps1'
+
+$snapGame = New-FixtureGame -Name 'snapgame' `
+    -Archives @('a.archive','b.archive','c.archive') `
+    -ModlistLines @('a.archive','b.archive','c.archive')
+
+# Snapshots go to a real user path, so redirect to the sandbox for the test.
+$snapHome = Join-Path $sandbox 'snaphome'
+New-Item -ItemType Directory -Path (Join-Path $snapHome 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\snapshots') -Force | Out-Null
+$realProfile = $env:USERPROFILE
+try {
+    $env:USERPROFILE = $snapHome
+
+    Get-Console { & $snapTool -GameRoot $snapGame -Label 'one' } | Out-Null
+    Start-Sleep -Seconds 1     # snapshot names are per-second; two in one second collide
+
+    # Reorder ONLY - no file on disk changes at all.
+    Set-Content -LiteralPath (Join-Path $snapGame 'archive\pc\mod\modlist.txt') `
+        "c.archive`na.archive`nb.archive`n" -NoNewline
+    Get-Console { & $snapTool -GameRoot $snapGame -Label 'two' } | Out-Null
+
+    $diff = Get-Console { & $cmpTool }
+    $problems = @(
+        if ($diff -notmatch 'LOAD ORDER')  { 'a pure reorder was not reported' }
+        if ($diff -notmatch 'c\.archive')  { 'the moved entry was not named' }
+        if ($diff -match 'ARCHIVE \+')     { 'reported an added archive when none was added' }
+        if ($diff -match 'ARCHIVE -')      { 'reported a removed archive when none was removed' }
+    )
+    if ($problems) { Bad 'snapshots: a load-order move is detected with no file change' ($problems -join "`n") }
+    else           { Ok  'snapshots: a load-order move is detected with no file change' }
+
+    # A genuinely added mod must show up too.
+    Start-Sleep -Seconds 1
+    Set-Content -LiteralPath (Join-Path $snapGame 'archive\pc\mod\d.archive') 'x' -NoNewline
+    Get-Console { & $snapTool -GameRoot $snapGame -Label 'three' } | Out-Null
+    $diff2 = Get-Console { & $cmpTool }
+    if ($diff2 -match 'ARCHIVE \+' -and $diff2 -match 'd\.archive') { Ok 'snapshots: an added archive is reported' }
+    else { Bad 'snapshots: an added archive is reported' "no addition reported:`n$diff2" }
+
+    # And no change must report no change, or the tool cries wolf.
+    Start-Sleep -Seconds 1
+    Get-Console { & $snapTool -GameRoot $snapGame -Label 'four' } | Out-Null
+    $diff3 = Get-Console { & $cmpTool }
+    if ($diff3 -match 'Nothing changed') { Ok 'snapshots: an unchanged install reports no change' }
+    else { Bad 'snapshots: an unchanged install reports no change' "reported changes on an untouched install:`n$diff3" }
+}
+finally { $env:USERPROFILE = $realProfile }
+
 # ========================================================== patch watch ======
 #
 # The sweep that makes overriding another author's file safe. Without it, an

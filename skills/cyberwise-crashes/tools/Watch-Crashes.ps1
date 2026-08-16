@@ -119,6 +119,21 @@ while ($true) {
     $p = Get-Process -Name 'Cyberpunk2077' -ErrorAction SilentlyContinue
     if (-not $p) { continue }
 
+    # SNAPSHOT THE INSTALL AT SESSION START.
+    #
+    # This is what makes "it worked last night" answerable. The watcher already
+    # knows the moment play begins, which is exactly when the install state is
+    # worth recording - and a snapshot taken by hand is a snapshot nobody takes.
+    # Roughly a second and a megabyte; failure here must never stop the watch.
+    $snapTool = Join-Path $PSScriptRoot 'New-InstallSnapshot.ps1'
+    if (Test-Path -LiteralPath $snapTool) {
+        try {
+            $lbl = 'session start'
+            if ($GameRoot) { & $snapTool -GameRoot $GameRoot -Label $lbl *>$null }
+            else           { & $snapTool -Label $lbl *>$null }
+        } catch { }
+    }
+
     $csv = Join-Path $Dir ("session-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".csv")
     "# game $gameVer, sampled every $IntervalSec s" | Set-Content -LiteralPath $csv
     "stamp,uptime_min,proc_ws_gb,proc_priv_gb,proc_gpu_gb,adapter_gpu_gb,free_ram_gb,handles,threads" | Add-Content -LiteralPath $csv

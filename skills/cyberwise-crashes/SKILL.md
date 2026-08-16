@@ -23,6 +23,36 @@ Load `cyberwise` alongside this for the method rules. Two matter enormously here
 - **Confirm the mod is deployed.** A crash blamed on a mod that was never
   actually deployed is a whole evening.
 
+## Start by asking what changed - and now you can answer it
+
+```powershell
+.\tools\New-InstallSnapshot.ps1 -Label 'before the DF update'
+.\tools\Compare-InstallSnapshot.ps1            # newest vs the one before
+.\tools\Compare-InstallSnapshot.ps1 -Since 20260810
+```
+
+"It worked yesterday" is the most common and least usable sentence in mod
+support, because nothing records yesterday. A snapshot costs about a second and a
+megabyte and records every archive, the modlist **order**, every loose script,
+tweak, Lua and plugin, and the framework versions. Two of them turn "somewhere in
+700 mods" into a diff that is usually three lines long.
+
+**`Watch-Crashes.ps1` takes one automatically at every session start**, so the
+history builds itself. A snapshot taken by hand is a snapshot nobody takes.
+
+**Read the diff before proposing a bisect.** Bisecting is for when nothing else
+narrows it - it is not the opening move, and at this game's load times it costs an
+evening to rediscover something a diff names immediately.
+
+The one it catches that nothing else does: **`LOAD ORDER ... moved`**. A mod whose
+position changed now wins or loses files it did not before, and *nothing about it
+looks different on disk* - same file, same size, same timestamp. Verified on a
+727-archive install: one entry moved from position 131 to 10 was reported exactly,
+with no false positives anywhere else.
+
+A diff that finds nothing is also an answer: the install did not change, so look
+at settings, save state or drivers - or accept it may not be deterministic.
+
 ## Start by asking what changed
 
 Bisection is for when the suspect set is too big to inspect - it is not a ritual.
@@ -56,8 +86,10 @@ Windows Error Reporting never fires for it, and the measurement traps.
 
 | tool | what it does |
 |---|---|
-| `tools/Watch-Crashes.ps1` | samples the running game to CSV and captures its post-mortem on death |
+| `tools/Watch-Crashes.ps1` | samples the running game to CSV, captures its post-mortem on death, snapshots the install at session start |
 | `tools/Register-CrashWatch.ps1` | registers the watcher as a logon task so it survives death and reboot |
+| `tools/New-InstallSnapshot.ps1` | records archives, load order, loose files and framework versions |
+| `tools/Compare-InstallSnapshot.ps1` | diffs two snapshots - what changed, including order changes invisible on disk |
 
 ```powershell
 .\tools\Register-CrashWatch.ps1 -Dir "<somewhere writable>" -GameRoot "<game>"
