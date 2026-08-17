@@ -92,6 +92,8 @@ $compareRel  = 'skills\cyberwise-crashes\tools\Compare-InstallSnapshot.ps1'
 $mmHtmlRel   = 'skills\cyberwise-reports\tools\ModManifestHtml.ps1'
 $reportRel   = 'skills\cyberwise-feedback\tools\New-ProblemReport.ps1'
 $installRel  = 'install.ps1'
+$liveRel     = 'skills\cyberwise\tools\Test-ScriptsLive.ps1'
+$dossierRel  = 'skills\cyberwise-reports\tools\New-ModDossier.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -102,6 +104,8 @@ Save-Original $compareRel
 Save-Original $mmHtmlRel
 Save-Original $reportRel
 Save-Original $installRel
+Save-Original $liveRel
+Save-Original $dossierRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -236,6 +240,27 @@ Assert-Detects 'the Discord form no longer trimmed to fit a message' $reportRel 
     '$discordText = Get-Fitted (Get-Redacted $short.ToString()) 2000' `
     '$discordText = Get-Redacted $short.ToString()' `
     'Discord form fits one message'
+
+# PowerShell's own trap, and it shipped: $hash[$missingKey] is $null, @($null) is
+# an array of ONE, and Join-Path with a null tail resolves to the root - so every
+# layer a mod did NOT ship reported "1 of 1 file(s) deployed".
+Assert-Detects 'a dossier inventing the layers a mod does not ship' $dossierRel `
+    'if (-not $layers.Contains($kind)) { continue }' `
+    '# mutation: no key guard' `
+    'layers a mod ships, and no others'
+
+# Both of these make the script check LOUDER rather than quieter, which is the
+# direction that gets a checker ignored. Ten of the eleven mods it first flagged
+# on a real install were false alarms of exactly these two kinds.
+Assert-Detects 'declarations inside comments counted as real symbols' $liveRel `
+    "`$t = [regex]::Replace(`$t, '(?s)/\*.*?\*/', '')" `
+    '# mutation: comments left in' `
+    'only a genuinely uncompiled mod'
+
+Assert-Detects 'the newest run trusted as the launch that built the live bundle' $liveRel `
+    '$lastLaunch = $runs | Where-Object { $_.Output -and -not (Test-IsOutsideGame $_.Output) } | Select-Object -First 1' `
+    '$lastLaunch = $lastRun' `
+    'live bundle comes from the log'
 
 # The install bug that hid a day of work: any existing link counted as healthy,
 # so the agents kept loading a different copy and re-running the installer agreed

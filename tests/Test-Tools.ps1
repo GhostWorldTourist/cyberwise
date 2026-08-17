@@ -825,6 +825,183 @@ if ($hkErr) {
     }
 }
 
+# ================================================================ dossier ====
+#
+# One mod, every layer. The failure mode this guards is a report that says a mod
+# ships things it does not: a dossier is read as an inventory, and an invented
+# layer sends somebody looking for a file that was never there.
+
+$dossierTool = Join-Path $Root 'skills\cyberwise-reports\tools\New-ModDossier.ps1'
+$dgame  = Join-Path $sandbox 'dossiergame'
+$dstage = Join-Path $sandbox 'dossierstaging'
+New-Item -ItemType Directory -Path (Join-Path $dgame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $dgame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+New-Item -ItemType Directory -Path (Join-Path $dgame 'archive\pc\mod') -Force | Out-Null
+
+# One staged mod: an archive and a CET folder with no init.lua. Note what it does
+# NOT ship - no tweaks, no scripts, no input xml - because that is the assertion.
+$dmod = Join-Path $dstage 'Spaced Name-4242-1-0-1700000000'
+foreach ($rel in 'archive\pc\mod\fixture.archive', 'bin\x64\plugins\cyber_engine_tweaks\mods\fixture\readme.txt') {
+    $p = Join-Path $dmod $rel
+    New-Item -ItemType Directory -Path (Split-Path $p) -Force | Out-Null
+    Set-Content -LiteralPath $p 'x' -NoNewline
+}
+# Deployed, but never added to modlist.txt - the silent bottom-of-the-stack case.
+Set-Content -LiteralPath (Join-Path $dgame 'archive\pc\mod\fixture.archive') 'x' -NoNewline
+Set-Content -LiteralPath (Join-Path $dgame 'archive\pc\mod\modlist.txt') "someone_else.archive`n" -NoNewline
+
+$dHtml = Join-Path $sandbox 'dossier.html'
+# Typed without the space, the way a mod page writes it.
+$dOut = Get-AllOutput { & $dossierTool -Mod 'SpacedName' -GameRoot $dgame -StagingRoot $dstage -Html $dHtml }
+
+$problems = @(
+    if ($dOut -notmatch 'Spaced Name')  { 'punctuation-insensitive matching failed - "SpacedName" did not find "Spaced Name"' }
+    if ($dOut -notmatch 'not in modlist\.txt') { 'an archive missing from modlist.txt was not reported as losing every contest' }
+    if ($dOut -notmatch 'no init\.lua')  { 'a CET folder with no init.lua was not reported as doing nothing' }
+    # The bug this exists for: $layers[$missing] is $null, and @($null) has ONE
+    # element, so every absent layer reported "1 of 1 file(s) deployed" - because
+    # Join-Path with a null tail resolves to the game root, which exists.
+    foreach ($absent in 'tweakxl', 'redscript', 'input', 'asi', 'red4ext', 'redmod') {
+        if ($dOut -match "(?m)^\s+$absent\s") { "reported a '$absent' layer for a mod that ships none" }
+    }
+)
+if ($problems) { Bad 'dossier: it reports the layers a mod ships, and no others' ($problems -join "`n") }
+else           { Ok  'dossier: it reports the layers a mod ships, and no others' }
+
+$dHtmlText = Get-Content -LiteralPath $dHtml -Raw
+$dLeaks = @(
+    if ($dHtmlText -match "(?i)\\$([regex]::Escape($env:USERNAME))\b") { 'the Windows username is in the dossier HTML' }
+    if ($dHtmlText -notmatch 'Spaced Name')                            { 'the HTML does not name the mod' }
+)
+if ($dLeaks) { Bad 'dossier: the page is safe to hand to someone else' ($dLeaks -join "`n") }
+else         { Ok  'dossier: the page is safe to hand to someone else' }
+
+# ========================================================== script cache =====
+#
+# "The .reds file is in r6\scripts" and "that code is running" are different
+# claims. The bundle is built at launch, so a mod deployed since then is
+# installed, enabled, correct and doing nothing - with no sign in game.
+#
+# Every assertion here is a false-alarm class that this tool actually produced
+# against a real install before it was fixed. Eleven mods were flagged; one was
+# real. A checker that cries wolf gets switched off, so the fixtures below are
+# built from the ten that were wrong.
+
+$scTool = Join-Path $Root 'skills\cyberwise\tools\Test-ScriptsLive.ps1'
+$scGame = Join-Path $sandbox 'scriptcache'
+New-Item -ItemType Directory -Path (Join-Path $scGame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $scGame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+New-Item -ItemType Directory -Path (Join-Path $scGame 'r6\logs') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $scGame 'r6\cache\modded') -Force | Out-Null
+
+$scBundle = Join-Path $scGame 'r6\cache\modded\final.redscripts.modded'
+$scBuilt  = (Get-Date).AddDays(-2)
+
+# A bundle is a blob with a null-terminated ASCII symbol pool. Module-qualified
+# and bare names both occur; both must resolve.
+$scPool = @(
+    'PlayerPuppet', 'gameObject', 'ScriptedPuppet'
+    'ModAWidget', 'Fixture.ModA.ModAHelper'
+    'Fixture.ModC.ModCReal'
+    'Fixture.ModD.ModDCore'
+) -join "`0"
+[IO.File]::WriteAllBytes($scBundle, [Text.Encoding]::ASCII.GetBytes("REDS`0$scPool`0"))
+
+# The .ts beside it: u64 nanoseconds since the Unix epoch, then 8 reserved bytes.
+$ns = [uint64]([DateTimeOffset]$scBuilt).ToUnixTimeMilliseconds() * 1000000
+$tsBytes = New-Object byte[] 16
+[Array]::Copy([BitConverter]::GetBytes($ns), $tsBytes, 8)
+[IO.File]::WriteAllBytes([IO.Path]::ChangeExtension($scBundle, '.ts'), $tsBytes)
+
+function New-ScriptLog {
+    param([string]$Name, [datetime]$When, [string]$Output, [switch]$Failed)
+    $body = "[INFO - $($When.ToString('ddd, dd MMM yyyy HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)) -0400] Compiling files in x`n"
+    if (-not $Failed) { $body += "[INFO - x] Compilation complete`n" }
+    $body += "[INFO - x] Output successfully saved to $Output`n"
+    Set-Content -LiteralPath (Join-Path $scGame "r6\logs\$Name") -Value $body -NoNewline
+}
+
+# The launch that produced the live bundle...
+New-ScriptLog -Name 'redscript_r2099-01-01_00-00-00.log' -When $scBuilt -Output $scBundle
+# ...and a LATER compile test, which is what rCURRENT holds. Note the archived
+# log above is named for a date it does not contain: that is redscript's rotation
+# scheme, and reading the filename sends you to the wrong run.
+New-ScriptLog -Name 'redscript_rCURRENT.log' -When (Get-Date) -Output (Join-Path $env:TEMP 'scc_test_deadbeef\final.redscripts')
+
+function New-ScriptMod {
+    param([string]$Name, [string]$Body, [datetime]$Stamp)
+    $d = Join-Path $scGame "r6\scripts\$Name"
+    New-Item -ItemType Directory -Path $d -Force | Out-Null
+    $f = Join-Path $d "$Name.reds"
+    Set-Content -LiteralPath $f -Value $Body -NoNewline
+    (Get-Item -LiteralPath $f).LastWriteTime = $Stamp
+}
+
+# In the bundle: must not be flagged.
+New-ScriptMod -Name 'ModA' -Stamp $scBuilt.AddDays(-1) -Body @'
+module Fixture.ModA
+public class ModAWidget {
+  public func Run() -> Void {}
+}
+public func ModAHelper() -> Void {}
+'@
+
+# Deployed AFTER the build: the one real signal.
+New-ScriptMod -Name 'ModB' -Stamp (Get-Date) -Body @'
+module Fixture.ModB
+public class ModBBrandNew {
+  public func Run() -> Void {}
+}
+'@
+
+# Documents its own API in a block comment. Parsing that as a declaration
+# reported a working mod as broken.
+New-ScriptMod -Name 'ModC' -Stamp $scBuilt.AddDays(-1) -Body @'
+module Fixture.ModC
+/**
+  public func ModCDocumentedButNotReal() -> Void
+  public class ModCAlsoJustDocs {}
+*/
+public class ModCReal {}
+'@
+
+# Conditionally compiled for a mod that is not installed: correctly absent.
+New-ScriptMod -Name 'ModD' -Stamp $scBuilt.AddDays(-1) -Body @'
+module Fixture.ModD
+public class ModDCore {}
+
+@if(ModuleExists("SomethingNotInstalled"))
+public class ModDBridge {}
+'@
+
+$scOut = Get-AllOutput { & $scTool -GameRoot $scGame }
+
+$problems = @(
+    # The "file" line is the verdict; the test path is expected to appear further
+    # down, in the note explaining why the newest run was ignored.
+    if ($scOut -notmatch ('(?m)^\s+file\s+' + [regex]::Escape($scBundle))) { 'the bundle it chose is not the one the launch log names' }
+    if ($scOut -match '(?m)^\s+file\s+.*scc_test_deadbeef')                { 'it chose the compile test output as the live bundle' }
+    if ($scOut -notmatch 'compile test')                                   { 'it never says the newest run was a test rather than a launch' }
+    if ($scOut -notmatch $scBuilt.ToString('yyyy-MM-dd HH:mm'))            { 'the build time from the .ts stamp is not reported' }
+)
+if ($problems) { Bad 'scripts: the live bundle comes from the log, not the newest run' ($problems -join "`n") }
+else           { Ok  'scripts: the live bundle comes from the log, not the newest run' }
+
+$flagProblems = @(
+    if ($scOut -notmatch 'ModB')     { 'a mod deployed after the build was not flagged - the one case that matters' }
+    if ($scOut -match '(?m)^\s+ModA') { 'a mod whose symbols are in the bundle was flagged' }
+    if ($scOut -match '(?m)^\s+ModC') { 'a declaration inside a block comment was treated as a real symbol' }
+    if ($scOut -match '(?m)^\s+ModD') { 'an @if-gated class for an absent mod was reported as missing' }
+)
+if ($flagProblems) { Bad 'scripts: only a genuinely uncompiled mod is flagged' ($flagProblems -join "`n") }
+else               { Ok  'scripts: only a genuinely uncompiled mod is flagged' }
+
+# Per-mod mode has to resolve a module-qualified symbol, or every modularised mod
+# reads as missing.
+$scOne = Get-AllOutput { & $scTool -GameRoot $scGame -Mod 'ModA' }
+if ($scOne -match 'ModAHelper\s+in the bundle') { Ok 'scripts: a module-qualified symbol resolves for a single mod' }
+else { Bad 'scripts: a module-qualified symbol resolves for a single mod' "ModAHelper was not found as Fixture.ModA.ModAHelper:`n$scOne" }
+
 # ============================================================== install ======
 #
 # The destructive bug this guards: an installed copy running its own uninstaller

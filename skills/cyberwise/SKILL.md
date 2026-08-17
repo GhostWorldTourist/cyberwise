@@ -186,6 +186,20 @@ because an unlisted archive sorts last and loses.
 |---|---|
 | `tools/ModFileBackup.ps1` | snapshot / diff / restore for any file you are about to edit in place |
 | `tools/ModPatchWatch.ps1` | register every patch and override, then sweep for the ones whose upstream file has changed |
+| `tools/Test-ScriptsLive.ps1` | is a `.reds` mod's code actually in the compiled bundle the game loads |
+
+**"The file is in `r6\scripts`" is not "the code is running."** `.reds` mods run
+from a bundle compiled at launch, so a mod installed since the last launch is
+enabled, correct, and doing nothing - with no sign in game. Ask the bundle:
+
+```powershell
+tools\Test-ScriptsLive.ps1 -GameRoot '<path>'            # what is stale
+tools\Test-ScriptsLive.ps1 -GameRoot '<path>' -Mod 'X'   # one mod, symbol by symbol
+```
+
+It also catches the log traps that make this hard to check by hand - an archived
+redscript log is named for the run that *replaced* it, and a compile test
+overwrites the current one. Both in `references/script-cache.md`.
 
 **Fixing another author's mod? Register it.** `Register-ModPatch` records the hash
 of their file as it was when you patched it; `Test-ModPatches` re-checks after any
@@ -221,8 +235,10 @@ not cost you anything when the question is about textures.
 | `cyberwise-backstory` | building a character - V's history, voice, roleplay decisions, a dossier |
 | `cyberwise-feedback` | Cyberwise itself is wrong, a tool errors, or the user wants to reach the author |
 
-`references/environment.md` stays here rather than in one of those, because
-manager behaviour, the settings store and compile-testing bear on all of them.
+Two references stay here rather than in one of those, because they bear on all of
+them: `references/environment.md` (manager behaviour, the settings store,
+compile-testing) and `references/script-cache.md` (what is actually in the
+compiled script bundle, and the log traps around it).
 
 **These are additive.** A hotkey sheet is also an HTML deliverable, so that job
 wants `cyberwise-hotkeys` *and* `cyberwise-reports`. Load both.

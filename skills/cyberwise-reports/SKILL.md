@@ -60,6 +60,28 @@ Two things before trusting the NSFW filter, both measured on one 846-mod install
 **The output is the user's actual mod list. Treat it as personal:** write it
 outside any repo and never commit it.
 
+## One mod: "I installed this - is it working?"
+
+```powershell
+tools\New-ModDossier.ps1 -Mod '<name>' -GameRoot '<path>'
+```
+
+The most common question on any modded install, and nothing answers it, because
+**a mod is not one thing.** It is up to nine payloads deployed to nine places,
+each failing in its own silent way - an archive that loses every file it
+contests, a `.reds` that is on disk but not in the compiled bundle, a CET folder
+with no `init.lua`, a `.yaml` that never loaded. A single verdict would be a lie;
+this reports **per layer**, and says `unknown` where disk genuinely cannot tell.
+
+It walks the mod's own staging folder to learn what it *should* deploy, so the
+footprint is exact rather than inferred from its category or its page. It also
+pulls in the user's real settings for that mod (matched on its redscript
+**module**, which is how `user.ini` sections are keyed - not on its display name)
+and any override you have registered against it.
+
+Paths are redacted by default: a dossier is what somebody pastes into a thread
+when asking why a mod does nothing.
+
 ## Any generated page: measure it, do not eyeball it
 
 **Get the viewport from the user, not from the screen — and LAUNCH the probe
@@ -118,6 +140,7 @@ of table rendering and the 2000-character cap: `references/report-design.md`.
 |---|---|
 | `tools/New-SystemProfile.ps1` | machine + install facts that change a diagnosis, flags first |
 | `tools/New-ModManifest.ps1` | inventory of an installed load order, with descriptions |
+| `tools/New-ModDossier.ps1` | one mod, every layer: what it ships and which parts are actually doing anything |
 | `tools/ModManifestHtml.ps1` | HTML renderer for the manifest (dot-sourced) |
 | `tools/NexusCredential.ps1` | Nexus API key in Windows Credential Manager |
 | `tools/Show-ViewportProbe.ps1` | asks the user's own browser window how big it is |
