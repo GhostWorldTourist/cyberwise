@@ -885,9 +885,14 @@ else           { Ok  'bisect: restore puts the round back from its manifest' }
 # A file missing from the park folder means something else moved it - a redeploy,
 # a cleanup, another round - and every round since is suspect. Saying so is the
 # whole value; restoring what is left and reporting success is the failure.
-Set-Content -LiteralPath (Join-Path $sandbox 'cut2.txt') "beta`n"
+#
+# Its own archive, not one an earlier round touched: sharing a fixture across
+# rounds makes a mutation in one place cascade into unrelated failures here, and
+# a noisy blast radius is how a mutation stops naming the thing it broke.
+Set-Content -LiteralPath (Join-Path $bgame 'archive\pc\mod\gamma.archive') 'g' -NoNewline
+Set-Content -LiteralPath (Join-Path $sandbox 'cut2.txt') "gamma`n"
 & $bisectTool -GameRoot $bgame -Round 'C' -Park (Join-Path $sandbox 'cut2.txt') -RecordDir $brecs *>$null
-Remove-Item -LiteralPath (Join-Path $bgame '_bisect_parked\C\archive\pc\mod\beta.archive') -Force
+Remove-Item -LiteralPath (Join-Path $bgame '_bisect_parked\C\archive\pc\mod\gamma.archive') -Force
 $bLost = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'C' -Restore -RecordDir $brecs }
 if ($bLost -match 'NOT in the park folder') { Ok 'bisect: a parked file that vanished is reported, not skipped' }
 else { Bad 'bisect: a parked file that vanished is reported, not skipped' "restore said nothing about the missing file:`n$bLost" }

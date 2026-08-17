@@ -112,8 +112,21 @@ Save-Original $bisectRel
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
 
+    # NORMALISE LINE ENDINGS ON BOTH SIDES BEFORE MATCHING.
+    #
+    # A multi-line $From is a string literal in THIS file, so it carries this
+    # file's line endings - and there is no reason those match the file being
+    # mutated. They did not: this file is CRLF, Invoke-BisectRound.ps1 is LF, and
+    # a two-line mutation silently stopped applying. The harness reported it
+    # correctly ("the code this mutation edits has changed"), which is the only
+    # reason it was not read as "the tool is fine".
+    #
+    # Every multi-line mutation is exposed to this, so it is fixed once here
+    # rather than by hand-matching endings per mutation.
     $path = Join-Path $tmp $Rel
-    $text = Get-Content -LiteralPath $path -Raw
+    $text = (Get-Content -LiteralPath $path -Raw) -replace "`r`n", "`n"
+    $From = $From -replace "`r`n", "`n"
+    $To   = $To   -replace "`r`n", "`n"
     if ($text -notmatch [regex]::Escape($From)) {
         $script:fail++
         Write-Host "FAIL  $Name" -ForegroundColor Red
