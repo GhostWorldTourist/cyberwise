@@ -956,11 +956,16 @@ public class ModBBrandNew {
 
 # Documents its own API in a block comment. Parsing that as a declaration
 # reported a working mod as broken.
+# The documented signatures sit at COLUMN ZERO inside the comment, which is how
+# mods actually write these blocks - and it is what makes comment-stripping
+# load-bearing. Indenting them here would let the top-level-only parser skip them
+# for the wrong reason, and the mutation that removes comment-stripping would
+# then change nothing and look undetectable. The harness caught exactly that.
 New-ScriptMod -Name 'ModC' -Stamp $scBuilt.AddDays(-1) -Body @'
 module Fixture.ModC
 /**
-  public func ModCDocumentedButNotReal() -> Void
-  public class ModCAlsoJustDocs {}
+public func ModCDocumentedButNotReal() -> Void
+public class ModCAlsoJustDocs {}
 */
 public class ModCReal {}
 '@

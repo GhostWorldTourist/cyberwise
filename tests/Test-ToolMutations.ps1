@@ -244,9 +244,16 @@ Assert-Detects 'the Discord form no longer trimmed to fit a message' $reportRel 
 # PowerShell's own trap, and it shipped: $hash[$missingKey] is $null, @($null) is
 # an array of ONE, and Join-Path with a null tail resolves to the root - so every
 # layer a mod did NOT ship reported "1 of 1 file(s) deployed".
+#
+# BOTH lines have to go. The fix is two independent guards - a key check and a
+# null filter - so removing either one alone changes nothing observable, and a
+# single-line mutation "passed" while the bug it names was gone. Reintroducing a
+# defect means reintroducing it fully, not deleting one of the things that would
+# have prevented it.
 Assert-Detects 'a dossier inventing the layers a mod does not ship' $dossierRel `
-    'if (-not $layers.Contains($kind)) { continue }' `
-    '# mutation: no key guard' `
+    "if (-not `$layers.Contains(`$kind)) { continue }
+    `$items = @(`$layers[`$kind] | Where-Object { `$_ })" `
+    '$items = @($layers[$kind])' `
     'layers a mod ships, and no others'
 
 # Both of these make the script check LOUDER rather than quieter, which is the
