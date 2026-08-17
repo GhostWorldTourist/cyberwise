@@ -76,6 +76,35 @@ tools\New-ModManifest.ps1 -StagingRoot '<staging root>' -HideNSFW
 
 ---
 
+## Mod dossier
+
+One mod, every layer it ships, and which parts are actually doing anything.
+
+![Mod dossier](docs/images/mod-dossier.png)
+
+*"I installed this — is it working?"* is the most common question on a modded
+install, and nothing answers it, because **a mod is not one thing.** It is up to
+nine payloads deployed to nine different places, and each fails in its own silent
+way: an archive that loses every file it contests, a `.reds` that is on disk but
+not in the compiled bundle, a CET folder with no `init.lua`, a `.yaml` that never
+loaded. A single verdict for all nine would be a lie, so this reports per layer —
+and says `unknown` where the disk genuinely cannot tell you.
+
+It learns what the mod *should* deploy by walking the mod's own staging folder,
+so the footprint is exact rather than guessed from its category or its page. The
+archive line is the useful one here: **entry 186 of 729** says this mod wins most
+of what it contests, which is a fact about load order that no mod page can tell
+you.
+
+The bottom section is the part that only exists because this repo tracks it — an
+override *you* made against this mod's file, with the reason recorded at the time
+you made it. When the author ships an update, that is the thing that silently
+keeps winning, and this is where it stops being invisible.
+
+```powershell
+tools\New-ModDossier.ps1 -Mod 'Visible Bullets' -GameRoot '<path>'
+```
+
 ## Hotkey cheatsheet
 
 57 bindings, harvested from the five separate places an install keeps them.
