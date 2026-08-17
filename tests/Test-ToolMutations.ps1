@@ -95,6 +95,7 @@ $installRel  = 'install.ps1'
 $liveRel     = 'skills\cyberwise\tools\Test-ScriptsLive.ps1'
 $dossierRel  = 'skills\cyberwise-reports\tools\New-ModDossier.ps1'
 $bisectRel   = 'skills\cyberwise-crashes\tools\Invoke-BisectRound.ps1'
+$resolveRel  = 'skills\cyberwise-conflicts\tools\Resolve-ResourcePath.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -108,6 +109,7 @@ Save-Original $installRel
 Save-Original $liveRel
 Save-Original $dossierRel
 Save-Original $bisectRel
+Save-Original $resolveRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -259,6 +261,23 @@ Assert-Detects 'the Discord form no longer trimmed to fit a message' $reportRel 
 # PowerShell's own trap, and it shipped: $hash[$missingKey] is $null, @($null) is
 # an array of ONE, and Join-Path with a null tail resolves to the root - so every
 # layer a mod did NOT ship reported "1 of 1 file(s) deployed".
+# The nastiest failure the path table can have: paths are front-coded, each one
+# rebuilt from the one before, so a walk that is off by one returns a NEIGHBOURING
+# path. Not an error, not a blank - a real, plausible, wrong filename, printed
+# into a conflict report as the file a mod just lost.
+Assert-Detects 'a front-coded path walk that stops one entry short' $resolveRel `
+    'for ($i = 1; $i -le $within; $i++) {' `
+    'for ($i = 1; $i -lt $within; $i++) {' `
+    'round-trip exactly'
+
+# The table stores hashes signed because SQLite has no unsigned 64-bit type.
+# Comparing the archive's unsigned hash directly finds nothing for every hash
+# above 2^63 - half of them, silently, with no error anywhere.
+Assert-Detects 'the signed conversion dropped, losing half of all hashes' $resolveRel `
+    '$signed = [BitConverter]::ToInt64([BitConverter]::GetBytes($Hash), 0)' `
+    '$signed = $Hash' `
+    'known hash resolves to its path'
+
 # A round is armed while the manager still believes the mods are deployed, so a
 # deployment puts them back without anyone noticing. Not checking is how a round
 # scores a result on a configuration nobody recorded.
