@@ -89,6 +89,8 @@ $hotkeyRel   = 'skills\cyberwise-hotkeys\tools\Get-Hotkeys.ps1'
 $manifestRel = 'skills\cyberwise-reports\tools\New-ModManifest.ps1'
 $backupRel   = 'skills\cyberwise\tools\ModFileBackup.ps1'
 $compareRel  = 'skills\cyberwise-crashes\tools\Compare-InstallSnapshot.ps1'
+$mmHtmlRel   = 'skills\cyberwise-reports\tools\ModManifestHtml.ps1'
+$reportRel   = 'skills\cyberwise-feedback\tools\New-ProblemReport.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -96,6 +98,8 @@ Save-Original $hotkeyRel
 Save-Original $manifestRel
 Save-Original $backupRel
 Save-Original $compareRel
+Save-Original $mmHtmlRel
+Save-Original $reportRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -192,6 +196,44 @@ Assert-Detects 'bindings.json parsed without -AsHashtable, which throws on case-
     'ConvertFrom-Json -AsHashtable' `
     'ConvertFrom-Json' `
     'case-colliding bindings.json'
+
+# Both of these fail SILENTLY in the direction that matters: the report is
+# written, it looks complete, and the user only finds out it cannot be sent when
+# Discord refuses the paste.
+Assert-Detects 'the profile no longer saying its markdown is too long to send' $profileRel `
+    'if ($chars -gt 2000) {' `
+    'if ($false) {' `
+    'too long to paste'
+
+Assert-Detects 'the manifest no longer saying its markdown is too long to send' $manifestRel `
+    'if ($mdChars -gt 2000) {' `
+    'if ($false) {' `
+    'unpasteable markdown says so'
+
+# Both halves of the manifest, because the leak that shipped was one output
+# forgetting while the other remembered - a single mutation would have proved
+# only the half that was already safe.
+Assert-Detects 'the manifest markdown printing the raw staging path again' $manifestRel `
+    'elseif ($htmlHelperLoaded) { Get-RedactedStagingPath $StagingRoot }' `
+    'elseif ($htmlHelperLoaded) { $StagingRoot }' `
+    'redact the staging path by default'
+
+Assert-Detects 'the manifest HTML header printing the raw staging path again' $mmHtmlRel `
+    '$shownRoot = if ($NoRedact) { $StagingRoot } else { Get-RedactedStagingPath $StagingRoot }' `
+    '$shownRoot = $StagingRoot' `
+    'redact the staging path by default'
+
+# A problem report is written for a stranger and pasted without being re-read.
+# Both of these produce a file that looks completely normal.
+Assert-Detects 'redaction skipped in a report written for a stranger' $reportRel `
+    'if ($NoRedact -or -not $Text) { return $Text }' `
+    'return $Text' `
+    'pasted stack trace is redacted'
+
+Assert-Detects 'the Discord form no longer trimmed to fit a message' $reportRel `
+    '$discordText = Get-Fitted (Get-Redacted $short.ToString()) 2000' `
+    '$discordText = Get-Redacted $short.ToString()' `
+    'Discord form fits one message'
 
 Assert-Detects 'unrecognised preset hashes dropped instead of shown' $presetRel `
     '$label = if ($group) { Get-Label $group } else { "?$hash" }' `

@@ -1,0 +1,58 @@
+name: Something here is wrong
+description: A note, a claim or a piece of advice in the skills does not match what you see
+labels: ["correction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This is the most welcome kind of report.** A note that turns out to be
+        wrong is worse than no note at all, because somebody acts on it. If you
+        can disprove one, that is worth more than a feature request.
+
+        What you saw in game outranks what any file here says — including this
+        repo. You do not need to prove the mechanism; saying what you observed is
+        enough.
+
+  - type: input
+    id: where
+    attributes:
+      label: Where is it
+      description: File and, if you can, the claim itself.
+      placeholder: cyberwise-conflicts/references/load-order.md — "earlier in modlist.txt wins"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-it-says
+    attributes:
+      label: What it says
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-you-saw
+    attributes:
+      label: What you actually saw
+      description: What happened on your install, and how you know.
+    validations:
+      required: true
+
+  - type: input
+    id: verified-stamp
+    attributes:
+      label: The file's Verified stamp
+      description: >-
+        The line near the top, e.g. "Verified: Cyberpunk 2077 patch 2.31".
+        "True on 2.2, false on 2.31" is a different bug from "never true".
+      placeholder: "Verified: Cyberpunk 2077 patch 2.31 - August 2026"
+    validations:
+      required: false
+
+  - type: input
+    id: setup
+    attributes:
+      label: Your setup
+      description: Game patch, mod manager, and anything unusual about the install.
+      placeholder: 2.31, MO2, ~200 mods
+    validations:
+      required: false

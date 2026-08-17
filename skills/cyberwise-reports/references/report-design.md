@@ -209,8 +209,26 @@ constrains it more than the HTML:
 - **Discord does not render markdown tables.** Pipes and dashes become line
   noise in the exact place the file is meant to be read. Use **fenced code
   blocks with space-aligned columns**, which render identically everywhere.
-- **2000 characters per message.** Keep the whole artefact under it if you can;
-  warn at generation time if you cannot, so the user learns before pasting.
+- **2000 characters per message, and over it a message is REFUSED, not
+  truncated.** This is the part people design around wrongly. A long paste does
+  not arrive clipped - nothing arrives, and the user discovers that while
+  already stuck and asking for help.
+
+  So every output whose purpose is to be pasted **states its own size and says
+  what to do instead**, at generation time, rather than leaving the user to find
+  out in the channel. Three shipped examples, all enforced by tests:
+
+  - `New-SystemProfile.ps1` caps each flag's item list at 8 in the markdown (the
+    HTML lists everything) and warns with the actual character count when the
+    file still runs over.
+  - `New-ModManifest.ps1` cannot make an 800-mod inventory pasteable, so it
+    reports the size and names the two things that do work - attach the file,
+    or share the HTML.
+  - The tray's **Copy crash summary** trims to fit before the text reaches the
+    clipboard, dropping oldest-first and saying how many lines went.
+
+  **Trim from the end, and say that you did.** Silent truncation is worse than
+  a refused paste: the reader believes they sent everything.
 - Bullets, bold and inline code are safe. Headings render but are heavy - bold
   a line instead.
 

@@ -110,6 +110,49 @@ namespace Cyberwise
     }
 
     /// <summary>
+    /// Text that is on its way to somewhere with a length limit.
+    /// </summary>
+    // "Copy crash summary" exists so somebody can paste it into a help channel,
+    // and Discord caps a message at 2000 characters. Going over does not arrive
+    // truncated - it does not arrive at all, and the person is left retyping it
+    // by hand at the exact moment they are already stuck.
+    //
+    // PUBLIC, and pulled out of the menu handler, so the test suite can call it
+    // with no clipboard, no tray and no game. A cap that only runs behind a
+    // context menu is a cap nobody ever proves.
+    public static class Paste
+    {
+        public const int DiscordLimit = 2000;
+
+        /// <summary>
+        /// Trim to <paramref name="limit"/> characters by dropping whole lines
+        /// off the END, then saying how many went. Callers list newest first, so
+        /// what goes is the oldest.
+        /// </summary>
+        public static string Fit(string text, int limit)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length <= limit) return text;
+
+            var lines = new List<string>(text.Replace("\r\n", "\n").TrimEnd('\n').Split('\n'));
+            int dropped = 0;
+            while (lines.Count > 1)
+            {
+                lines.RemoveAt(lines.Count - 1);
+                dropped++;
+                string note = string.Format(
+                    "  ...and {0} more line(s), dropped to fit a {1}-character message.", dropped, limit);
+                string candidate = string.Join(Environment.NewLine, lines)
+                                 + Environment.NewLine + note + Environment.NewLine;
+                if (candidate.Length <= limit) return candidate;
+            }
+
+            // One line longer than the whole budget. Cutting it mid-word is ugly;
+            // returning something that will not send is worse.
+            return text.Substring(0, Math.Max(0, limit - 1)) + "…";
+        }
+    }
+
+    /// <summary>
     /// Plain key=value settings. Not JSON on purpose: .NET Framework has no
     /// built-in JSON reader worth the reference, and this file is meant to be
     /// legible and editable by the same person who is scared of a terminal.
@@ -662,7 +705,12 @@ namespace Cyberwise
                 foreach (var f in Directory.GetFiles(d, "*.json", SearchOption.TopDirectoryOnly)
                                            .OrderByDescending(File.GetLastWriteTimeUtc).Take(10))
                     sb.AppendLine("  " + Summarise(f));
-            try { Clipboard.SetText(sb.ToString()); _icon.ShowBalloonTip(4000, "Cyberwise", "Summary copied to the clipboard.", ToolTipIcon.Info); }
+
+            // Crashes are listed newest first, so what Fit drops off the end is
+            // the oldest and least relevant. Ten unreadable files or a couple of
+            // very long district names is all it takes to run over.
+            string text = Paste.Fit(sb.ToString(), Paste.DiscordLimit);
+            try { Clipboard.SetText(text); _icon.ShowBalloonTip(4000, "Cyberwise", "Summary copied to the clipboard.", ToolTipIcon.Info); }
             catch { }
         }
 

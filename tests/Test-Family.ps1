@@ -255,6 +255,100 @@ Check 'every shipped .ps1 parses' {
     }
 }
 
+# ------------------------------------------------------------ issue forms --
+
+# GitHub issue forms fail the same way a skill does: SILENTLY. A malformed one is
+# not reported anywhere the author will see - the template simply stops appearing
+# in the chooser, and the first sign of trouble is that bug reports arrive with
+# none of the fields anybody asked for. Nobody re-tests a template that worked
+# once, because nobody opens their own issues.
+#
+# There is no YAML parser in PowerShell, and adding one would break the rule that
+# this repo needs nothing installed. So this checks the shape GitHub actually
+# requires rather than validating YAML in general: the required keys, a known
+# field type, a label on every field a human fills in, unique ids, and no tab
+# indentation. It cannot catch every malformation - it is a floor, not a parser.
+Check 'every GitHub issue form has the shape GitHub requires' {
+    $tplDir = Join-Path $Root '.github\ISSUE_TEMPLATE'
+    if (-not (Test-Path -LiteralPath $tplDir)) { return }
+
+    foreach ($f in (Get-ChildItem -LiteralPath $tplDir -Filter *.yml)) {
+        $lines = @(Get-Content -LiteralPath $f.FullName)
+        $text  = $lines -join "`n"
+        $rel   = ".github/ISSUE_TEMPLATE/$($f.Name)"
+
+        # A tab used as indentation makes YAML invalid outright, and an editor
+        # can insert one without it being visible in a diff.
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^ *`t") { "${rel}: line $($i + 1) is indented with a tab, which YAML forbids" }
+        }
+
+        # config.yml is the chooser page, not a form, and has its own schema.
+        if ($f.Name -eq 'config.yml') {
+            if ($text -notmatch '(?m)^blank_issues_enabled:\s*(true|false)\s*$') {
+                "${rel}: no blank_issues_enabled: true/false"
+            }
+            # Entries are split by line index rather than by regex: the name
+            # lives on the `- name:` line that STARTS each entry, so a pattern
+            # looking for `^\s*name:` inside a block never finds it and reports
+            # every well-formed link as nameless. (It did.)
+            $starts = @()
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match '^\s*-\s+name\s*:') { $starts += $i }
+            }
+            if (-not $starts.Count) { "${rel}: contact_links has no entries" }
+            for ($j = 0; $j -lt $starts.Count; $j++) {
+                $from  = $starts[$j]
+                $to    = if ($j + 1 -lt $starts.Count) { $starts[$j + 1] - 1 } else { $lines.Count - 1 }
+                $block = ($lines[$from..$to]) -join "`n"
+                # GitHub drops a contact link missing any of the three, without
+                # saying which one, or that it did.
+                if ($block -notmatch '^\s*-\s+name\s*:\s*\S') { "${rel}: a contact link has no name" }
+                foreach ($k in 'url', 'about') {
+                    if ($block -notmatch "(?m)^\s*$k\s*:\s*\S") { "${rel}: a contact link has no $k" }
+                }
+                if ($block -notmatch '(?m)^\s*url\s*:\s*https?://') { "${rel}: a contact link url is not absolute" }
+            }
+            continue
+        }
+
+        foreach ($k in 'name', 'description', 'body') {
+            if ($text -notmatch "(?m)^$k\s*:\s*\S") { "${rel}: no top-level ${k}:" }
+        }
+
+        $known = @('markdown', 'input', 'textarea', 'dropdown', 'checkboxes')
+        $items = [regex]::Matches($text, '(?ms)^  - type:\s*(\S+).*?(?=^  - type:|\z)')
+        if (-not $items.Count) { "${rel}: body has no '- type:' fields" }
+
+        $seenIds = @{}
+        foreach ($m in $items) {
+            $type  = $m.Groups[1].Value
+            $block = $m.Value
+            if ($known -notcontains $type) { "${rel}: unknown field type '$type'"; continue }
+
+            if ($block -notmatch '(?m)^\s+attributes:\s*$') { "${rel}: a '$type' field has no attributes: block" }
+
+            if ($type -eq 'markdown') {
+                if ($block -notmatch '(?m)^\s+value:') { "${rel}: a markdown block has no value:" }
+            } elseif ($block -notmatch '(?m)^\s+label:\s*\S') {
+                # The failure this is really for: a field with no label renders as
+                # an unexplained empty box, and people leave it blank.
+                "${rel}: a '$type' field has no label"
+            }
+
+            if (@('dropdown', 'checkboxes') -contains $type -and $block -notmatch '(?m)^\s+options:') {
+                "${rel}: a '$type' field has no options:"
+            }
+
+            if ($block -match '(?m)^\s+id:\s*(\S+)') {
+                $id = $matches[1]
+                if ($seenIds.ContainsKey($id)) { "${rel}: duplicate field id '$id' - GitHub rejects the whole form" }
+                $seenIds[$id] = $true
+            }
+        }
+    }
+}
+
 # ----------------------------------------------------------------- privacy --
 
 # This repo is public, and personal mod names and absolute user paths have leaked

@@ -9,6 +9,31 @@
 # search instant on a large load order - a few hundred to a few thousand entries
 # filter without the page having been re-generated.
 
+function Get-RedactedStagingPath {
+    <#
+    .SYNOPSIS
+        Strip machine identity out of a staging path.
+    .DESCRIPTION
+        REDACT BY DEFAULT. A manifest exists to be shared - posted to a Discord,
+        attached to a bug report, screenshotted - and the staging root carries
+        the Windows username in almost every layout. Nobody proof-reads a header
+        before pasting, so the safe form has to be the default one.
+
+        What a reader actually needs from it is which manager produced this, not
+        where it lives.
+
+        This lives here, and BOTH outputs call it, because the markdown shipped
+        a full path in its header for a while after the HTML header was already
+        redacting one. Two copies of this logic is how a field quietly stops
+        being covered.
+    #>
+    param([string] $Path)
+    if (-not $Path) { return $Path }
+    $s = $Path -replace [regex]::Escape([string]$env:USERPROFILE), '~'
+    if ($env:USERNAME) { $s = $s -replace "(?i)\\$([regex]::Escape([string]$env:USERNAME))\b", '\<user>' }
+    return ($s -replace '^([A-Za-z]:)\\.*\\([^\\]+\\[^\\]+)$', '$1\...\$2')
+}
+
 function ConvertTo-ManifestHtml {
     param(
         [Parameter(Mandatory)] $Mods,
@@ -16,7 +41,9 @@ function ConvertTo-ManifestHtml {
         [string] $StagingRoot,
         [int]    $HiddenCount = 0,
         [switch] $HideNSFW,
-        [string] $FlagSource = 'name heuristic'
+        [string] $FlagSource = 'name heuristic',
+        # Show the real staging path. Off by default - see Get-RedactedStagingPath.
+        [switch] $NoRedact
     )
 
     $payload = foreach ($m in $Mods) {
@@ -236,7 +263,10 @@ render();
 </html>
 '@
 
-    $src = if ($StagingRoot) { "SOURCE: $StagingRoot" } else { '' }
+    # Redacted unless the caller asks for the real thing; see the helper above
+    # for why the default is the safe one.
+    $shownRoot = if ($NoRedact) { $StagingRoot } else { Get-RedactedStagingPath $StagingRoot }
+    $src = if ($shownRoot) { "SOURCE: $shownRoot" } else { '' }
     $tpl = $tpl.Replace('__DATA__',     $json)
     $tpl = $tpl.Replace('__SUBTITLE__', $subtitle)
     # Avoid System.Web - not loaded by default in PowerShell 7. The source path

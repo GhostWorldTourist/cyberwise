@@ -1,0 +1,82 @@
+name: Something is broken
+description: A skill, a tool or the tray app did not do what it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **You do not have to fill this in by hand.** With Cyberwise installed, tell
+        your assistant *"help me report this problem"* — it gathers the version,
+        environment and error text itself, redacts your username and paths, and
+        hands you the text to paste below.
+
+        Prefer chat? <https://discord.gg/UltraPlace> — the cyberpunk channel,
+        tag **@GhostWorldTourist**.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: In your own words. A screenshot is fine.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: >-
+        The most useful line in the whole form, and the easiest one to leave out.
+        "It said F3" is a fact; "it said F3 but I rebound that to F7" is a bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Exact error text
+      description: Pasted rather than retyped — a paraphrased error is a different error.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: area
+    attributes:
+      label: Which skill or tool
+      description: e.g. cyberwise-hotkeys, New-ModManifest.ps1, the tray app. "Not sure" is a fine answer.
+      placeholder: not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >-
+        The block New-ProblemReport.ps1 produces, or fill in what you know:
+        cyberwise version, game patch, mod manager, Claude Code or Codex.
+      render: text
+      placeholder: |
+        cyberwise      2026.08.16
+        area           cyberwise-hotkeys
+        game patch     2.31
+        claude code    SymbolicLink -> ~\repos\cyberwise\skills\cyberwise
+        powershell     7.5.0
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: repeats
+    attributes:
+      label: Does it repeat?
+      options:
+        - label: It happens every time
+        - label: It happened once and I have not tried again
+
+  - type: markdown
+    attributes:
+      value: |
+        **Before you post:** check there is no username, machine name or full path
+        left in anything you pasted. Please do not attach a save file — they are
+        personal, large, and almost never the evidence needed.

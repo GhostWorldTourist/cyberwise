@@ -97,8 +97,20 @@ image. Two failure modes a screenshot cannot show you, and one a number cannot:
   `scrollHeight` has the viewport as its floor. Re-measure against a short window
   for the true content height.
 
+## Anything meant for a chat paste has a hard size limit
+
+**Discord refuses a message over 2000 characters - it does not truncate it.** A
+report that quietly runs long is one the user cannot send at all, and they find
+that out while already stuck.
+
+Every paste-facing output here says its own size and what to do instead: the
+profile warns with the character count, the manifest names the file and the HTML
+as the alternatives, and the tray trims a crash summary to fit before it reaches
+the clipboard. **Hand somebody a short form or an attachment - never a wall of
+text and a "paste this".**
+
 House style - palette, one type base, flex over CSS multi-column, Discord's lack
-of table rendering and its 2000-character cap: `references/report-design.md`.
+of table rendering and the 2000-character cap: `references/report-design.md`.
 
 ## Tools
 

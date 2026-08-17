@@ -113,6 +113,13 @@ out.
 build; documentation describes intent. When their observation contradicts your
 source, the source is what is wrong, and arguing the point is a waste of a turn.
 
+**And when the source that is wrong is one of these files, that is a report, not
+an embarrassment.** A note that turns out to be false is worse than no note, so a
+user who can disprove one is doing the most valuable thing anybody does here.
+Offer to write it up - `cyberwise-feedback` gathers the facts and hands them a
+finished message. That applies just as much when the thing that got it wrong was
+you rather than the notes.
+
 ## Where records live - one place, agent-neutral
 
 Anything this family must **remember about an install** goes on disk beside the
@@ -195,6 +202,7 @@ not cost you anything when the question is about textures.
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua and console commands, finding game text |
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
 | `cyberwise-backstory` | building a character - V's history, voice, roleplay decisions, a dossier |
+| `cyberwise-feedback` | Cyberwise itself is wrong, a tool errors, or the user wants to reach the author |
 
 `references/environment.md` stays here rather than in one of those, because
 manager behaviour, the settings store and compile-testing bear on all of them.

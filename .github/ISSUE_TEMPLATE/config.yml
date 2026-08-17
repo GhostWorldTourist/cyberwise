@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask on Discord
+    url: https://discord.gg/UltraPlace
+    about: >-
+      Faster than an issue, and no account needed beyond Discord. Post in the
+      cyberpunk channel and tag @GhostWorldTourist. Best for "is this me or the
+      tool", screenshots, and anything needing back-and-forth.
+  - name: Let your assistant write it for you
+    url: https://github.com/GhostWorldTourist/cyberwise#readme
+    about: >-
+      If you have Cyberwise installed, say "help me report this problem" - it
+      gathers the version, environment and error text itself and hands you the
+      finished text to paste here or into Discord.

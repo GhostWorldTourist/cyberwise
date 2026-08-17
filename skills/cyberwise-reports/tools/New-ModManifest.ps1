@@ -64,6 +64,8 @@ param(
     [string] $NexusApiKey,
     # Skip the Nexus lookup entirely, even if a key is stored. Tier 1 only.
     [switch] $NoNexus,
+    # Show the real staging path in the report. Paths carry the username.
+    [switch] $NoRedact,
     [switch] $HideNSFW,
     # Written to the current directory, not beside the script: the script may
     # live in a shared or read-only skill folder, and a manifest is a listing of
@@ -111,6 +113,14 @@ Could not find a mod staging folder. Pass -StagingRoot explicitly:
 }
 
 Write-Host "staging: $StagingRoot" -ForegroundColor DarkGray
+
+# The HTML renderer is dot-sourced HERE rather than at the point of use, because
+# the markdown report needs its path-redaction helper as well - and the markdown
+# is written first. Sourcing it only for the HTML is how the markdown header came
+# to ship an un-redacted staging path while the HTML header was already safe.
+$htmlHelper = Join-Path $PSScriptRoot 'ModManifestHtml.ps1'
+$htmlHelperLoaded = Test-Path -LiteralPath $htmlHelper
+if ($htmlHelperLoaded) { . $htmlHelper }
 
 # ------------------------------------------------------------------ parsing --
 
@@ -375,7 +385,16 @@ function W($t = '') { [void]$sb.AppendLine($t) }
 
 W "# Cyberpunk 2077 mod manifest"
 W ""
-W "Generated $(Get-Date -Format 'yyyy-MM-dd HH:mm') from ``$StagingRoot``."
+# The markdown is the output people paste. Same rule as the HTML header: the
+# staging path names the user unless something strips it. With the helper
+# missing, say nothing rather than leak - a manifest is still useful without
+# knowing which folder it came from.
+$shownRoot =
+    if ($NoRedact) { $StagingRoot }
+    elseif ($htmlHelperLoaded) { Get-RedactedStagingPath $StagingRoot }
+    else { '<staging folder>' }
+
+W "Generated $(Get-Date -Format 'yyyy-MM-dd HH:mm') from ``$shownRoot``."
 W ""
 W "- **$($mods.Count)** mods listed"
 # Recomputed rather than reusing the pre-filter count: -HideNSFW may have
@@ -456,22 +475,30 @@ W "folder names and layout. Tier 2 (summary, author, adult flag) comes from the"
 W "Nexus v1 API and is cached in ``$(Split-Path $CachePath -Leaf)`` so re-runs are free."
 
 Set-Content -LiteralPath $Out -Value $sb.ToString() -Encoding UTF8
-Write-Host "wrote $((Resolve-Path -LiteralPath $Out).Path)" -ForegroundColor Green
+$mdChars = $sb.Length
+Write-Host "wrote $((Resolve-Path -LiteralPath $Out).Path) ($mdChars chars)" -ForegroundColor Green
+
+# Say the size, and say what it means. A manifest of any real load order is far
+# past Discord's 2000-character message cap, and pasting a long one does not
+# arrive truncated - it does not arrive at all. The person then either retypes it
+# or gives up, and neither is the outcome this file was written for.
+if ($mdChars -gt 2000) {
+    Write-Host ("  that is past Discord's 2000-character message cap - attach the file " +
+                "or share the HTML rather than pasting it") -ForegroundColor DarkGray
+}
 
 # ------------------------------------------------------------------- html ----
 # Markdown stays the primary output - it diffs, greps and pastes. The HTML is a
 # second rendering of the same data for when you want to browse and search it.
 
 if (-not $NoHtml) {
-    $htmlHelper = Join-Path $PSScriptRoot 'ModManifestHtml.ps1'
-    if (Test-Path -LiteralPath $htmlHelper) {
-        . $htmlHelper
+    if ($htmlHelperLoaded) {
         if (-not $HtmlOut) {
             $HtmlOut = [IO.Path]::ChangeExtension($Out, '.html')
         }
         $flagSource = if ($heuristicUsed) { 'name heuristic' } else { 'nexus flag' }
         $html = ConvertTo-ManifestHtml -Mods $mods -Game $Game -StagingRoot $StagingRoot `
-                    -HiddenCount $hidden -HideNSFW:$HideNSFW -FlagSource $flagSource
+                    -HiddenCount $hidden -HideNSFW:$HideNSFW -FlagSource $flagSource -NoRedact:$NoRedact
         Set-Content -LiteralPath $HtmlOut -Value $html -Encoding UTF8
         Write-Host "wrote $((Resolve-Path -LiteralPath $HtmlOut).Path)" -ForegroundColor Green
     } else {

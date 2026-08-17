@@ -442,8 +442,12 @@ Set-Content -LiteralPath $Md -Value $mdText -Encoding UTF8
 
 $chars = $mdText.Length
 Write-Host "wrote $Md ($chars chars)" -ForegroundColor Green
+# Over the cap a Discord message is not truncated - it is REFUSED, so a profile
+# that quietly runs long is one the user cannot send at all. Say the number, and
+# say what to do instead.
 if ($chars -gt 2000) {
-    Write-Warning "Discord caps a message at 2000 characters. Paste the Flags block, or attach the file."
+    Write-Warning ("This is $chars characters and Discord caps a message at 2000, so it will not send. " +
+                   "Paste the Flags block on its own, or attach the file.")
 }
 
 # ---- html ----

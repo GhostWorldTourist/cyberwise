@@ -83,6 +83,10 @@ the assembly attributes, so there is no separate `.rc` file to keep in sync.
 - **Start Cyberwise when I log in** — a per-user `HKCU\...\Run` entry, no admin needed
 - **Copy crash summary** — the last ten crashes as plain text, for pasting when
   asking someone for help. That is the action this audience actually needs next.
+  It is trimmed to fit a 2000-character Discord message before it reaches the
+  clipboard — over that limit a message is *refused*, not shortened, so an
+  untrimmed summary would simply fail to send. Oldest crashes go first, and it
+  says how many it dropped.
 - **Open crash folder**, **Settings…**, **Reload settings**, **Exit**
 
 Exit leaves the watcher running on purpose: quitting the UI should not silently

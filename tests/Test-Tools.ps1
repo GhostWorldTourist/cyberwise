@@ -87,6 +87,13 @@ function Get-Console {
     return (& $Call 6>&1 2>&1 | Out-String)
 }
 
+# Write-Warning is stream 3, which Get-Console does not take. The Discord cap is
+# reported as a warning, so those tests need everything the tool emits.
+function Get-AllOutput {
+    param([scriptblock]$Call)
+    return (& $Call *>&1 | Out-String)
+}
+
 Write-Host "tool fixtures under $sandbox`n"
 
 # ============================================================ load order =====
@@ -174,6 +181,46 @@ else            { Ok  'the HTML footer redacts the install path by default' }
 $htmlPlain = Get-Profile -GameRoot $g -WithHtml -NoRedact
 if ($htmlPlain -match [regex]::Escape((Split-Path -Leaf $g))) { Ok 'the -NoRedact switch restores the real path' }
 else { Bad 'the -NoRedact switch restores the real path' 'the path was still redacted with -NoRedact' }
+
+# ============================================================ discord cap ====
+#
+# The markdown exists to be pasted into a help channel, and Discord does not
+# truncate an over-long message - it REFUSES it. So a report that quietly runs
+# past 2000 characters is one the user cannot send at all, and finds that out
+# while already stuck. The tool has to say so itself.
+#
+# A profile only runs long when a flag carries a lot of items, so the fixture is
+# an install whose archives and modlist entries all have long names.
+$capNames = 1..8 | ForEach-Object { "unlisted-$_-" + ('x' * 100) + '.archive' }
+$capGone  = 1..8 | ForEach-Object { "missing-$_-"  + ('x' * 100) + '.archive' }
+$capGame  = New-FixtureGame -Name 'discord-cap' -Archives $capNames -ModlistLines $capGone
+$capMd    = Join-Path $sandbox 'cap.md'
+$capOut   = Get-AllOutput { & $tools.Profile -GameRoot $capGame -Md $capMd -NoHtml }
+$capChars = (Get-Content -LiteralPath $capMd -Raw).Length
+
+if ($capChars -le 2000) {
+    Bad 'the markdown warns when it is too long to paste' `
+        "the fixture only produced $capChars characters, so the warning was never reachable - the test proves nothing"
+} elseif ($capOut -match '2000') {
+    Ok 'the markdown warns when it is too long to paste'
+} else {
+    Bad 'the markdown warns when it is too long to paste' `
+        "$capChars characters written and nothing said about the cap:`n$capOut"
+}
+
+# And it must stay quiet on a report that fits, or the warning is noise people
+# learn to scroll past. The clean fixture raises no flags at all, so its markdown
+# is the smallest this tool ever writes.
+$smallMd  = Join-Path $sandbox 'small.md'
+$smallOut = Get-AllOutput { & $tools.Profile -GameRoot $clean -Md $smallMd -NoHtml }
+$smallChars = (Get-Content -LiteralPath $smallMd -Raw).Length
+if ($smallChars -gt 2000) {
+    Skip 'a pasteable markdown says nothing about the cap' "even the minimal report is $smallChars characters"
+} elseif ($smallOut -match '2000') {
+    Bad 'a pasteable markdown says nothing about the cap' "warned about the cap on a $smallChars-character report"
+} else {
+    Ok 'a pasteable markdown says nothing about the cap'
+}
 
 # ================================================================== LZ4 ======
 #
@@ -467,9 +514,9 @@ $script:PatchStore = Join-Path $env:LOCALAPPDATA 'cyberwise\patches.json'   # re
 
 $stage = Join-Path $sandbox 'staging'
 function New-StagedMod {
-    param([string]$Folder, [string[]]$Files)
+    param([string]$Folder, [string[]]$Files, [string]$Root = $stage)
     foreach ($f in $Files) {
-        $full = Join-Path (Join-Path $stage $Folder) $f
+        $full = Join-Path (Join-Path $Root $Folder) $f
         New-Item -ItemType Directory -Path (Split-Path $full) -Force | Out-Null
         Set-Content -LiteralPath $full 'x' -NoNewline
     }
@@ -552,6 +599,135 @@ if ($mmConsole -match '(?i)unique ids|Credential Manager') {
 } else {
     Ok 'manifest: -NoNexus makes no network call'
 }
+
+# A manifest exists to be handed to somebody else, and the staging root it was
+# built from carries the Windows username. Nobody proof-reads a header before
+# pasting, so the safe form has to be the default one.
+#
+# BOTH outputs, not just the HTML. The markdown is the one that gets pasted into
+# a Discord thread, and it names the staging root in its own header line - that
+# leak shipped while the HTML header was already redacted.
+$mmHtml = Get-Content -LiteralPath $htmOut -Raw
+$mmLeaks = @(
+    if ($mm     -match "(?i)\\$([regex]::Escape($env:USERNAME))\b") { 'the Windows username is in the markdown' }
+    if ($mmHtml -match "(?i)\\$([regex]::Escape($env:USERNAME))\b") { 'the Windows username is in the HTML' }
+    if ($mm     -match [regex]::Escape($env:USERPROFILE))           { 'the full profile path is in the markdown' }
+    if ($mmHtml -match [regex]::Escape($env:USERPROFILE))           { 'the full profile path is in the HTML' }
+)
+if ($mmLeaks) { Bad 'manifest: both outputs redact the staging path by default' ($mmLeaks -join "`n") }
+else          { Ok  'manifest: both outputs redact the staging path by default' }
+
+# And -NoRedact has to actually turn it off in both, or the switch is a lie in
+# whichever output forgot it. The fixture lives under the temp dir, which is
+# inside the profile path, so an un-redacted header must contain it verbatim.
+$mdPlain  = Join-Path $sandbox 'manifest-plain.md'
+$htmPlain = Join-Path $sandbox 'manifest-plain.html'
+& $manifestTool -StagingRoot $stage -Out $mdPlain -HtmlOut $htmPlain -NoNexus -NoRedact `
+    -CachePath (Join-Path $sandbox 'mm-cache.json') -OverridePath (Join-Path $sandbox 'nsfw.json') *>$null
+$plainMd   = Get-Content -LiteralPath $mdPlain  -Raw
+$plainHtml = Get-Content -LiteralPath $htmPlain -Raw
+$notRestored = @(
+    if ($plainMd   -notmatch [regex]::Escape($env:USERPROFILE)) { 'the markdown was still redacted with -NoRedact' }
+    if ($plainHtml -notmatch [regex]::Escape($env:USERPROFILE)) { 'the HTML was still redacted with -NoRedact' }
+)
+if ($notRestored) { Bad 'manifest: -NoRedact restores the real staging path' ($notRestored -join "`n") }
+else              { Ok  'manifest: -NoRedact restores the real staging path' }
+
+# A manifest of any real load order is far past Discord's message cap, and the
+# same rule applies as to the profile: an over-long message is refused, not
+# trimmed. The tool cannot make an 800-mod inventory pasteable, so it says the
+# size and names the two things that do work.
+$bigStage = Join-Path $sandbox 'staging-big'
+1..40 | ForEach-Object { New-StagedMod -Root $bigStage -Folder "Padding Mod $_-$(1000 + $_)-1-0-1750000000" -Files @('archive\pc\mod\p.archive') }
+$bigMdOut = Join-Path $sandbox 'manifest-big.md'
+$bigConsole = Get-AllOutput {
+    & $manifestTool -StagingRoot $bigStage -Out $bigMdOut -NoHtml -NoNexus `
+        -CachePath (Join-Path $sandbox 'mm-cache.json') -OverridePath (Join-Path $sandbox 'nsfw.json')
+}
+$bigChars = (Get-Content -LiteralPath $bigMdOut -Raw).Length
+if ($bigChars -le 2000) {
+    Bad 'manifest: an unpasteable markdown says so' `
+        "40 mods only produced $bigChars characters, so the notice was never reachable - the test proves nothing"
+} elseif ($bigConsole -match '2000') {
+    Ok 'manifest: an unpasteable markdown says so'
+} else {
+    Bad 'manifest: an unpasteable markdown says so' `
+        "$bigChars characters written and nothing said about the cap:`n$bigConsole"
+}
+
+# =============================================================== feedback ====
+#
+# The report is written FOR a stranger on the internet, by a tool the user did
+# not read, out of text they did not check. Three ways that goes wrong, all of
+# them silent: it carries their username, it is too long for the channel it was
+# built for, or it states a fact nobody gave it.
+
+$reportTool = Join-Path $Root 'skills\cyberwise-feedback\tools\New-ProblemReport.ps1'
+$prOut      = Join-Path $sandbox 'problem-report.md'
+$prDiscord  = [IO.Path]::ChangeExtension($prOut, '.discord.md')
+
+# A stack trace is the realistic way a full path reaches a report - the user
+# pastes one in without reading it. Redaction has to cover the whole document,
+# not the fields the tool happens to know about.
+$prError = @"
+Get-Content: $env:USERPROFILE\repos\cyberwise\skills\cyberwise-hotkeys\tools\Get-Hotkeys.ps1:212
+Cannot find path '$env:USERPROFILE\Documents\nope.xml' because it does not exist.
+"@
+$prDetail = (1..60 | ForEach-Object { "Line $_ of a long description that somebody pasted in without trimming it." }) -join "`n"
+
+$prConsole = Get-AllOutput {
+    & $reportTool -Summary 'the hotkey sheet shows a key I rebound' -Detail $prDetail `
+        -Expected 'my binding, not the one the mod ships' -Area 'cyberwise-hotkeys' `
+        -ErrorText $prError -Out $prOut
+}
+$prFull  = Get-Content -LiteralPath $prOut -Raw
+$prShort = Get-Content -LiteralPath $prDiscord -Raw
+
+$problems = @(
+    if ($prFull -notmatch 'the hotkey sheet shows a key I rebound') { 'the summary is not in the report' }
+    if ($prFull -notmatch '(?m)^## What happened')                  { 'no "what happened" section' }
+    if ($prFull -notmatch '(?m)^## What I expected')                { 'no "what I expected" section' }
+    if ($prFull -notmatch '(?m)^## Environment')                    { 'no environment block' }
+    if ($prFull -notmatch 'cyberwise\s+\S')                         { 'the environment block names no cyberwise version' }
+)
+if ($problems) { Bad 'feedback: the report carries what the author needs' ($problems -join "`n") }
+else           { Ok  'feedback: the report carries what the author needs' }
+
+$prLeaks = @(
+    if ($prFull  -match [regex]::Escape($env:USERPROFILE)) { 'the profile path survived into the full report' }
+    if ($prShort -match [regex]::Escape($env:USERPROFILE)) { 'the profile path survived into the Discord form' }
+    if ($prFull  -match "(?i)$([regex]::Escape($env:USERNAME))")  { 'the account name is in the full report' }
+    if ($prShort -match "(?i)$([regex]::Escape($env:USERNAME))")  { 'the account name is in the Discord form' }
+)
+if ($prLeaks) { Bad 'feedback: a pasted stack trace is redacted too' ($prLeaks -join "`n") }
+else          { Ok  'feedback: a pasted stack trace is redacted too' }
+
+# The whole point of the second file. Discord refuses an over-long message, so
+# one that does not fit is one that never arrives.
+$prShortProblems = @(
+    if ($prShort.Length -gt 2000)      { "the Discord form is $($prShort.Length) characters - it would be refused" }
+    if ($prFull.Length -le 2000)       { 'the fixture was not long enough to need trimming - the test proves nothing' }
+    if ($prShort -notmatch 'dropped')  { 'it trimmed silently, so the sender thinks they pasted everything' }
+    if ($prShort -notmatch 'the hotkey sheet shows a key I rebound') { 'the summary was trimmed away - it took from the wrong end' }
+)
+if ($prShortProblems) { Bad 'feedback: the Discord form fits one message and says what it dropped' ($prShortProblems -join "`n") }
+else                  { Ok  'feedback: the Discord form fits one message and says what it dropped' }
+
+# "not provided" is a fact. A guessed game path produces a plausible report about
+# a game nobody was playing, which is worse than a blank.
+$prNoGame = Join-Path $sandbox 'pr-nogame.md'
+& $reportTool -Summary 'x' -Out $prNoGame *>$null
+$prNoGameText = Get-Content -LiteralPath $prNoGame -Raw
+$prBogus = Join-Path $sandbox 'pr-bogus.md'
+& $reportTool -Summary 'x' -GameRoot (Join-Path $sandbox 'no-such-game') -Out $prBogus *>$null
+$prBogusText = Get-Content -LiteralPath $prBogus -Raw
+$prGuesses = @(
+    if ($prNoGameText -notmatch 'game patch\s+not provided') { 'with no -GameRoot it did not say the patch was not provided' }
+    if ($prNoGameText -match 'game patch\s+\d+\.\d+')        { 'it reported a patch version nobody gave it' }
+    if ($prBogusText  -match 'game patch\s+\d+\.\d+')        { 'a path with no game in it still produced a version' }
+)
+if ($prGuesses) { Bad 'feedback: an unknown game patch is reported as unknown' ($prGuesses -join "`n") }
+else            { Ok  'feedback: an unknown game patch is reported as unknown' }
 
 # ================================================================ hotkeys ====
 #
@@ -815,6 +991,75 @@ if ($Quick) {
                 if ($distinct.Count -ge 5) { Ok 'tray: the icon renders more than a flat swatch' }
                 else { Bad 'tray: the icon renders more than a flat swatch' "only $($distinct.Count) distinct colours in the sampled area" }
             } finally { $img.Dispose() }
+        }
+
+        # "Copy crash summary" is there so somebody can paste it into a help
+        # channel, and Discord refuses a message over 2000 characters outright.
+        # A summary that runs long therefore does not arrive short - it does not
+        # arrive, and the person retypes it by hand while already stuck.
+        #
+        # Testing this means calling the real Paste.Fit, which is why it is a
+        # public class rather than a private helper. Loading a Framework 4.8
+        # assembly into pwsh (which runs on .NET 8) is not reliable, so instead a
+        # tiny harness is compiled TOGETHER WITH the shipped source by the same
+        # csc, with /main: choosing the entry point. What runs is the code that
+        # ships, not a copy of it.
+        $harnessSrc = Join-Path $sandbox 'FitHarness.cs'
+        Set-Content -LiteralPath $harnessSrc -Encoding UTF8 -Value @'
+using System;
+using System.Text;
+using Cyberwise;
+
+internal static class FitHarness
+{
+    private static void Main()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Cyberpunk 2077 crash summary");
+        for (int i = 0; i < 20; i++) sb.AppendLine("  crash " + i + " " + new string('x', 200));
+        string big = Paste.Fit(sb.ToString(), Paste.DiscordLimit);
+
+        Console.WriteLine("LEN=" + big.Length);
+        Console.WriteLine("HEADER=" + (big.StartsWith("Cyberpunk 2077 crash summary") ? "kept" : "lost"));
+        Console.WriteLine("NEWEST=" + (big.Contains("crash 0 ") ? "kept" : "lost"));
+        Console.WriteLine("OLDEST=" + (big.Contains("crash 19 ") ? "kept" : "dropped"));
+        Console.WriteLine("SAIDSO=" + (big.Contains("more line(s)") ? "yes" : "no"));
+
+        string small = "Cyberpunk 2077 crash summary" + Environment.NewLine + "crashes recorded: 0";
+        Console.WriteLine("SHORT=" + (Paste.Fit(small, Paste.DiscordLimit) == small ? "untouched" : "mangled"));
+
+        string oneLine = new string('y', 5000);
+        Console.WriteLine("ONELINE=" + Paste.Fit(oneLine, Paste.DiscordLimit).Length);
+    }
+}
+'@
+        $fitExe = Join-Path $sandbox 'FitHarness.exe'
+        $traySrc = Join-Path $Root 'app\CyberwiseTray.cs'
+        & $csc /nologo /target:exe /main:FitHarness /out:"$fitExe" `
+            /r:System.dll /r:System.Core.dll /r:System.Drawing.dll `
+            /r:System.Windows.Forms.dll /r:System.Management.dll `
+            "$harnessSrc" "$traySrc" 2>&1 | Out-Null
+
+        if (-not (Test-Path -LiteralPath $fitExe)) {
+            Bad 'tray: a pasted crash summary fits a Discord message' 'the harness would not compile against the shipped source'
+        } else {
+            $fitFile = Join-Path $sandbox 'fit.txt'
+            Start-Process -FilePath $fitExe -NoNewWindow -Wait -RedirectStandardOutput $fitFile
+            $fit = @{}
+            foreach ($line in (Get-Content -LiteralPath $fitFile)) {
+                if ($line -match '^(\w+)=(.*)$') { $fit[$matches[1]] = $matches[2] }
+            }
+            $problems = @(
+                if ([int]$fit['LEN'] -gt 2000)   { "a 4KB summary came back at $($fit['LEN']) characters - Discord would refuse it" }
+                if ($fit['HEADER'] -ne 'kept')   { 'the header line was trimmed away, so the paste no longer says what it is' }
+                if ($fit['NEWEST'] -ne 'kept')   { 'the newest crash was dropped - trimming took from the wrong end' }
+                if ($fit['OLDEST'] -ne 'dropped'){ 'nothing was actually dropped, so the length above is a coincidence' }
+                if ($fit['SAIDSO'] -ne 'yes')    { 'it trimmed silently, so the reader believes they pasted everything' }
+                if ($fit['SHORT'] -ne 'untouched') { 'a summary that already fits was rewritten anyway' }
+                if ([int]$fit['ONELINE'] -gt 2000) { "a single 5000-character line came back at $($fit['ONELINE'])" }
+            )
+            if ($problems) { Bad 'tray: a pasted crash summary fits a Discord message' ($problems -join "`n") }
+            else           { Ok  'tray: a pasted crash summary fits a Discord message' }
         }
     }
 }

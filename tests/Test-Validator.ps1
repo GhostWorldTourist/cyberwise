@@ -33,6 +33,11 @@ $tmp       = Join-Path ([IO.Path]::GetTempPath()) ("cw-validator-" + [guid]::New
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo 'skills') -Destination $tmp -Recurse -Force
 
+# The issue forms come too, or the check that reads them has nothing to read and
+# passes vacuously - which would look identical to passing for a good reason.
+$ghSrc = Join-Path $repo '.github'
+if (Test-Path -LiteralPath $ghSrc) { Copy-Item -LiteralPath $ghSrc -Destination $tmp -Recurse -Force }
+
 function Invoke-Validator {
     # 6>&1 is load-bearing: the validator reports with Write-Host, which writes to
     # the INFORMATION stream, not stdout. Capturing only 2>&1 yields an empty
@@ -179,6 +184,27 @@ $doomedOrig = Get-Content -LiteralPath $doomed -Raw
 Assert-Catches 'a skill directory with no SKILL.md at all' 'has a SKILL.md' `
     { Remove-Item -LiteralPath $doomed -Force } `
     { $doomedOrig | Set-Content -LiteralPath $doomed -NoNewline }
+
+# -- issue forms --------------------------------------------------------------
+# A form field with no label renders as an unexplained empty box, and the report
+# comes back without the thing it was asking for. GitHub says nothing about it,
+# and nobody opens issues against their own repo to find out.
+$form = Join-Path $tmp '.github\ISSUE_TEMPLATE\bug_report.yml'
+if (Test-Path -LiteralPath $form) {
+    $formOrig = Get-Content -LiteralPath $form -Raw
+
+    Assert-Catches 'an issue form field with no label' 'issue form' `
+        { $formOrig -replace '(?m)^      label: What happened\r?\n', '' | Set-Content -LiteralPath $form -NoNewline } `
+        { $formOrig | Set-Content -LiteralPath $form -NoNewline }
+
+    # A duplicate id is worse than a missing label: GitHub rejects the entire
+    # file, so the template vanishes from the chooser rather than rendering badly.
+    Assert-Catches 'two issue form fields sharing an id' 'issue form' `
+        { $formOrig.Replace('id: expected', 'id: what-happened') | Set-Content -LiteralPath $form -NoNewline } `
+        { $formOrig | Set-Content -LiteralPath $form -NoNewline }
+} else {
+    Write-Host 'skip  issue form faults - no .github/ISSUE_TEMPLATE in this tree' -ForegroundColor Yellow
+}
 
 # ----------------------------------------------------------------------------
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

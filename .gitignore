@@ -11,3 +11,11 @@ cp2077-system-profile*.html
 cp2077_hotkeys_cheatsheet*.html
 nsfw-overrides.json
 .nexus-cache.json
+
+# A problem report carries whatever error text the user pasted in, and
+# New-ProblemReport.ps1 defaults to the current directory - so a run from the
+# repo root lands one here.
+problem-report*.md
+
+# Per-machine agent settings. Not part of the family, and they name local paths.
+.claude/
