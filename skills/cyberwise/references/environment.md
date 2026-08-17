@@ -24,6 +24,39 @@ Not every mod uses Mod Settings. Others keep configuration in a CET mod's own
 `.json`, in a `.reds` constant, or in a menu of their own. There is no single
 settings store; work out which one the mod in question uses before quoting a value.
 
+### The game's own options are a separate store, and they are the authority
+
+```
+%LOCALAPPDATA%\CD Projekt Red\Cyberpunk 2077\UserSettings.json
+```
+
+Every option the engine exposes is declared here - graphics, gameplay, hidden
+entries with no menu control - with its group, its type, its permitted `values`,
+its `default_index` and the user's current one. That declaration is the game
+speaking about its own option, so it settles questions no mod file can: whether
+an option exists on this patch, what it can be set to, and whether a mod that
+writes it is writing something real.
+
+Read it before accepting any mod's account of what an engine option is. Mods that
+drive graphics settings ship their own names, comments and tooltips for these
+options, and those are the author's shorthand, not the engine's definition. A
+label naming a feature does not mean the option only acts while that feature is
+on - gating is a property of the engine, and only this file and the game's
+behaviour can tell you about it.
+
+This is also where "that setting does nothing" goes wrong. A control can reach
+the game through at least four separate layers - the mod's own config files, the
+option registry above, a second control in the same mod writing into the same
+subsystem, and a native RED4ext plugin doing it in compiled code where no text
+search will ever find it. Finding nothing in the first says nothing about the
+other three, so a negative from one layer is worth stating as exactly that.
+
+When the mod's author contradicts the reading, that is not proof either - authors
+describe old versions and misremember their own controls - but it is the
+strongest available signal that a label was trusted or a layer was never opened.
+Defending a reading you cannot support and folding to a claim you have not
+checked cost the same turn, and neither one establishes who was right.
+
 ## Establish how the install is assembled FIRST
 
 Almost every technique in this skill reads the game directory. Whether that

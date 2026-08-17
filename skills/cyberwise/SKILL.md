@@ -53,6 +53,12 @@ silent parse failure was read as a finding - `#` treated as a comment in
 `Start-Process` fail so quietly it was mistaken for a platform limit. Capture
 stderr, check the exit code, confirm the process exists.
 
+**A negative is only as wide as the layer you searched.** "It does nothing" is a
+far stronger claim than "it does X", and one grep over one file cannot carry it.
+Name the layers the thing could act through - the mod's own config, the game's
+option registry, another control on the same subsystem, a native plugin - and
+until they are open, report "nothing in `<layer>`", not "nothing".
+
 **Find out how the install is assembled before you trust the filesystem** -
 manual, Vortex, MO2 and Wabbajack lists show completely different pictures on
 disk. Two that bite hardest:
@@ -95,6 +101,12 @@ declares what the author shipped, not what the user set. Keybinds are the worst
 case - there are **five** stores, not one, and a key you cannot find is not a key
 that is free (`cyberwise-hotkeys`).
 
+**A mod's own labels describe the mod, not the engine.** That rule is about
+values; this one is about meaning. Comments, tooltips, INI section names and
+debug captions are the author's shorthand, and routinely misstate what a setting
+reaches or what gates it. Treat them as a lead; the game's own option registry
+declares the option itself and outranks them (`references/environment.md`).
+
 **Always dereference an internal name to something the user can find.** Folder
 names, TweakXL namespaces, redscript modules and archive filenames are authored by
 mod authors for themselves and routinely bear no resemblance to the name the user
@@ -119,6 +131,11 @@ user who can disprove one is doing the most valuable thing anybody does here.
 Offer to write it up - `cyberwise-feedback` gathers the facts and hands them a
 finished message. That applies just as much when the thing that got it wrong was
 you rather than the notes.
+
+**When a mod's author contradicts your reading of their mod, re-derive.** Their
+word is not proof either, but it is a strong signal that a label was trusted or
+a layer was never opened. Check again at the authoritative source before either
+defending the reading or folding to the claim.
 
 ## Where records live - one place, agent-neutral
 
