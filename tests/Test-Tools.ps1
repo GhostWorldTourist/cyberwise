@@ -825,6 +825,65 @@ if ($hkErr) {
     }
 }
 
+# ========================================================= resource paths ====
+#
+# The table turns archive hashes into file names, which is the difference between
+# "3 of 16 files lost" and naming the skin material template. Two ways it can be
+# wrong, and both are silent: it can resolve the WRONG path (a reader bug in the
+# binary search or the front-coded decode), or it can quietly resolve nothing at
+# all and leave every report back where it started.
+
+$resolver = Join-Path $Root 'skills\cyberwise-conflicts\tools\Resolve-ResourcePath.ps1'
+$cwpx     = Join-Path $Root 'skills\cyberwise-conflicts\data\resource-paths-2.31.cwpx'
+
+if (-not (Test-Path -LiteralPath $cwpx)) {
+    Skip 'resource paths: hashes resolve to names' 'the vendored table is not in this checkout'
+} else {
+    . $resolver
+
+    # FNV-1a is defined on WRAPPING 64-bit arithmetic, and PowerShell does not
+    # wrap - `[uint64] * [uint64]` promotes to double and then fails the cast.
+    # The first version produced 0xCBF29CE484222337 for every input, which is the
+    # offset basis XORed once: a constant, and a plausible-looking one.
+    $knownPath = 'base\worlds\03_night_city\_compiled\default\exterior_-14_-18_1_1.streamingsector'
+    $h = Get-ResourceHash $knownPath
+    # [Convert]::ToUInt64(..,16), NOT a 0x literal. PowerShell parses a hex
+    # literal with the high bit set as a NEGATIVE Int64, so `[uint64]0x8000...`
+    # throws at runtime - and this assertion silently vanished from the suite
+    # rather than failing, because a thrown statement prints to stderr and skips
+    # both branches. Half of all 64-bit hashes have that bit set.
+    $expect = [Convert]::ToUInt64('800008F5BA040F7E', 16)
+    if ($h -eq $expect) { Ok 'resource paths: FNV-1a wraps at 64 bits' }
+    else { Bad 'resource paths: FNV-1a wraps at 64 bits' ("hashed to 0x{0:X16}, expected 0x800008F5BA040F7E" -f $h) }
+
+    if ((Resolve-ResourceHash -Hash $h) -eq $knownPath) { Ok 'resource paths: a known hash resolves to its path' }
+    else { Bad 'resource paths: a known hash resolves to its path' "got '$(Resolve-ResourceHash -Hash $h)'" }
+
+    # Block boundaries. Paths are front-coded in blocks, so each entry is
+    # rebuilt from the one before it - an off-by-one in the walk returns a
+    # NEIGHBOURING path, which is the worst kind of wrong because it looks
+    # entirely reasonable in a conflict report.
+    $edges = @{
+        'base\characters\common\skin\face\microdetail_n.xbm' = $null
+        'base\materials\skin.mt'                             = $null
+        'engine\materials\defaults\default.sp'               = $null
+    }
+    $wrong = @()
+    foreach ($p in @($edges.Keys)) {
+        $got = Resolve-ResourceHash -Hash (Get-ResourceHash $p)
+        if ($got -ne $p) { $wrong += "$p -> '$got'" }
+    }
+    if ($wrong) { Bad 'resource paths: several real paths round-trip exactly' ($wrong -join "`n") }
+    else        { Ok  'resource paths: several real paths round-trip exactly' }
+
+    # A miss must be $null, never a nearby path. The table covers the BASE GAME,
+    # so a mod's own resource legitimately misses - and a reader that returned
+    # its binary-search neighbour would name an innocent file in every report.
+    $miss = Resolve-ResourceHash -Hash ([uint64]0x0123456789ABCDEF)
+    if ($null -eq $miss) { Ok 'resource paths: an unknown hash returns nothing, not a neighbour' }
+    else { Bad 'resource paths: an unknown hash returns nothing, not a neighbour' "invented '$miss'" }
+}
+
 # ================================================================= bisect ====
 #
 # A bisect round is twenty repetitions of "move this set, record it, put it

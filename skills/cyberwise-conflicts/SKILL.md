@@ -69,6 +69,13 @@ enabled, and contributing nothing. This is the single most common silent failure
 **Compare loss count against total file count.** Losing 1 file of 60 is a cosmetic
 overlap. Losing 1 of 1 is a dead mod.
 
+**But the count is not the answer - the file names are.** `-Explain` resolves the
+contested hashes to real paths from the vendored table, and *which* files a mod
+loses routinely inverts what the count implies. One skin mod here kept 13 of its
+16 files and the three it lost were `base\materials\skin.mt`, the face
+microdetail normal, and a shader default: it wins the arithmetic and loses the
+material. A percentage cannot tell you that.
+
 **But an inert ARCHIVE does not mean an inert MOD.** Before advising an uninstall,
 check the rest of the payload. A mod's real content may be a CET Lua file, an
 entSpawner registration, a `.reds` script or an `.xl` - none of which appear in an
@@ -114,11 +121,13 @@ mentioned. `references/load-order.md`.
 | tool | what it does |
 |---|---|
 | `tools/Repair-LoadOrder.ps1` | audits `modlist.txt` and the archives against each other, and can repair the order |
+| `tools/Resolve-ResourcePath.ps1` | turns an archive hash into a real file path, and back |
 
 ```powershell
 .\tools\Repair-LoadOrder.ps1              # report only
 .\tools\Repair-LoadOrder.ps1 -Fix         # reorder, and place unlisted archives
 .\tools\Repair-LoadOrder.ps1 -SkipScan    # inventory and rules only, no index reads
+.\tools\Repair-LoadOrder.ps1 -Explain 'X.archive'   # which FILES it loses, and to whom
 ```
 
 Three independent checks: **inventory** (entries with no file, archives with no

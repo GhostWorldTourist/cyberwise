@@ -34,7 +34,37 @@ Implement it in a language with wrapping 64-bit multiply. PowerShell throws on
 
 ## Resolving hashes back to paths
 
-Two dictionaries, both incomplete:
+**This family vendors a table, and it is the first stop.**
+`data/resource-paths-2.31.cwpx` carries **751,710 paths - 99.97% of base-game and
+EP1 files** for 2.31, derived from Ultrapunk's resource-path database (CC BY 4.0;
+`data/ATTRIBUTION.md`). No credentials, no other mod installed, no network.
+
+```powershell
+. tools\Resolve-ResourcePath.ps1
+Resolve-ResourceHash -Hash ([Convert]::ToUInt64('800008F5BA040F7E', 16))
+Get-ResourceHash 'base\materials\skin.mt'
+tools\Repair-LoadOrder.ps1 -Explain 'Preem Skin.archive'   # names the lost files
+```
+
+**A miss is information, not a gap.** The table covers the *base game*, so a hash
+it does not know is usually a **mod's own resource** - a path the game never had.
+Say which of the two it is; "unknown hash" and "not a base-game file" lead
+somewhere different.
+
+Two traps here produced silently wrong answers before they were understood:
+
+- **PowerShell does not wrap on `UInt64` overflow.** It promotes to `double` and
+  then fails the cast, so a naive FNV loop returns the offset basis XORed once -
+  a constant - for every input. Use `BigInteger` with an explicit 64-bit mask, as
+  `Resolve-ResourcePath.ps1` does, or an `Add-Type` helper.
+- **A hex literal with the high bit set parses as a negative `Int64`**, so
+  `[uint64]0x800008F5BA040F7E` throws at runtime. That is half of all 64-bit
+  hashes. Use `[Convert]::ToUInt64('800008F5BA040F7E', 16)`. Upstream stores
+  hashes signed for the same reason - SQLite has no unsigned 64-bit type - so
+  converting on the way in and out is not optional.
+
+The older dictionaries still matter where the table misses, or on a game version
+it does not cover. Two, both incomplete:
 
 - **Codeware's `KnownHashes.txt`** - *if Codeware is present.* It ships at
   `red4ext\plugins\Codeware\Data\` under the game root, and Codeware is a mod

@@ -48,7 +48,11 @@ param(
     [string] $RulesFile,
     [switch] $Fix,
     [switch] $PruneStale,
-    [switch] $SkipScan
+    [switch] $SkipScan,
+    # Name the files one archive loses, and to whom - and what it beats. Needs
+    # the vendored resource-path table to turn hashes into paths; without it the
+    # relationships still print, as hashes.
+    [string] $Explain
 )
 
 $ErrorActionPreference = 'Stop'
@@ -320,9 +324,16 @@ if (-not $SkipScan) {
         if ($kv.Value.Count -lt 2) { continue }
         $ranked = $kv.Value | Sort-Object $rank
         foreach ($l in $ranked[1..($ranked.Count - 1)]) {
-            if (-not $lost.ContainsKey($l)) { $lost[$l] = @{ Count = 0; To = @{} } }
+            if (-not $lost.ContainsKey($l)) { $lost[$l] = @{ Count = 0; To = @{}; Hashes = @{} } }
             $lost[$l].Count++
             $lost[$l].To[$ranked[0]] = 1 + $lost[$l].To[$ranked[0]]
+            # Keep the hashes, not just the tally. Naming the FILE is the whole
+            # point of a conflict report - "3 of 16 lost" tells a user nothing
+            # they can act on, and this is the data that turns it into a path.
+            if (-not $lost[$l].Hashes.ContainsKey($ranked[0])) {
+                $lost[$l].Hashes[$ranked[0]] = New-Object 'System.Collections.Generic.List[UInt64]'
+            }
+            $lost[$l].Hashes[$ranked[0]].Add($kv.Key)
         }
     }
 
@@ -352,11 +363,66 @@ if (-not $SkipScan) {
 
     $partial = @($lost.Keys | Where-Object { $total[$_] -gt 0 -and $lost[$_].Count -lt $total[$_] })
     Write-Host "`n  $($partial.Count) archive(s) lose some but not all of their files (normal for overlapping retextures)."
-    Write-Host "  Re-run with -Verbose to list them."
+    Write-Host "  Re-run with -Verbose to list them, or -Explain <archive> to name the files."
     if ($VerbosePreference -ne 'SilentlyContinue') {
         foreach ($p in ($partial | Sort-Object $rank)) {
             $pos = if ($idx.ContainsKey($p)) { $idx[$p] + 1 } else { 'UNLISTED' }
             Write-Host ("    line {0,5}  {1,-58} {2}/{3} files lost" -f $pos, $p, $lost[$p].Count, $total[$p])
+        }
+    }
+
+    # ---------------------------------------------------------- explain ------
+    # One archive, named files, both directions. This is the question every
+    # conflict prompts - "which mod is beating this one, and over what?" - and
+    # until the resource-path table was vendored it could only ever be answered
+    # with a count.
+    if ($Explain) {
+        $target = @($total.Keys | Where-Object { $_ -eq $Explain -or $_ -like "*$Explain*" })
+        if ($target.Count -ne 1) {
+            Write-Host ''
+            if ($target.Count -eq 0) { Write-Bad "no archive matching '$Explain'" }
+            else {
+                Write-Host "'$Explain' matches $($target.Count) archives:" -ForegroundColor Yellow
+                $target | ForEach-Object { Write-Host "  $_" }
+            }
+        } else {
+            $t = $target[0]
+            $tpos = if ($idx.ContainsKey($t)) { $idx[$t] + 1 } else { 'UNLISTED' }
+            Write-Host ''
+            Write-Host "$t (line $tpos) - carries $($total[$t]) file(s)" -ForegroundColor Cyan
+
+            $resolver = Join-Path $PSScriptRoot 'Resolve-ResourcePath.ps1'
+            $canName = Test-Path -LiteralPath $resolver
+            if ($canName) { . $resolver }
+            else { Write-Host '  (resource-path table not present - hashes cannot be named)' -ForegroundColor DarkYellow }
+
+            if ($lost.ContainsKey($t)) {
+                Write-Host "  LOSES $($lost[$t].Count) file(s):" -ForegroundColor Yellow
+                foreach ($w in ($lost[$t].To.Keys | Sort-Object $rank)) {
+                    $wp = if ($idx.ContainsKey($w)) { $idx[$w] + 1 } else { 'UNLISTED' }
+                    Write-Host "    to $w (line $wp):" -ForegroundColor DarkGray
+                    foreach ($h in $lost[$t].Hashes[$w]) {
+                        $name = if ($canName) { Resolve-ResourceHash -Hash $h } else { $null }
+                        # An unresolved hash is not an error: the table covers the
+                        # BASE GAME, so a miss usually means the file is a mod's
+                        # own resource. Say which it is rather than printing a
+                        # bare number and letting the reader assume.
+                        if ($name) { Write-Host "      $name" -ForegroundColor DarkGray }
+                        else { Write-Host ("      0x{0:X16}  (not a base-game path - probably mod-added)" -f $h) -ForegroundColor DarkGray }
+                    }
+                }
+            } else {
+                Write-Ok "loses nothing - it wins every file it ships"
+            }
+
+            $beats = @($lost.Keys | Where-Object { $lost[$_].To.ContainsKey($t) } | Sort-Object $rank)
+            if ($beats.Count) {
+                Write-Host "  BEATS:" -ForegroundColor Green
+                foreach ($b in $beats) {
+                    $bp = if ($idx.ContainsKey($b)) { $idx[$b] + 1 } else { 'UNLISTED' }
+                    Write-Host "    $b (line $bp) loses $($lost[$b].To[$t]) file(s) to it" -ForegroundColor DarkGray
+                }
+            }
         }
     }
 }
