@@ -882,6 +882,31 @@ $restored = @(
 if ($restored) { Bad 'bisect: restore puts the round back from its manifest' ($restored -join "`n") }
 else           { Ok  'bisect: restore puts the round back from its manifest' }
 
+# -Plan has to answer the same question as arming, without touching anything. A
+# dry run that moves files is not a dry run, and one that hides a bad name is
+# worse than none - the point is to find the bad name before the round.
+$planOut = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'P' -Park @('beta', 'not-a-mod') -Plan -RecordDir $brecs }
+$planProblems = @(
+    if ($planOut -notmatch 'would park')                                                { 'it did not say what would move' }
+    if ($planOut -notmatch 'NO MATCH')                                                  { 'it did not name the unresolvable entry' }
+    if (-not (Test-Path -LiteralPath (Join-Path $bgame 'archive\pc\mod\beta.archive'))) { 'the plan moved a file' }
+    if (Test-Path -LiteralPath (Join-Path $brecs 'P.json'))                             { 'the plan wrote a manifest' }
+)
+if ($planProblems) { Bad 'bisect: -Plan reports without touching anything' ($planProblems -join "`n") }
+else               { Ok  'bisect: -Plan reports without touching anything' }
+
+# A round is armed while the manager still believes the mods are deployed, so any
+# deployment silently puts them all back. That round then scores as a result on a
+# configuration nobody recorded - the exact false answer this whole file is
+# organised around.
+Set-Content -LiteralPath (Join-Path $sandbox 'cut-undo.txt') "beta`n"
+& $bisectTool -GameRoot $bgame -Round 'D' -Park (Join-Path $sandbox 'cut-undo.txt') -RecordDir $brecs *>$null
+Set-Content -LiteralPath (Join-Path $bgame 'archive\pc\mod\beta.archive') 'redeployed' -NoNewline
+$statusOut = Get-AllOutput { & $bisectTool -GameRoot $bgame -Status -RecordDir $brecs }
+if ($statusOut -match 'back in the game directory') { Ok 'bisect: a round the manager undid is reported as void' }
+else { Bad 'bisect: a round the manager undid is reported as void' "status did not notice a parked file had reappeared:`n$statusOut" }
+& $bisectTool -GameRoot $bgame -Round 'D' -Restore -RecordDir $brecs *>$null
+
 # A file missing from the park folder means something else moved it - a redeploy,
 # a cleanup, another round - and every round since is suspect. Saying so is the
 # whole value; restoring what is left and reporting success is the failure.

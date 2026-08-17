@@ -106,6 +106,16 @@ be armed in seconds rather than minutes.** On a long bisect that last one wins
 most of the time: parking is scriptable and recordable, and a manager's UI is
 neither.
 
+**Under a hardlink-deploying manager, parking is cheaper than it looks.** Every
+file in the game tree is a second name for the staging inode, so moving the
+game-side name hides the mod and loses nothing - the staging copy is the same
+data, still there, still the manager's. Restoring is a rename back.
+
+**Move, never copy.** A copy makes a new inode, and the file the game then loads
+is no longer linked to staging: the manager's next deployment sees a file it did
+not place, and any later update to that mod silently stops reaching the game.
+`Move-Item`, always.
+
 The cost of choosing parking is that the manager's picture is now stale, so:
 
 - **Treat a deployment during a bisect as voiding the round.** If the manager
@@ -138,7 +148,45 @@ and a full redeploy.
    `*.xl`, all `*.archive`. Four launches tells you which *kind* of mod is at fault
    and halves the search space cheaply. Skip any layer the install does not have -
    an archives-only list has three of these to test, not four.
-3. **Then binary search within the guilty layer.**
+3. **Then search within the guilty layer - but read the next section before you
+   assume halving is the search.**
+
+## A failing round narrows nothing
+
+This corrects advice this file used to give, and the correction matters more than
+anything else on this page. It comes from `sulskill`, the same-shaped skill family
+for another game, where the assumption below cost about a dozen launches before
+anyone noticed it was an assumption.
+
+**Disable half, launch, keep the half that still fails** is wrong, and wrong in
+the way that looks like progress. It assumes **exactly one culprit**. Two mods
+that each break the same thing on their own make every half fail, because the
+other cause is still enabled - so each round "clears" innocent and guilty alike
+and the search narrows into a region that never held the whole answer. Nothing
+errors. The rounds keep halving. The report looks like a bisect.
+
+The asymmetry is the whole method:
+
+| round | what it proves |
+|---|---|
+| **clean** | every cause is inside the set you disabled |
+| **failing** | only that at least one cause is still enabled |
+
+So while you are still halving, a failing round is not evidence about any
+individual mod in it.
+
+**Once any round comes back clean, invert.** You now have a proven base: hold it
+disabled and add mods *back* in groups. From then on both outcomes are
+informative, because the complement is already known clean. Add-back is slower per
+round and finishes sooner.
+
+**A mod is named as a cause only by adding it back, alone, to a proven-clean base
+and watching it fail.** Never by elimination. An answer reached by elimination is
+the same claim as "everything else was innocent", which no failing round supports.
+
+This is also why the validation rule below is not optional bookkeeping: restoring
+everything and withholding only the suspect is the add-back test, run once more
+against the full order.
 
 `.xl` files deserve early suspicion for anything that only manifests on a **new
 game**. Quest-graph rewrites (`intercept: true` entries) only execute when the

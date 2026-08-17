@@ -259,6 +259,14 @@ Assert-Detects 'the Discord form no longer trimmed to fit a message' $reportRel 
 # PowerShell's own trap, and it shipped: $hash[$missingKey] is $null, @($null) is
 # an array of ONE, and Join-Path with a null tail resolves to the root - so every
 # layer a mod did NOT ship reported "1 of 1 file(s) deployed".
+# A round is armed while the manager still believes the mods are deployed, so a
+# deployment puts them back without anyone noticing. Not checking is how a round
+# scores a result on a configuration nobody recorded.
+Assert-Detects 'a bisect status that never checks whether the manager undid the round' $bisectRel `
+    'if (Test-Path -LiteralPath (Join-Path $GameRoot $item.Rel)) { $undone += "$($r.Round): $($item.Rel)" }' `
+    '# mutation: no re-deploy check' `
+    'manager undid is reported as void'
+
 # The quiet one. Parking the names that happen to resolve and shrugging at the
 # rest produces a round that exists in no manifest, and its result scores exactly
 # like a real one.

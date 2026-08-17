@@ -67,8 +67,10 @@ file mid-test, and on MO2 the archives may not physically be there at all.
 **When you do bisect: arm the round AND launch the game yourself.**
 
 ```powershell
+tools\Invoke-BisectRound.ps1 -GameRoot '<path>' -Round C -Park cut3.txt -Plan
 tools\Invoke-BisectRound.ps1 -GameRoot '<path>' -Round C -Park cut3.txt -Launch
 tools\Invoke-BisectRound.ps1 -GameRoot '<path>' -Round C -Restore
+tools\Invoke-BisectRound.ps1 -GameRoot '<path>' -Status
 ```
 
 The tester has exactly one job that cannot be automated - looking at the screen
@@ -82,6 +84,13 @@ away".
 
 **The verdict stays theirs.** No watcher can tell a livelock from a loaded game
 sitting at a menu.
+
+**And a failing round narrows nothing.** Halve-and-keep-the-failing-half assumes
+exactly one culprit; with two, every half fails and each round clears innocent and
+guilty alike. A *clean* round is the informative one - it proves every cause sits
+in the set you disabled - so once you get one, invert and add mods back in groups.
+**Name a cause only by adding it back alone to a proven-clean base.** Never by
+elimination. `references/bisecting.md`.
 
 When halving has named the mod but not what it is doing, `bisecting.md` also
 covers **guards** - a throwaway one-function mod that logs the value separating

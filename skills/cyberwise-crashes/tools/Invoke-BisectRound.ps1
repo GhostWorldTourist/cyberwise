@@ -42,8 +42,15 @@ param(
     # Put a round's files back, from its manifest.
     [switch] $Restore,
 
-    # Show what is parked right now, and by which round.
+    # Show what is parked right now, by which round, and whether the mod manager
+    # has quietly undone any of it.
     [switch] $Status,
+
+    # Resolve the list and report what would move, without moving anything. Worth
+    # running first on a list somebody typed: the failure it catches is a name
+    # that matches nothing, which parks nothing and scores as "the fault went
+    # away".
+    [switch] $Plan,
 
     # Start the game after parking, the way this install normally starts it.
     [switch] $Launch,
@@ -91,11 +98,29 @@ if ($Status) {
         Write-Host '  no rounds recorded on this install' -ForegroundColor DarkGray
         exit 0
     }
+    $undone = @()
     foreach ($m in (Get-ChildItem -LiteralPath $recordDir -Filter '*.json' | Sort-Object LastWriteTime)) {
         $r = Get-Content -LiteralPath $m.FullName -Raw | ConvertFrom-Json
         $state = if ($r.RestoredAt) { "restored $($r.RestoredAt)" } else { 'PARKED' }
         $colour = if ($r.RestoredAt) { 'DarkGray' } else { 'Yellow' }
         Write-Host ("  {0,-10} {1,-22} {2,4} item(s)  {3}" -f $r.Round, $r.ParkedAt, @($r.Items).Count, $state) -ForegroundColor $colour
+
+        # HAS THE MANAGER UNDONE IT? A round is armed by moving files out while
+        # the manager still believes they are deployed - which is what makes
+        # arming instant, and is also why any deployment silently puts them all
+        # back. A round that quietly re-armed itself scores as a result, and the
+        # configuration tested is not the one in the manifest.
+        if (-not $r.RestoredAt) {
+            foreach ($item in $r.Items) {
+                if (Test-Path -LiteralPath (Join-Path $GameRoot $item.Rel)) { $undone += "$($r.Round): $($item.Rel)" }
+            }
+        }
+    }
+    if ($undone.Count) {
+        Write-Host ''
+        Write-Host "$($undone.Count) parked item(s) are back in the game directory:" -ForegroundColor Red
+        $undone | Select-Object -First 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkRed }
+        Write-Host '  A deployment ran during the round. Whatever you tested was not the configuration recorded - re-arm it.' -ForegroundColor DarkRed
     }
     $stray = if (Test-Path -LiteralPath $parkRoot) { @(Get-ChildItem -LiteralPath $parkRoot -Recurse -File).Count } else { 0 }
     Write-Host ''
@@ -172,10 +197,10 @@ function Resolve-ModItem {
 }
 
 if (-not $Park) {
-    throw "Nothing to do. Pass -Park (names or a list file), -Restore, or -Status."
+    throw "Nothing to do. Pass -Park (names or a list file), -Restore, -Status or -Plan."
 }
 
-Assert-GameClosed "parking round $Round"
+if (-not $Plan) { Assert-GameClosed "parking round $Round" }
 
 # A single argument that is a readable file is a list, not a mod name.
 $names = @()
@@ -192,6 +217,17 @@ $items = @(); $unresolved = @()
 foreach ($n in $names) {
     $r = Resolve-ModItem $n
     if ($r) { $items += $r } else { $unresolved += $n }
+}
+
+if ($Plan) {
+    Write-Host ''
+    Write-Host "ROUND $Round - plan only, nothing moved" -ForegroundColor Cyan
+    foreach ($i in $items) { Write-Host "  would park   $($i.Rel)" -ForegroundColor DarkGreen }
+    foreach ($u in $unresolved) { Write-Host "  NO MATCH     $u" -ForegroundColor Red }
+    Write-Host ''
+    Write-Host ("  {0} of {1} name(s) resolve." -f $items.Count, $names.Count) -ForegroundColor DarkGray
+    if ($unresolved.Count) { Write-Host '  Arming would refuse - fix the list first.' -ForegroundColor Yellow }
+    exit $(if ($unresolved.Count) { 1 } else { 0 })
 }
 
 if ($unresolved.Count) {
