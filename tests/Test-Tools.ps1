@@ -860,6 +860,37 @@ $own = @(Get-ChildItem (Join-Path $homeA 'skills') -Directory -ErrorAction Silen
 if ($own -eq 0) { Ok 'install: a copy can still remove its own links' }
 else { Bad 'install: a copy can still remove its own links' "$own links left after removing with the owning copy" }
 
+# The silent one, and it happened for real: a link pointing at ANOTHER copy was
+# reported as "already linked", so re-running the installer said everything was
+# fine while both agents kept loading a stale snapshot. Nine of ten skills sat
+# like that for a day. A stale link and a good one are indistinguishable until
+# somebody resolves the target.
+$homeC = Join-Path $sandbox 'agentHomeC'
+New-Item -ItemType Directory -Path (Join-Path $homeC 'skills') -Force | Out-Null
+cmd /c mklink /J "$(Join-Path $homeC 'skills\cyberwise')" "$(Join-Path $copyB 'skills\cyberwise')" | Out-Null
+
+# Get-AllOutput, not Get-Console: the mismatch is a Write-Warning, and warnings
+# are stream 3. Capturing only 6>&1 2>&1 misses it and fails this on the wrong
+# grounds - which it did, first run.
+$stale = Get-AllOutput { & (Join-Path $Root 'install.ps1') -ClaudeHome $homeC -ClaudeOnly }
+$staleTarget = [string]@((Get-Item -LiteralPath (Join-Path $homeC 'skills\cyberwise') -Force).Target)[0]
+$problems = @(
+    if ($stale -match 'already linked: cyberwise\b') { 'a link to another copy was reported as already linked' }
+    if ($stale -notmatch 'points at another copy')   { 'nothing said the link belongs to a different copy' }
+    if ($stale -notmatch '-Relink')                  { 'the report does not say how to fix it' }
+    # Reporting is the whole point: repointing somebody's links unasked is not
+    # this script's decision.
+    if ($staleTarget -notmatch [regex]::Escape($copyB)) { 'the link was repointed without -Relink being passed' }
+)
+if ($problems) { Bad 'install: a link pointing at another copy is reported, not called healthy' ($problems -join "`n") }
+else           { Ok  'install: a link pointing at another copy is reported, not called healthy' }
+
+# ...and -Relink must actually move it, or the advice above is a dead end.
+& (Join-Path $Root 'install.ps1') -ClaudeHome $homeC -ClaudeOnly -Relink *>$null
+$relinked = [string]@((Get-Item -LiteralPath (Join-Path $homeC 'skills\cyberwise') -Force).Target)[0]
+if ($relinked -eq (Join-Path $Root 'skills\cyberwise')) { Ok 'install: -Relink repoints a link at this copy' }
+else { Bad 'install: -Relink repoints a link at this copy' "still points at $relinked" }
+
 # ============================================================== watcher ======
 #
 # Several independent things can start a watcher - the tray, a logon Run entry,

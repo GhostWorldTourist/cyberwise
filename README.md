@@ -181,10 +181,12 @@ Also included: `Get-Hotkeys.ps1` / `New-HotkeySheet.ps1` (every keybind on an in
 ```powershell
 git clone https://github.com/GhostWorldTourist/cyberwise ~/repos/cyberwise
 cd ~/repos/cyberwise
-.\install.ps1          # -Remove to unlink, -ClaudeOnly to skip Codex
+.\install.ps1          # -Remove to unlink, -ClaudeOnly to skip Codex, -Relink to repoint
 ```
 
 **Works with Claude Code and Codex**, from one install. Each skill under `skills/` is symlinked into `~/.claude/skills/` *and* `~/.codex/skills/` (or `$CODEX_HOME/skills`), so edits take effect immediately with no reinstall step and the two agents cannot drift apart. It falls back to a directory junction where a symlink would need elevation.
+
+**If you have two copies** — a clone *and* the tray installer's bundled snapshot, say — the installer says so rather than calling an existing link healthy, and names which copy your agents are actually loading. `-Relink` repoints them at the copy you ran it from. This matters because a stale link fails silently in the worst way: every edit you make appears to do nothing.
 
 Then restart your agent so it refreshes its global skill catalog.
 

@@ -91,6 +91,7 @@ $backupRel   = 'skills\cyberwise\tools\ModFileBackup.ps1'
 $compareRel  = 'skills\cyberwise-crashes\tools\Compare-InstallSnapshot.ps1'
 $mmHtmlRel   = 'skills\cyberwise-reports\tools\ModManifestHtml.ps1'
 $reportRel   = 'skills\cyberwise-feedback\tools\New-ProblemReport.ps1'
+$installRel  = 'install.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -100,6 +101,7 @@ Save-Original $backupRel
 Save-Original $compareRel
 Save-Original $mmHtmlRel
 Save-Original $reportRel
+Save-Original $installRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -234,6 +236,14 @@ Assert-Detects 'the Discord form no longer trimmed to fit a message' $reportRel 
     '$discordText = Get-Fitted (Get-Redacted $short.ToString()) 2000' `
     '$discordText = Get-Redacted $short.ToString()' `
     'Discord form fits one message'
+
+# The install bug that hid a day of work: any existing link counted as healthy,
+# so the agents kept loading a different copy and re-running the installer agreed
+# that everything was fine.
+Assert-Detects 'an existing link accepted without checking where it points' $installRel `
+    'if ($actual -and $actual -eq [IO.Path]::GetFullPath($target)) {' `
+    'if ($actual) {' `
+    'not called healthy'
 
 Assert-Detects 'unrecognised preset hashes dropped instead of shown' $presetRel `
     '$label = if ($group) { Get-Label $group } else { "?$hash" }' `
