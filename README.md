@@ -253,3 +253,12 @@ Saying *"help me report this problem"* loads `cyberwise-feedback`, which gathers
 ## Getting Help
 
 I hang out in the [Ultra Place Discord](https://discord.gg/UltraPlace), so you can `@GhostWorldTourist` in the #cyberpunk channel. Note that this is *not* some "official Cyberwise support channel". I am the only one who supports this suite right now, so please be patient and wait for me to answer. Do not harass other people about it, please. They are good people and it's a really good place to talk about Cyberpunk 2077 and other games. While you're there, check out Ultra+ for CP2077, because it's genuinely cool.
+
+## Licence
+
+[MIT](LICENSE) — the code and the notes both. Take it, fork it, paste a script into your own tool, quote a finding in your guide. Keep the copyright line and you're square with me.
+
+Two things the licence doesn't cover, so I'll just say them:
+
+- **Credit the finding, not just the file.** If something here saves you an afternoon and you write it up somewhere, a link back means the next person can check the working rather than taking your word for it. That matters more here than usual, because half of this repo is claims about a game that keeps changing.
+- **The name and the eye are mine.** No licence grants trademark rights, MIT included. Fork the code freely; if you ship it as your own thing, give it your own name so nobody files your bugs with me.
