@@ -46,6 +46,47 @@ halving beats reading the log and reverting that.
 The rules - reproduce first, one variable per test, validate against the full load
 order - hold at every size. Only the search strategy scales.
 
+## Do the round FOR them, and launch the game yourself
+
+The person testing has exactly one job that cannot be automated: looking at the
+screen and saying what happened. Everything either side of that is chores, and
+handing those back is what makes a twenty-round bisect feel like a punishment.
+
+**Arm the round yourself.** Moving a hundred files is a script; a hundred
+checkboxes in a mod manager is twenty minutes and a transcription error. Use
+`tools/Invoke-BisectRound.ps1`, which parks a named set, records exactly what it
+parked, and hands back a one-line undo.
+
+**Then launch the game yourself.** This is the single biggest quality-of-life
+change to a long bisect, learned from a twenty-round one in another game: the
+tester glances over, sees the game is up, and knows it is time to try the thing.
+No instruction to read, no waiting to be told the round is ready, no "have you
+started it yet" round-trip.
+
+```powershell
+tools\Invoke-BisectRound.ps1 -GameRoot '<path>' -Round C -Park cut3.txt -Launch
+```
+
+**Launch it the way they play it**, not by running the exe. A storefront launch
+applies their configured launch options - one install here carries
+`--launcher-skip -skipStartScreen` - and bypassing those tests a configuration
+they never play. `launcher-configuration.json` in the game root names the
+platform; the tool reads it rather than guessing from the path.
+
+Two things not to automate past:
+
+- **The verdict is theirs.** A watcher cannot tell a livelock from a loaded game
+  sitting at a menu (below). Getting them to the screen faster is the win; the
+  screen is still the instrument.
+- **A round that parks 37 of 38 is not the round in the manifest.** Refuse a
+  partial set outright. An unresolvable name silently parks nothing, which scores
+  as "the fault went away" and sends the whole search down the wrong branch.
+
+**Write every round down.** Which configuration was that, exactly? is the
+question that ruins long bisects, and it always gets asked three rounds later.
+The tool writes a manifest per round beside the game's own data, so a different
+agent - or the user alone - can pick the bisect up cold.
+
 ## Disabling versus parking
 
 **If there is a mod manager, prefer its own enable/disable.** It is reversible, it
@@ -59,8 +100,21 @@ install. Two manager-specific reasons this matters:
   `archive\pc\mod` at all, so there may be nothing to move - and moving whatever
   *is* there tests nothing. Disable in MO2's own UI. See `environment.md`.
 
-Park files by hand when there is no manager, or when you need finer granularity
-than the manager offers - half of one mod's archives, say.
+Park files by hand when there is no manager, when you need finer granularity than
+the manager offers - half of one mod's archives, say - or **when the round has to
+be armed in seconds rather than minutes.** On a long bisect that last one wins
+most of the time: parking is scriptable and recordable, and a manager's UI is
+neither.
+
+The cost of choosing parking is that the manager's picture is now stale, so:
+
+- **Treat a deployment during a bisect as voiding the round.** If the manager
+  redeploys mid-run it can restore a parked file underneath you, and the
+  configuration you tested is not the one you recorded. Re-arm rather than
+  reasoning about what it might have put back.
+- **Restore from the manifest, not from memory**, and report loudly if a file is
+  not where the manifest says it was parked - something else moved it, and every
+  round since is suspect.
 
 ## Where to park files
 
@@ -131,6 +185,50 @@ than concluding you have found the cause.
 Equally: a mod may be inert for reasons unrelated to your bisect (see
 `environment.md` on redscript compilation). Confirm the mod you are testing is
 actually running before drawing conclusions from disabling it.
+
+## When halving stops paying: write a guard
+
+Bisection answers *which mod*. It does not answer *what that mod is doing*, and
+sometimes the interesting question is the second one - the suspect is confirmed,
+but the state that makes it fail happens inside a function nothing logs.
+
+A **guard** is a throwaway mod whose only job is to watch one place and write
+down what it sees. Not a fix. One function, one log line, deleted afterwards.
+
+This came from another game's twenty-round bisect, where a guard wrapped the one
+call that was failing, skipped the operation when its precondition was empty, and
+appended a line naming the value and its size. The log line
+`wanted states[0] but has 0 state(s)` settled a root cause that four rounds of
+halving had only circled - because the number nobody could see was the whole
+answer.
+
+**Design rules, in the order they matter:**
+
+- **Log the value that separates your hypotheses**, not "reached here". If two
+  explanations predict different numbers, print the number. A guard that only
+  proves the code ran has told you what the crash already told you.
+- **Say in the mod itself that it is containment, not a fix.** If it skips the
+  failing operation to keep the game up, the README says so in as many words.
+  Guards get forgotten and then get blamed for behaviour six months later.
+- **Expect to ship it twice.** The first log line is usually not quite the right
+  one; version it, refine what it prints, re-deploy. That is normal, not failure.
+- **Register it** with `cyberwise/tools/ModPatchWatch.ps1` and delete it when the
+  investigation ends. An unregistered guard is an invisible mod that survives
+  every future update.
+
+**Two Cyberpunk-specific constraints decide how you build one:**
+
+- **Prefer CET over redscript for a guard.** redscript is an all-or-nothing gate:
+  a guard that fails to compile silently disables *every* `.reds` mod on the
+  install, which is a spectacular way to make a bisect worse. A broken CET mod
+  fails alone, and CET writes a per-mod log at
+  `bin\x64\plugins\cyber_engine_tweaks\mods\<name>\<name>.log` with no extra
+  plumbing (`cyberwise-tweaks/references/cet-lua.md`).
+- **You cannot wrap another mod's own classes.** `@wrapMethod` / `@replaceMethod`
+  work on classes the *game* declares, not on ones another mod declares, so a
+  guard usually has to sit on the game-side function the suspect calls into
+  rather than on the suspect itself. Establish which is which before promising
+  anybody a guard.
 
 ## Reporting
 

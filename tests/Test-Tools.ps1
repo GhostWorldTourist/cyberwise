@@ -825,6 +825,73 @@ if ($hkErr) {
     }
 }
 
+# ================================================================= bisect ====
+#
+# A bisect round is twenty repetitions of "move this set, record it, put it
+# back". The failure that costs the most is not a crash - it is a round that
+# parked less than it claimed, because a configuration nobody recorded still
+# produces a result, and a clean one is indistinguishable from a real one.
+#
+# -Launch is deliberately not exercised. Starting a game is not something a test
+# suite should do to somebody's machine.
+
+$bisectTool = Join-Path $Root 'skills\cyberwise-crashes\tools\Invoke-BisectRound.ps1'
+$bgame = Join-Path $sandbox 'bisectgame'
+$brecs = Join-Path $sandbox 'bisectrecords'
+New-Item -ItemType Directory -Path (Join-Path $bgame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $bgame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+New-Item -ItemType Directory -Path (Join-Path $bgame 'archive\pc\mod') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $bgame 'r6\scripts\ScriptMod') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $bgame 'archive\pc\mod\alpha.archive') 'a' -NoNewline
+Set-Content -LiteralPath (Join-Path $bgame 'archive\pc\mod\beta.archive')  'b' -NoNewline
+Set-Content -LiteralPath (Join-Path $bgame 'r6\scripts\ScriptMod\x.reds')  'x' -NoNewline
+
+# Names as a human types them: a bare archive name and a script folder. Demanding
+# full relative paths turns every round into transcription work.
+$cutFile = Join-Path $sandbox 'cut1.txt'
+Set-Content -LiteralPath $cutFile "alpha`nScriptMod`n"
+
+$bOut = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'A' -Park $cutFile -RecordDir $brecs }
+$parkedA = Join-Path $bgame '_bisect_parked\A'
+$problems = @(
+    if (Test-Path -LiteralPath (Join-Path $bgame 'archive\pc\mod\alpha.archive')) { 'alpha.archive was not parked' }
+    if (Test-Path -LiteralPath (Join-Path $bgame 'r6\scripts\ScriptMod'))          { 'the script folder was not parked' }
+    if (-not (Test-Path -LiteralPath (Join-Path $bgame 'archive\pc\mod\beta.archive'))) { 'it parked something that was not on the list' }
+    if (-not (Test-Path -LiteralPath (Join-Path $parkedA 'archive\pc\mod\alpha.archive'))) { 'the parked archive is not under the round folder' }
+    if (-not (Test-Path -LiteralPath (Join-Path $brecs 'A.json')))                 { 'no manifest was written for the round' }
+)
+if ($problems) { Bad 'bisect: a round parks exactly the named set, and records it' ($problems -join "`n") }
+else           { Ok  'bisect: a round parks exactly the named set, and records it' }
+
+# The one that matters most. A name that resolves to nothing must stop the round
+# rather than quietly park a subset.
+$bBad = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'B' -Park @('beta', 'does-not-exist') -RecordDir $brecs }
+$partial = @(
+    if (-not (Test-Path -LiteralPath (Join-Path $bgame 'archive\pc\mod\beta.archive'))) { 'it parked the resolvable half of a bad list' }
+    if (Test-Path -LiteralPath (Join-Path $brecs 'B.json'))                             { 'it recorded a round it refused to arm' }
+    if ($bBad -notmatch 'do not resolve')                                               { 'it did not say which names were unresolvable' }
+)
+if ($partial) { Bad 'bisect: an unresolvable name refuses the whole round' ($partial -join "`n") }
+else          { Ok  'bisect: an unresolvable name refuses the whole round' }
+
+& $bisectTool -GameRoot $bgame -Round 'A' -Restore -RecordDir $brecs *>$null
+$restored = @(
+    if (-not (Test-Path -LiteralPath (Join-Path $bgame 'archive\pc\mod\alpha.archive'))) { 'the archive did not come back' }
+    if (-not (Test-Path -LiteralPath (Join-Path $bgame 'r6\scripts\ScriptMod\x.reds')))  { 'the script folder did not come back' }
+)
+if ($restored) { Bad 'bisect: restore puts the round back from its manifest' ($restored -join "`n") }
+else           { Ok  'bisect: restore puts the round back from its manifest' }
+
+# A file missing from the park folder means something else moved it - a redeploy,
+# a cleanup, another round - and every round since is suspect. Saying so is the
+# whole value; restoring what is left and reporting success is the failure.
+Set-Content -LiteralPath (Join-Path $sandbox 'cut2.txt') "beta`n"
+& $bisectTool -GameRoot $bgame -Round 'C' -Park (Join-Path $sandbox 'cut2.txt') -RecordDir $brecs *>$null
+Remove-Item -LiteralPath (Join-Path $bgame '_bisect_parked\C\archive\pc\mod\beta.archive') -Force
+$bLost = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'C' -Restore -RecordDir $brecs }
+if ($bLost -match 'NOT in the park folder') { Ok 'bisect: a parked file that vanished is reported, not skipped' }
+else { Bad 'bisect: a parked file that vanished is reported, not skipped' "restore said nothing about the missing file:`n$bLost" }
+
 # ================================================================ dossier ====
 #
 # One mod, every layer. The failure mode this guards is a report that says a mod

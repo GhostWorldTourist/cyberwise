@@ -94,6 +94,7 @@ $reportRel   = 'skills\cyberwise-feedback\tools\New-ProblemReport.ps1'
 $installRel  = 'install.ps1'
 $liveRel     = 'skills\cyberwise\tools\Test-ScriptsLive.ps1'
 $dossierRel  = 'skills\cyberwise-reports\tools\New-ModDossier.ps1'
+$bisectRel   = 'skills\cyberwise-crashes\tools\Invoke-BisectRound.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -106,6 +107,7 @@ Save-Original $reportRel
 Save-Original $installRel
 Save-Original $liveRel
 Save-Original $dossierRel
+Save-Original $bisectRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -244,6 +246,15 @@ Assert-Detects 'the Discord form no longer trimmed to fit a message' $reportRel 
 # PowerShell's own trap, and it shipped: $hash[$missingKey] is $null, @($null) is
 # an array of ONE, and Join-Path with a null tail resolves to the root - so every
 # layer a mod did NOT ship reported "1 of 1 file(s) deployed".
+# The quiet one. Parking the names that happen to resolve and shrugging at the
+# rest produces a round that exists in no manifest, and its result scores exactly
+# like a real one.
+Assert-Detects 'a bisect round arming with only the names that resolved' $bisectRel `
+    'Write-Host ''Nothing was parked. Fix the list and re-run - a partly-parked round tests a configuration nobody recorded.'' -ForegroundColor Yellow
+    exit 1' `
+    'Write-Host ''carrying on with what resolved'' -ForegroundColor Yellow' `
+    'unresolvable name refuses the whole round'
+
 #
 # BOTH lines have to go. The fix is two independent guards - a key check and a
 # null filter - so removing either one alone changes nothing observable, and a

@@ -64,6 +64,29 @@ could have named in zero.
 files on disk is unreliable on a managed install - a manager can restore a parked
 file mid-test, and on MO2 the archives may not physically be there at all.
 
+**When you do bisect: arm the round AND launch the game yourself.**
+
+```powershell
+tools\Invoke-BisectRound.ps1 -GameRoot '<path>' -Round C -Park cut3.txt -Launch
+tools\Invoke-BisectRound.ps1 -GameRoot '<path>' -Round C -Restore
+```
+
+The tester has exactly one job that cannot be automated - looking at the screen
+and saying what happened. Everything either side of that is chores, and handing
+them back is what makes twenty rounds feel like a punishment. They glance over,
+the game is up, they try the thing. It launches through the storefront so their
+own launch options still apply, writes a manifest per round so "which config was
+that?" is answerable three rounds later, and refuses to park a partial set - a
+name that resolves to nothing parks nothing, which scores as "the fault went
+away".
+
+**The verdict stays theirs.** No watcher can tell a livelock from a loaded game
+sitting at a menu.
+
+When halving has named the mod but not what it is doing, `bisecting.md` also
+covers **guards** - a throwaway one-function mod that logs the value separating
+your hypotheses.
+
 ## A missing log is not a silent log
 
 None of REDscript, RED4ext, CET, ArchiveXL or TweakXL ship with the game. An
@@ -90,6 +113,7 @@ Windows Error Reporting never fires for it, and the measurement traps.
 | `tools/Register-CrashWatch.ps1` | registers the watcher as a logon task so it survives death and reboot |
 | `tools/New-InstallSnapshot.ps1` | records archives, load order, loose files and framework versions |
 | `tools/Compare-InstallSnapshot.ps1` | diffs two snapshots - what changed, including order changes invisible on disk |
+| `tools/Invoke-BisectRound.ps1` | parks a named set, records the round, and launches the game for the tester |
 
 ```powershell
 .\tools\Register-CrashWatch.ps1 -Dir "<somewhere writable>" -GameRoot "<game>"
