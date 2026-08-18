@@ -14,7 +14,7 @@
 # Skin loses the torso diffuse to MaterialGirl".
 #
 # The lookup table is vendored: 751,710 paths for 2.31 + Phantom Liberty, from
-# Ultrapunk's resource-path database (CC BY 4.0, see data/ATTRIBUTION.md).
+# VanStorm's resource-path database (CC BY 4.0, see data/ATTRIBUTION.md).
 #
 # WHAT IT COSTS AND WHY IT IS SHAPED THIS WAY
 #

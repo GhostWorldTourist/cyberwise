@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the vendored resource-path index from Ultrapunk's SQLite database.
+"""Build the vendored resource-path index from VanStorm's SQLite database.
 
 MAINTAINER TOOL. Users never run this and never need Python - it exists so the
 vendored artefact can be rebuilt from source when a new game version lands, and
@@ -40,7 +40,7 @@ Hashes are FNV-1a 64-bit over the UTF-8 path with backslash separators, stored
 signed because SQLite has no unsigned 64-bit integer. The reader converts.
 
 Source data: https://github.com/VanStorm/Cyberpunk-Modding - CC BY 4.0,
-attribution Ultrapunk. See data/ATTRIBUTION.md; this script is the "what was
+attribution VanStorm. See data/ATTRIBUTION.md; this script is the "what was
 changed" that the licence asks you to state.
 """
 from __future__ import annotations

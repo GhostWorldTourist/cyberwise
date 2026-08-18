@@ -172,7 +172,7 @@ Also included: `Get-Hotkeys.ps1` / `New-HotkeySheet.ps1` (every keybind on an in
 
 `Repair-LoadOrder.ps1 -Explain <archive>` names the *files* a mod loses, and to whom. An `.archive` indexes its contents by 64-bit hash and carries no path strings, so conflict reports have always been able to say how many files a mod lost and never which — and the count routinely inverts the meaning. One skin mod here keeps 13 of its 16 files, and the three it loses are the skin material template and the face microdetail map: it wins the arithmetic and loses the look.
 
-That works because the repo **vendors a resource-path table** — 751,710 paths, 99.97% of base-game and Phantom Liberty files for 2.31, from [Ultrapunk's resource-path database](https://github.com/VanStorm/Cyberpunk-Modding) under CC BY 4.0. It is the one large file in this repository (11 MB): the upstream artefact is 79 MB of SQLite, and reading SQLite would mean shipping a database engine, so it is re-packed into a seek-and-read format the shipped PowerShell reads directly. No credentials, no other mod installed, no network. Attribution and rebuild instructions: `skills/cyberwise-conflicts/data/ATTRIBUTION.md`.
+That works because the repo **vendors a resource-path table** — 751,710 paths, 99.97% of base-game and Phantom Liberty files for 2.31, from [VanStorm's resource-path database](https://github.com/VanStorm/Cyberpunk-Modding) under CC BY 4.0. It is the one large file in this repository (11 MB): the upstream artefact is 79 MB of SQLite, and reading SQLite would mean shipping a database engine, so it is re-packed into a seek-and-read format the shipped PowerShell reads directly. No credentials, no other mod installed, no network. Attribution and rebuild instructions: `skills/cyberwise-conflicts/data/ATTRIBUTION.md`.
 
 **Anything meant to be pasted is built to fit.** Discord refuses a message over 2000 characters rather than shortening it, so an over-long paste doesn't arrive clipped — it doesn't arrive. The profile warns with the character count, the manifest names the file and the HTML as the alternatives, the problem report writes a separate Discord-sized version, and the tray trims a crash summary before it reaches the clipboard — dropping oldest first, and saying how many it dropped.
 
@@ -268,7 +268,7 @@ I hang out in the [Ultra Place Discord](https://discord.gg/UltraPlace), so you c
 
 [MIT](LICENSE) — the code and the notes both. Take it, fork it, paste a script into your own tool, quote a finding in your guide. Keep the copyright line and you're square with me.
 
-**One file is not mine and not MIT.** `skills/cyberwise-conflicts/data/resource-paths-2.31.cwpx` is derived from [Ultrapunk's resource-path database](https://github.com/VanStorm/Cyberpunk-Modding) and stays under **CC BY 4.0** — free to use and redistribute, including commercially, as long as Ultrapunk is credited. If you fork this repo, that credit travels with the file; `data/ATTRIBUTION.md` is written to be exactly what you need to keep.
+**One file is not mine and not MIT.** `skills/cyberwise-conflicts/data/resource-paths-2.31.cwpx` is derived from [VanStorm's resource-path database](https://github.com/VanStorm/Cyberpunk-Modding) and stays under **CC BY 4.0** — free to use and redistribute, including commercially, as long as VanStorm is credited. If you fork this repo, that credit travels with the file; `data/ATTRIBUTION.md` is written to be exactly what you need to keep.
 
 Two things the licence doesn't cover, so I'll just say them:
 

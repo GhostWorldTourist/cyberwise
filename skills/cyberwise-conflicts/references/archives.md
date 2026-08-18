@@ -36,7 +36,7 @@ Implement it in a language with wrapping 64-bit multiply. PowerShell throws on
 
 **This family vendors a table, and it is the first stop.**
 `data/resource-paths-2.31.cwpx` carries **751,710 paths - 99.97% of base-game and
-EP1 files** for 2.31, derived from Ultrapunk's resource-path database (CC BY 4.0;
+EP1 files** for 2.31, derived from VanStorm's resource-path database (CC BY 4.0;
 `data/ATTRIBUTION.md`). No credentials, no other mod installed, no network.
 
 ```powershell

@@ -5,10 +5,10 @@ Phantom Liberty, keyed by the FNV-1a 64-bit hashes that `.archive` files index b
 
 ## Attribution
 
-Derived from the **Cyberpunk 2077 resource-path database** by **Ultrapunk**:
+Derived from the **Cyberpunk 2077 resource-path database** by **VanStorm**:
 
 - Source: <https://github.com/VanStorm/Cyberpunk-Modding>
-- Author: Ultrapunk — <https://github.com/Ultrapunk>
+- Author: VanStorm — <https://github.com/VanStorm>
 - Licence: **Creative Commons Attribution 4.0 International (CC BY 4.0)**
   — <https://creativecommons.org/licenses/by/4.0/>
 
@@ -22,6 +22,12 @@ PowerShell is already on the machine and nothing else should need installing.
 The conversion is reproducible: `tools/Build-ResourcePathIndex.py` at the repo
 root takes the upstream `.db` and emits this file. It is a maintainer tool and
 needs Python; nobody using these skills ever runs it.
+
+**Credit VanStorm, not Ultrapunk.** The upstream repository's own README credits
+"Ultrapunk", which is the name of his Cyberpunk 2077 *collection*. He asked
+(2026-08-18) to be credited as **VanStorm** here, because the database is work he
+did independently of that collection. Do not "correct" this back by copying the
+upstream README - the attribution a CC BY licensor asks for is the one to use.
 
 Upstream also credits [WolvenKit](https://github.com/WolvenTeam/WolvenKit) and
 [MlsetupBuilder](https://github.com/Neurolinked/MlsetupBuilder), whose exports
