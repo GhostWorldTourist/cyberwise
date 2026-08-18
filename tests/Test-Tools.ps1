@@ -876,6 +876,24 @@ if (-not (Test-Path -LiteralPath $cwpx)) {
     if ($wrong) { Bad 'resource paths: several real paths round-trip exactly' ($wrong -join "`n") }
     else        { Ok  'resource paths: several real paths round-trip exactly' }
 
+    # The reverse direction, which is what makes quest work possible: you know
+    # the shape of what you want and need the hashes to hunt for inside mod
+    # archives. A pattern that silently matches nothing reads exactly like a
+    # quest no mod touches - the same wrong answer, from the opposite direction.
+    $found = Find-ResourcePath -Like '*\sq026\*.questphase'
+    $findProblems = @(
+        if (-not $found -or $found.Count -lt 5) { "pattern search returned $($found.Count) matches for a quest known to have dozens" }
+        if ($found | Where-Object { $_.Path -notlike '*sq026*' }) { 'a match does not contain the pattern' }
+    )
+    # Every hash it hands back must resolve to the path it came with, or the
+    # archive scan downstream hunts for hashes of nothing.
+    $sample = @($found | Select-Object -First 5)
+    foreach ($f in $sample) {
+        if ((Resolve-ResourceHash -Hash $f.Hash) -ne $f.Path) { $findProblems += "hash for $($f.Path) does not resolve back" }
+    }
+    if ($findProblems) { Bad 'resource paths: a wildcard search finds paths and usable hashes' ($findProblems -join "`n") }
+    else               { Ok  'resource paths: a wildcard search finds paths and usable hashes' }
+
     # A miss must be $null, never a nearby path. The table covers the BASE GAME,
     # so a mod's own resource legitimately misses - and a reader that returned
     # its binary-search neighbour would name an innocent file in every report.

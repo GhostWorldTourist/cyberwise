@@ -122,6 +122,7 @@ mentioned. `references/load-order.md`.
 |---|---|
 | `tools/Repair-LoadOrder.ps1` | audits `modlist.txt` and the archives against each other, and can repair the order |
 | `tools/Resolve-ResourcePath.ps1` | turns an archive hash into a real file path, and back |
+| `tools/Find-QuestConflicts.ps1` | which mods rewrote a quest's files, and which of them is actually live |
 
 ```powershell
 .\tools\Repair-LoadOrder.ps1              # report only
@@ -165,6 +166,41 @@ have. Theirs live in a data file beside their game:
 undoes the decision silently. The two suppression maps stop known-harmless cases
 counting as problems - the script ships only the entries that are facts about
 public mods, not preferences.
+
+## A quest that stopped advancing
+
+```powershell
+tools\Find-QuestConflicts.ps1 -Quest sq026 -GameRoot '<path>'
+```
+
+**This is not softlock detection and must not be offered as one.** A stuck quest
+and a quest legitimately waiting look identical from outside - most of the
+journal is waiting on an in-game day, a phone call, or a fact set somewhere else.
+Same reason automated hang detection fails (`cyberwise-crashes`), with more force.
+
+What it answers is the question you have *once you are stuck*: which mods rewrote
+this quest, and which of them is winning. The finding to look for is a
+**contested** resource - two mods replacing the same `.questphase`. Quest edits
+are not additive: under earlier-wins one version is in the game and the other is
+absent, so a mod's fix for the exact bug being hit can be the half that lost.
+
+A real example from one install, on the Judy questline:
+
+```
+base\quest\side_quests\sq026\phases\sq026.questphase
+  WINS   LiveALittleTimers.archive (line 4)
+  loses  ##TaB_Quest.archive (line 563)
+```
+
+Owning a quest file is not guilt - plenty of mods rewrite quests correctly. It
+narrows twenty suspects to two, and the test is to park the winner and reload an
+earlier save.
+
+Quests break from two other directions this tool cannot see: **`.xl` quest
+intercepts**, which change the graph without owning a file (`intercept: true`
+entries only execute on a fresh run of that quest, which is why they surface on a
+new game and not on an old save), and **redscript hooks** on quest classes. Rule
+them in or out before concluding an archive is responsible.
 
 ## Reference material
 

@@ -190,3 +190,60 @@ function Resolve-ResourceHashes {
     }
     return $map
 }
+
+function Find-ResourcePath {
+    <#
+    .SYNOPSIS
+        Every base-game path matching a wildcard, with its hash.
+    .DESCRIPTION
+        The reverse direction, and the one that makes quest work possible: you
+        know the shape of what you are looking for (`*\sq026\*.questphase`) and
+        need the hashes to look for inside mod archives.
+
+        The body is stored in PATH order, so a prefix search could binary-search
+        it - but a substring search cannot, and substring is what people
+        actually have ("clouds", "sq026"). So this decodes the whole table once
+        and caches the result for the session. It is one pass over 751,710
+        entries; the alternative is a second index nobody would keep in step.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Like,
+        [string] $IndexPath
+    )
+
+    $ix = Get-ResourcePathIndex -IndexPath $IndexPath
+    if (-not $ix) { return @() }
+
+    if (-not $script:AllPaths) {
+        $list = New-Object 'System.Collections.Generic.List[string]' ([int]$ix.Count)
+        $p = [int]$ix.BodyOff
+        $end = $p + [int]$ix.BodyLen
+        $cur = $null
+        $n = 0
+        while ($p -lt $end) {
+            if ($n % $ix.BlockSize -eq 0) {
+                $len = [BitConverter]::ToUInt16($ix.Bytes, $p); $p += 2
+                $cur = New-Object byte[] $len
+                [Array]::Copy($ix.Bytes, $p, $cur, 0, $len); $p += $len
+            } else {
+                $shared = $ix.Bytes[$p]; $p += 1
+                $sufLen = [BitConverter]::ToUInt16($ix.Bytes, $p); $p += 2
+                $next = New-Object byte[] ($shared + $sufLen)
+                if ($shared -gt 0) { [Array]::Copy($cur, 0, $next, 0, $shared) }
+                [Array]::Copy($ix.Bytes, $p, $next, $shared, $sufLen); $p += $sufLen
+                $cur = $next
+            }
+            $list.Add([Text.Encoding]::UTF8.GetString($cur))
+            $n++
+        }
+        $script:AllPaths = $list
+    }
+
+    $out = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($p in $script:AllPaths) {
+        if ($p -like $Like) {
+            $out.Add([pscustomobject]@{ Path = $p; Hash = (Get-ResourceHash $p) })
+        }
+    }
+    return $out
+}
