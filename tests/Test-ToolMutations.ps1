@@ -112,6 +112,8 @@ Save-Original $liveRel
 Save-Original $dossierRel
 Save-Original $bisectRel
 Save-Original $resolveRel
+Save-Original $creditRel
+Save-Original $anatomyRel
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -127,6 +129,15 @@ function Assert-Detects {
     #
     # Every multi-line mutation is exposed to this, so it is fixed once here
     # rather than by hand-matching endings per mutation.
+    # REGISTER BEFORE MUTATING. Restore-All only puts back what Save-Original
+    # captured, so a file mutated without being registered stays mutated for the
+    # rest of the run: the healed re-run fails, this mutation is reported as not
+    # restored, and every assertion after it is judged against a broken tree. It
+    # happened - two new $...Rel variables were declared and their Save-Original
+    # lines forgotten, and the four mutations that followed all reported FAIL
+    # while the tests they name were working perfectly.
+    if (-not $pristine.ContainsKey($Rel)) { Save-Original $Rel }
+
     $path = Join-Path $tmp $Rel
     $text = (Get-Content -LiteralPath $path -Raw) -replace "`r`n", "`n"
     $From = $From -replace "`r`n", "`n"
