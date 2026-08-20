@@ -1891,6 +1891,19 @@ $cMdBad = @(
 if ($cMdBad) { Bad 'credits: the markdown variant carries the same facts' ($cMdBad -join "`n") }
 else         { Ok  'credits: the markdown variant carries the same facts' }
 
+# A staging root the cache knows nothing about. Every mod is unattributed, so
+# the roll is empty - which looks exactly like a broken tool unless the page
+# says which of the two it is.
+$cEmptyHtml = Join-Path $sandbox 'credits-empty.html'
+$null = Get-AllOutput { & $credTool -StagingRoot $cStage -CachePath (Join-Path $sandbox 'no-such-cache.json') -Html $cEmptyHtml }
+$cEmptyText = Get-Content -LiteralPath $cEmptyHtml -Raw
+$cEmptyBad = @(
+    if ($cEmptyText -notmatch '(?i)no authors on record') { 'an empty credits roll does not say why it is empty' }
+    if ($cEmptyText -notmatch 'New-ModManifest')          { 'it does not name the tool that would fill it in' }
+)
+if ($cEmptyBad) { Bad 'credits: an unenriched install says so instead of rendering nothing' ($cEmptyBad -join "`n") }
+else            { Ok  'credits: an unenriched install says so instead of rendering nothing' }
+
 # ================================================================ anatomy ====
 #
 # The anatomy report rests on one distinction: a hash the base-game table knows

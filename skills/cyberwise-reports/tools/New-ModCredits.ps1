@@ -140,6 +140,10 @@ if ($Md) {
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("$($mods.Count) mods. $($authors.Count) authors. $single of them made exactly one thing.")
     [void]$sb.AppendLine()
+    if ($authors.Count -eq 0) {
+        [void]$mb.AppendLine('No authors on record yet - run `New-ModManifest.ps1` with a Nexus API key once and this fills in.')
+        [void]$mb.AppendLine()
+    }
     foreach ($a in $authors) {
         $list = $byAuthor[$a]
         [void]$sb.AppendLine("**$a** - $($list.Count) mod$(if ($list.Count -ne 1) { 's' })")
@@ -188,6 +192,8 @@ $doc = @"
   .who { font-weight:600; color:var(--hot); overflow-wrap:anywhere; }
   .what { color:var(--dim); font-size:14px; overflow-wrap:anywhere; }
   .dot { padding:0 7px; opacity:.4; }
+  .empty { border:1px solid #1b1d24; padding:18px 20px; color:var(--dim); font-size:14px; }
+  .empty code { color:var(--cool); }
   footer { margin-top:56px; color:var(--dim); font-size:13px; line-height:1.8; }
   @media (max-width:620px) { .credit { grid-template-columns:1fr; gap:4px; } }
 </style></head><body>
@@ -201,6 +207,11 @@ $doc = @"
     <div><b>$single</b><span>made just one</span></div>
   </div>
 
+$(if ($authors.Count -eq 0) { @"
+  <div class="empty">No authors on record yet. Names come from Nexus metadata, which
+  <code>New-ModManifest.ps1</code> caches when it runs with an API key - run that once
+  and this page fills in. Nothing is wrong with the install.</div>
+"@ })
 $($rows -join "`n")
 
   <footer>
