@@ -2071,6 +2071,155 @@ $anMdBad = @(
 if ($anMdBad) { Bad 'anatomy: the markdown variant carries the same numbers' ($anMdBad -join "`n") }
 else          { Ok  'anatomy: the markdown variant carries the same numbers' }
 
+# ============================================================ sitebuilder ====
+#
+# The site builder has one design rule - DO NOT FLATTEN THE DOCUMENTS - and the
+# tests below are almost all about that. The characters it was built for are
+# written in four different in-world formats, and a renderer that quietly turns
+# a form into a run-on paragraph, or a nested list into a flat one, destroys the
+# thing that makes them worth publishing.
+#
+# The second concern is that the output has to work when double-clicked. No
+# fetch, no absolute paths, nothing loaded from another host.
+
+$mdTool   = Join-Path $Root 'skills\cyberwise-sitebuilder\tools\ConvertFrom-Markdown.ps1'
+$siteTool = Join-Path $Root 'skills\cyberwise-sitebuilder\tools\New-CharacterSite.ps1'
+. $mdTool
+
+# --- the markdown subset ---------------------------------------------------
+
+$mdSrc = @'
+# Doc
+
+Some **bold**, *italic*, and `a**b` in code. 5 < 6 & Q&A.
+
+- one
+- two
+    - nested
+- three
+
+| Preset | Worn |
+| --- | --- |
+| `Phase 1` | a \| b |
+
+An_underscored_name.archive survives.
+'@
+$mdOut = ConvertTo-Html -Markdown $mdSrc
+
+$mdBad = @(
+    # The nested list belongs INSIDE its parent item. Emitting </li><ul> renders
+    # correctly in every browser and is invalid in all of them, and a reader
+    # mode drops the indentation entirely.
+    if ($mdOut -notmatch '(?s)<li>two\s*<ul>') { 'a nested list was emitted beside its parent item, not inside it' }
+    # Backticks must survive emphasis: `a**b` is the only way to write literal
+    # asterisks, and these documents do.
+    if ($mdOut -notmatch '<code>a\*\*b</code>') { 'emphasis was applied inside a code span' }
+    if ($mdOut -notmatch '<strong>bold</strong>') { 'bold did not render' }
+    if ($mdOut -notmatch '<em>italic</em>')       { 'italic did not render' }
+    # Escaping has to happen before markup, or the tags get eaten by it.
+    if ($mdOut -notmatch '5 &lt; 6 &amp; Q&amp;A') { 'HTML metacharacters were not escaped' }
+    if ($mdOut -match '<script')                   { 'raw HTML passed through' }
+    # Underscores are file names here, not emphasis.
+    if ($mdOut -notmatch 'An_underscored_name\.archive') { 'underscores were treated as emphasis' }
+    if ($mdOut -notmatch '<td>a \| b</td>')              { 'an escaped pipe did not survive as a table cell' }
+)
+if ($mdBad) { Bad 'sitebuilder: the markdown subset renders what these documents contain' ($mdBad -join "`n") }
+else        { Ok  'sitebuilder: the markdown subset renders what these documents contain' }
+
+# --- the rule the whole tool exists for ------------------------------------
+
+$fieldSrc = @'
+SUBJECT: VALERIE AURUM CLEMENS / ID NC770416
+CODENAME: VALKYRIE
+AKAS: "V", "GOLDEN CHILD"
+
+Constant across every look: palest skin, the same nose,
+mouth, ears and brows, which wraps mid sentence like prose.
+'@
+$fieldOut = ConvertTo-Html -Markdown $fieldSrc
+$fieldBad = @(
+    if ($fieldOut -notmatch 'NC770416<br>CODENAME') { 'a field block was joined into a run-on paragraph' }
+    if ($fieldOut -notmatch 'VALKYRIE<br>AKAS')     { 'a field block was joined into a run-on paragraph' }
+    # ...and the opposite error, which is just as bad: hard-wrapped prose must
+    # NOT gain ragged line breaks.
+    if ($fieldOut -match 'the same nose,<br>') { 'hard-wrapped prose was broken at the source line endings' }
+)
+if ($fieldBad) { Bad 'sitebuilder: a field block keeps its lines and prose does not' ($fieldBad -join "`n") }
+else           { Ok  'sitebuilder: a field block keeps its lines and prose does not' }
+
+# --- building a site -------------------------------------------------------
+
+$siteSrc = Join-Path $sandbox 'chars'
+$siteOut = Join-Path $sandbox 'site'
+foreach ($who in 'valkyrie', 'venom') {
+    New-Item -ItemType Directory -Path (Join-Path $siteSrc $who) -Force | Out-Null
+}
+Set-Content -LiteralPath (Join-Path $siteSrc 'valkyrie\Profile - Valkyrie.md') -Value @'
+# DOSSIER "VALERIE AURUM CLEMENS" AR-NA-CI-D07
+
+SUBJECT: VALERIE AURUM CLEMENS / ID NC770416
+STATUS: TERMINATED WITH PREJUDICE
+
+## BACKGROUND
+- Born in Charter Hill
+'@
+Set-Content -LiteralPath (Join-Path $siteSrc 'valkyrie\Meta - Valkyrie.md') -Value @'
+# Appearance
+Gold everything.
+'@
+# The character with media, to prove images are copied and referenced relatively.
+New-Item -ItemType Directory -Path (Join-Path $siteSrc 'venom\media') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $siteSrc 'venom\Profile - Venom.md') -Value @'
+# Too Bad, Too Bad
+
+I have a story for you, one long enough to be chosen as the card lead rather than a label.
+'@
+Copy-Item -LiteralPath (Join-Path $sandbox 'icon.png') -Destination (Join-Path $siteSrc 'venom\media\one.png') -ErrorAction SilentlyContinue
+if (-not (Test-Path -LiteralPath (Join-Path $siteSrc 'venom\media\one.png'))) {
+    Set-Content -LiteralPath (Join-Path $siteSrc 'venom\media\one.png') -Value 'not really a png' -NoNewline
+}
+# A draft folder, which must not be published.
+New-Item -ItemType Directory -Path (Join-Path $siteSrc '_wip') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $siteSrc '_wip\Profile - Wip.md') -Value '# Unfinished'
+
+$siteLog = Get-AllOutput { & $siteTool -From $siteSrc -Out $siteOut -Title 'Test Files' }
+$index = Get-Content -LiteralPath (Join-Path $siteOut 'index.html') -Raw
+$valk  = Get-Content -LiteralPath (Join-Path $siteOut 'valkyrie.html') -Raw
+
+$siteBad = @(
+    foreach ($f in 'index.html', 'valkyrie.html', 'venom.html', 'site.css', 'site.js') {
+        if (-not (Test-Path -LiteralPath (Join-Path $siteOut $f))) { "$f was not written" }
+    }
+    if ($index -notmatch 'href="valkyrie\.html"') { 'the index does not link to a character page' }
+    if ($index -match '(?i)unfinished|_wip')      { 'a draft folder was published' }
+    # The Meta document is a second section, not a second page.
+    if ($valk -notmatch '(?i)Gold everything')    { 'the Meta document was dropped' }
+    # It must work from a file:// URL, so nothing may be absolute or remote.
+    foreach ($page in $index, $valk) {
+        if ($page -match '(?i)https?://(?!www\.w3\.org)') { 'the page loads something from another host' }
+        if ($page -match '(?i)[a-z]:\\\\')                { 'an absolute Windows path leaked into the page' }
+        if ($page -match "(?i)\\\\$([regex]::Escape($env:USERNAME))\b") { 'the Windows username leaked into the page' }
+    }
+)
+if ($siteBad) { Bad 'sitebuilder: it writes a self-contained site and publishes only what it should' (($siteBad | Select-Object -Unique) -join "`n") }
+else          { Ok  'sitebuilder: it writes a self-contained site and publishes only what it should' }
+
+# The prototype was built for somebody with NO images at all. A missing photo
+# must not render as a broken frame, and a character that has one must actually
+# get it copied.
+$venom = Get-Content -LiteralPath (Join-Path $siteOut 'venom.html') -Raw
+$mediaBad = @(
+    if ($index -notmatch 'class="nameplate">VALKYRIE<') { 'a character with no media did not get a nameplate tile' }
+    if ($index -notmatch 'media/venom/one\.png')        { 'a character with media did not get its image on the card' }
+    if (-not (Test-Path -LiteralPath (Join-Path $siteOut 'media\venom\one.png'))) { 'the image was referenced but never copied' }
+    # Every card carries the character NAME as its heading. All four of these
+    # characters are Vs, so a first-letter monogram drew the same glyph on every
+    # card - the bug this replaced.
+    if ($index -notmatch '<h2>Valkyrie</h2>') { 'the card does not lead with the character name' }
+)
+if ($mediaBad) { Bad 'sitebuilder: media is optional and its absence is not a broken image' ($mediaBad -join "`n") }
+else           { Ok  'sitebuilder: media is optional and its absence is not a broken image' }
+
 # =================================================================== report ==
 
 Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue

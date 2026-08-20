@@ -247,6 +247,7 @@ not cost you anything when the question is about textures.
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua and console commands, finding game text |
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
 | `cyberwise-backstory` | building a character - V's history, voice, roleplay decisions, a dossier |
+| `cyberwise-sitebuilder` | publish character documents, or anything else here, as a shareable website |
 | `cyberwise-feedback` | Cyberwise itself is wrong, a tool errors, or the user wants to reach the author |
 
 Two references stay here rather than in one of those, because they bear on all of
