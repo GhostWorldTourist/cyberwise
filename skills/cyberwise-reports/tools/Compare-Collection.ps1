@@ -46,20 +46,36 @@ param(
     # the reason to run this at all. 'all' lists everything missing.
     [ValidateSet('stability', 'all')] [string] $Focus = 'stability',
 
-    [string] $Json
+    [string] $Json,
+
+    # Analyse a previously fetched payload instead of calling Nexus. The tool is
+    # otherwise untestable without the network, and a test suite that calls
+    # somebody else's API is not a test suite. Also useful on its own: re-run the
+    # comparison after installing something, with no second API call.
+    [string] $FromJson,
+
+    # Write the fetched payload here, so a later run can use -FromJson.
+    [string] $SaveJson
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not $NexusApiKey) {
+# A KEY PASSED AS AN ARGUMENT IS VISIBLE TO EVERY PROCESS ON THE MACHINE for the
+# duration of the call - Get-Process, Get-CimInstance Win32_Process and Task
+# Manager's command-line column all show it, and it lands in shell history too.
+# The parameter stays, because it is convenient and sometimes the only option,
+# but an environment variable is strictly better and costs one line.
+if (-not $NexusApiKey -and $env:NEXUS_API_KEY) { $NexusApiKey = $env:NEXUS_API_KEY }
+
+if (-not $NexusApiKey -and -not $FromJson) {
     $cred = Join-Path $PSScriptRoot 'NexusCredential.ps1'
     if (Test-Path -LiteralPath $cred) {
         . $cred
         $NexusApiKey = Get-NexusApiKey -ErrorAction SilentlyContinue
     }
 }
-if (-not $NexusApiKey) {
-    throw "No Nexus API key. Pass -NexusApiKey, or store one with NexusCredential.ps1."
+if (-not $NexusApiKey -and -not $FromJson) {
+    throw "No Nexus API key. Pass -NexusApiKey, store one with NexusCredential.ps1, or analyse a saved payload with -FromJson."
 }
 
 if (-not $StagingRoot) {
@@ -85,7 +101,12 @@ function Invoke-NexusGraph {
 
 # ------------------------------------------------------------- collection ----
 
-if (-not $Revision) {
+if ($FromJson) {
+    if (-not (Test-Path -LiteralPath $FromJson)) { throw "No payload at $FromJson" }
+    $saved = Get-Content -LiteralPath $FromJson -Raw | ConvertFrom-Json
+    $name = $saved.name; $summary = $saved.summary; $Revision = $saved.revision
+    $rev = $saved.revision_data
+} elseif (-not $Revision) {
     $d = Invoke-NexusGraph "query { collection(slug: `"$Slug`", domainName: `"$Game`", viewAdultContent: true) { name summary currentRevision { revisionNumber } } }"
     if (-not $d.collection) { throw "No collection '$Slug' for $Game." }
     $Revision = $d.collection.currentRevision.revisionNumber
@@ -93,12 +114,18 @@ if (-not $Revision) {
     $summary = $d.collection.summary
 }
 
-$d = Invoke-NexusGraph @"
+if (-not $rev) {
+    $d = Invoke-NexusGraph @"
 query { collectionRevision(slug: "$Slug", domainName: "$Game", revision: $Revision, viewAdultContent: true) {
   modCount totalSize
   modFiles { optional file { mod { modId name summary author category adult } } } } }
 "@
-$rev = $d.collectionRevision
+    $rev = $d.collectionRevision
+    if ($SaveJson) {
+        [pscustomobject]@{ name = $name; summary = $summary; revision = $Revision; revision_data = $rev } |
+            ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $SaveJson -Encoding UTF8
+    }
+}
 if (-not $rev) { throw "No revision $Revision of '$Slug'." }
 
 # Collections list FILES, not mods, so one mod can appear twice (main + patch).

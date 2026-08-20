@@ -825,6 +825,166 @@ if ($hkErr) {
     }
 }
 
+# ============================================================== readiness ====
+#
+# The value of this tool is one distinction: problems LAUNCHING FIXES versus
+# problems it does not. Get that backwards and it is worse than no tool - either
+# it nags about something the next launch resolves, or it stays quiet about mods
+# that will lose every conflict forever.
+#
+# The trap it already fell into: a hardlinking manager deploys by making a second
+# name for the staging inode, so a deployed .reds keeps the mod AUTHOR'S
+# timestamp. Comparing only *.reds mtimes said "everything predates the bundle"
+# for ten mods deployed the day before.
+
+$readyTool = Join-Path $Root 'skills\cyberwise\tools\Test-InstallReady.ps1'
+$rdyGame = Join-Path $sandbox 'readygame'
+New-Item -ItemType Directory -Path (Join-Path $rdyGame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $rdyGame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+New-Item -ItemType Directory -Path (Join-Path $rdyGame 'archive\pc\mod') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $rdyGame 'r6\logs') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $rdyGame 'r6\cache\modded') -Force | Out-Null
+
+# An archive with no modlist entry sorts last and loses every contest, and no
+# launch changes that.
+Set-Content -LiteralPath (Join-Path $rdyGame 'archive\pc\mod\listed.archive') 'x' -NoNewline
+Set-Content -LiteralPath (Join-Path $rdyGame 'archive\pc\mod\forgotten.archive') 'x' -NoNewline
+Set-Content -LiteralPath (Join-Path $rdyGame 'archive\pc\mod\modlist.txt') "listed.archive`ngone.archive`n" -NoNewline
+
+$rdyOut = Get-AllOutput { & $readyTool -GameRoot $rdyGame }
+$problems = @(
+    if ($rdyOut -notmatch 'NOT READY')                   { 'an unlisted archive did not make the install "not ready"' }
+    if ($rdyOut -notmatch 'forgotten\.archive')          { 'the unlisted archive was not named' }
+    if ($rdyOut -notmatch 'LAUNCHING WILL NOT FIX')      { 'it did not separate what launching cannot fix' }
+    # A stale line is normal - it holds the slot of a mod disabled on purpose -
+    # so it must not be dressed up as a problem.
+    if ($rdyOut -match '(?m)^\s+stale entries.*\n?.*LAUNCHING WILL NOT FIX') { 'a stale modlist line was treated as an action item' }
+)
+if ($problems) { Bad 'readiness: an unlisted archive is reported as launching-will-not-fix' ($problems -join "`n") }
+else           { Ok  'readiness: an unlisted archive is reported as launching-will-not-fix' }
+
+# Now the other side: scripts newer than the bundle, which IS fixed by launching.
+# The .reds file is deliberately given an OLD timestamp, the way a hardlinked
+# deploy leaves it, while the folder carries the deploy time.
+$bundlePath = Join-Path $rdyGame 'r6\cache\modded\final.redscripts.modded'
+Set-Content -LiteralPath $bundlePath 'bundle' -NoNewline
+$builtAt = (Get-Date).AddDays(-2)
+(Get-Item -LiteralPath $bundlePath).LastWriteTime = $builtAt
+$ns = [uint64]([DateTimeOffset]$builtAt).ToUnixTimeMilliseconds() * 1000000
+$tsBytes = New-Object byte[] 16
+[Array]::Copy([BitConverter]::GetBytes($ns), $tsBytes, 8)
+[IO.File]::WriteAllBytes([IO.Path]::ChangeExtension($bundlePath, '.ts'), $tsBytes)
+
+$log = Join-Path $rdyGame 'r6\logs\redscript_rCURRENT.log'
+Set-Content -LiteralPath $log -NoNewline -Value @"
+[INFO - $($builtAt.ToString('ddd, dd MMM yyyy HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)) -0400] Compiling files
+[INFO - x] Compilation complete
+[INFO - x] Output successfully saved to $bundlePath
+"@
+
+$modFolder = Join-Path $rdyGame 'r6\scripts\FreshMod'
+New-Item -ItemType Directory -Path $modFolder -Force | Out-Null
+$redsFile = Join-Path $modFolder 'mod.reds'
+Set-Content -LiteralPath $redsFile 'public class Fresh {}' -NoNewline
+(Get-Item -LiteralPath $redsFile).LastWriteTime = (Get-Date).AddYears(-3)   # author's date
+(Get-Item -LiteralPath $modFolder).LastWriteTime = (Get-Date)               # deploy time
+
+$rdy2 = Get-AllOutput { & $readyTool -GameRoot $rdyGame }
+$scriptProblems = @(
+    if ($rdy2 -notmatch 'FIXED BY LAUNCHING') { 'a mod deployed after the bundle was not reported as fixed by launching' }
+    if ($rdy2 -notmatch 'FreshMod')           { 'the mod was not named - the hardlink timestamp trap' }
+)
+if ($scriptProblems) { Bad 'readiness: a mod deployed after the bundle is fixed by launching' ($scriptProblems -join "`n") }
+else                 { Ok  'readiness: a mod deployed after the bundle is fixed by launching' }
+
+# A failed compile is the highest-value finding in the tool: every .reds mod is
+# off, with no sign in game. It must never be filed as self-healing.
+Set-Content -LiteralPath $log -NoNewline -Value @"
+[INFO - $($builtAt.ToString('ddd, dd MMM yyyy HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)) -0400] Compiling files
+[ERROR - x] something went wrong
+[INFO - x] Output successfully saved to $bundlePath
+"@
+$rdy3 = Get-AllOutput { & $readyTool -GameRoot $rdyGame }
+if ($rdy3 -match 'EVERY \.reds mod is off') { Ok 'readiness: a failed compile is called out as install-wide' }
+else { Bad 'readiness: a failed compile is called out as install-wide' "a compile with no 'Compilation complete' was not escalated:`n$rdy3" }
+
+# ============================================================= collection ====
+#
+# Comparing an install against a curated collection is only useful if the two
+# sides are matched correctly, and the way that fails is silent: a hashtable
+# keyed by Int32 and probed with an Int64 - which is what a modId out of JSON
+# becomes - matches nothing and reports a perfect ZERO overlap. That reads as a
+# finding ("you share none of this list") rather than as the bug it is. It
+# happened while writing this tool by hand, and the number was believable.
+#
+# THE NO-NETWORK RULE APPLIES HERE TOO, which is why the tool takes -FromJson: a
+# suite that calls Nexus to test a comparison is not a test suite.
+
+$collTool = Join-Path $Root 'skills\cyberwise-reports\tools\Compare-Collection.ps1'
+$collStage = Join-Path $sandbox 'collstaging'
+New-Item -ItemType Directory -Path $collStage -Force | Out-Null
+
+# Two of these are Vortex-shaped and carry an id; the third is MO2-shaped and
+# carries none, which is the case that makes a comparison unreliable.
+foreach ($f in 'Shared Mod-111-1-0-1700000000', 'Other Mod-222-2-1-1700000000', 'HandUnzippedMod') {
+    New-Item -ItemType Directory -Path (Join-Path $collStage $f) -Force | Out-Null
+}
+
+# A payload shaped exactly like the API's, with modId as a NUMBER - the type
+# that broke the first hand-rolled comparison.
+$payload = @{
+    name = 'Fixture Collection'; summary = 'A stated scope'; revision = 3
+    revision_data = @{
+        modCount = 3; totalSize = 1073741824
+        modFiles = @(
+            @{ optional = $false; file = @{ mod = @{ modId = 111; name = 'Shared Mod'; summary = 'already installed'; author = 'a'; category = 'Gameplay'; adult = $false } } }
+            @{ optional = $false; file = @{ mod = @{ modId = 999; name = 'Crash Fix For Something'; summary = 'prevents a crash'; author = 'b'; category = 'Utilities'; adult = $false } } }
+            @{ optional = $false; file = @{ mod = @{ modId = 998; name = 'Shiny New Outfit'; summary = 'adds an outfit'; author = 'c'; category = 'Appearance'; adult = $false } } }
+            # The same mod twice, as a collection genuinely lists it: one file
+            # entry for the main download and one for a patch. Counting rows as
+            # mods overstates the list.
+            @{ optional = $false; file = @{ mod = @{ modId = 999; name = 'Crash Fix For Something'; summary = 'prevents a crash'; author = 'b'; category = 'Utilities'; adult = $false } } }
+        )
+    }
+}
+$payloadPath = Join-Path $sandbox 'collection.json'
+$payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $payloadPath -Encoding UTF8
+
+$collOut = Get-AllOutput { & $collTool -Slug fixture -FromJson $payloadPath -StagingRoot $collStage -Focus all }
+
+$problems = @(
+    if ($collOut -notmatch 'shared with you\s*:\s*1')  { 'the mod present in both was not matched - the Int32/Int64 key trap' }
+    if ($collOut -notmatch 'missing from you\s*:\s*2') { 'the two absent mods were not both reported missing' }
+    if ($collOut -notmatch '3 distinct mods across 4 file entries') { 'file entries were counted as distinct mods' }
+    if ($collOut -notmatch 'Crash Fix For Something')  { 'a missing mod was not named' }
+)
+if ($problems) { Bad 'collection: an install is matched against a collection by mod id' ($problems -join "`n") }
+else           { Ok  'collection: an install is matched against a collection by mod id' }
+
+# The whole reason to run it: surface the FIXES, which are named after the bug
+# rather than the feature and are the entries nobody finds by browsing.
+$focusOut = Get-AllOutput { & $collTool -Slug fixture -FromJson $payloadPath -StagingRoot $collStage -Focus stability }
+$focusProblems = @(
+    if ($focusOut -notmatch 'Crash Fix For Something') { 'the stability filter dropped a crash fix' }
+    if ($focusOut -match 'Shiny New Outfit')           { 'the stability filter kept a cosmetic mod' }
+)
+if ($focusProblems) { Bad 'collection: the stability focus keeps fixes and drops features' ($focusProblems -join "`n") }
+else                { Ok  'collection: the stability focus keeps fixes and drops features' }
+
+# An install whose folders carry no Nexus id cannot be compared, and saying
+# nothing is missing would be the wrong answer rather than a quiet one.
+$blindStage = Join-Path $sandbox 'blindstaging'
+New-Item -ItemType Directory -Path (Join-Path $blindStage 'JustAFolder') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $blindStage 'AnotherFolder') -Force | Out-Null
+$blindOut = Get-AllOutput { & $collTool -Slug fixture -FromJson $payloadPath -StagingRoot $blindStage -Focus all }
+if ($blindOut -match 'WARNING: fewer than half') { Ok 'collection: an install with no ids warns instead of reporting everything missing' }
+else { Bad 'collection: an install with no ids warns instead of reporting everything missing' "no warning for a staging root with no Nexus ids:`n$blindOut" }
+
+# -FromJson must make no network call at all - that is what makes it testable,
+# and a fallback that reached for a key anyway would defeat it.
+if ($collOut -notmatch 'No Nexus API key') { Ok 'collection: -FromJson needs no API key' }
+else { Bad 'collection: -FromJson needs no API key' 'it demanded a key despite being handed a payload' }
+
 # ============================================================== collisions ====
 #
 # The collision scan is the most consequential thing in this repo - it decides
@@ -1075,6 +1235,46 @@ $statusOut = Get-AllOutput { & $bisectTool -GameRoot $bgame -Status -RecordDir $
 if ($statusOut -match 'back in the game directory') { Ok 'bisect: a round the manager undid is reported as void' }
 else { Bad 'bisect: a round the manager undid is reported as void' "status did not notice a parked file had reappeared:`n$statusOut" }
 & $bisectTool -GameRoot $bgame -Round 'D' -Restore -RecordDir $brecs *>$null
+
+# SECURITY: a name in a cut list must not be able to leave the game directory.
+# `..\..\Documents\x` resolves perfectly well - just not where anyone intended -
+# and before containment existed this MOVED a file with nothing to do with the
+# game into the park folder, reported success, and wrote it into a manifest.
+# A cut list is exactly the kind of thing that arrives pasted from a forum or
+# generated by an agent reading untrusted text.
+$escapeVault = Join-Path $sandbox 'outside-the-game'
+New-Item -ItemType Directory -Path $escapeVault -Force | Out-Null
+$precious = Join-Path $escapeVault 'precious.txt'
+Set-Content -LiteralPath $precious 'do not move me' -NoNewline
+Set-Content -LiteralPath (Join-Path $sandbox 'cut-escape.txt') "..\outside-the-game\precious.txt"
+
+$escOut = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'ESC' -Park (Join-Path $sandbox 'cut-escape.txt') -RecordDir $brecs }
+$escProblems = @(
+    if (-not (Test-Path -LiteralPath $precious))        { 'a file outside the game directory was moved' }
+    if ($escOut -notmatch 'outside the game directory') { 'it did not say why the name was refused' }
+    if (Test-Path -LiteralPath (Join-Path $brecs 'ESC.json')) { 'it recorded a round built from an escaping name' }
+)
+if ($escProblems) { Bad 'bisect: a name cannot escape the game directory' ($escProblems -join "`n") }
+else              { Ok  'bisect: a name cannot escape the game directory' }
+
+# The manifest is a file like any other, so restore has to check too - otherwise
+# a doctored one writes wherever it likes.
+$forged = Join-Path $brecs 'FORGED.json'
+[pscustomobject]@{
+    Round = 'FORGED'; ParkedAt = '2026-01-01 00:00'; GameRoot = $bgame
+    ParkDir = (Join-Path $bgame '_bisect_parked\FORGED')
+    Items = @([pscustomobject]@{ Rel = '..\outside-the-game\planted.txt' })
+} | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $forged -Encoding UTF8
+$parkedForge = Join-Path $bgame '_bisect_parked\FORGED\..\outside-the-game\planted.txt'
+New-Item -ItemType Directory -Path (Split-Path -Parent $parkedForge) -Force | Out-Null
+Set-Content -LiteralPath $parkedForge 'planted' -NoNewline
+
+$forgeOut = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'FORGED' -Restore -RecordDir $brecs }
+if (Test-Path -LiteralPath (Join-Path $escapeVault 'planted.txt')) {
+    Bad 'bisect: a doctored manifest cannot write outside the game directory' 'restore wrote a file outside the game root'
+} else {
+    Ok  'bisect: a doctored manifest cannot write outside the game directory'
+}
 
 # A file missing from the park folder means something else moved it - a redeploy,
 # a cleanup, another round - and every round since is suspect. Saying so is the

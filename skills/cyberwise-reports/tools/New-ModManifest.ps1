@@ -214,6 +214,15 @@ if ($mods.Count -gt 0 -and $withId -eq 0) {
 # wrong for a quick inventory, wrong on a metered or offline connection, and
 # wrong in a test, where it would fetch real descriptions for invented mod ids.
 if ($NoNexus) { $NexusApiKey = $null }
+elseif (-not $NexusApiKey -and $env:NEXUS_API_KEY) {
+    # A KEY PASSED AS AN ARGUMENT IS VISIBLE TO EVERY PROCESS ON THE MACHINE for
+    # the duration of the call - Get-Process, Win32_Process and Task Manager's
+    # command-line column all show it, and it lands in shell history too. The
+    # parameter stays, because sometimes it is the only option, but this is
+    # strictly better and costs one line.
+    $NexusApiKey = $env:NEXUS_API_KEY
+    Write-Host "using API key from NEXUS_API_KEY" -ForegroundColor DarkGray
+}
 elseif (-not $NexusApiKey) {
     $credHelper = Join-Path $PSScriptRoot 'NexusCredential.ps1'
     if (Test-Path $credHelper) {

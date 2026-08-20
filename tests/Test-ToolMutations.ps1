@@ -278,6 +278,14 @@ Assert-Detects 'the signed conversion dropped, losing half of all hashes' $resol
     '$signed = $Hash' `
     'known hash resolves to its path'
 
+# Containment is one `if`, and without it a cut list can move any file the user
+# can read. Nothing errors, the round reports success, and the manifest records
+# a file that was never part of the game.
+Assert-Detects 'path containment removed, letting a list escape the game directory' $bisectRel `
+    'if (-not (Test-InsideGameRoot $full)) {' `
+    'if ($false) {' `
+    'cannot escape the game directory'
+
 # A round is armed while the manager still believes the mods are deployed, so a
 # deployment puts them back without anyone noticing. Not checking is how a round
 # scores a result on a configuration nobody recorded.

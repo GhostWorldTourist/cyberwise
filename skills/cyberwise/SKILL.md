@@ -187,6 +187,20 @@ because an unlisted archive sorts last and loses.
 | `tools/ModFileBackup.ps1` | snapshot / diff / restore for any file you are about to edit in place |
 | `tools/ModPatchWatch.ps1` | register every patch and override, then sweep for the ones whose upstream file has changed |
 | `tools/Test-ScriptsLive.ps1` | is a `.reds` mod's code actually in the compiled bundle the game loads |
+| `tools/Test-InstallReady.ps1` | before you press Play: what is wrong, and which half launching will fix |
+
+**Before a launch, ask what state the install is in.**
+
+```powershell
+tools\Test-InstallReady.ps1 -GameRoot '<path>'      # ~0.5s; -Deep reads the bundle
+```
+
+It sorts findings into **fixed by launching** and **launching will not fix
+this**, which is the distinction that makes any of it actionable. Script mods
+newer than the compiled bundle are the first kind and need no action at all;
+archives with no `modlist.txt` entry are the second, and they sort last and lose
+every file they contest until somebody notices. Reported together they are a wall
+of warnings; reported apart, one of them is the answer.
 
 **"The file is in `r6\scripts`" is not "the code is running."** `.reds` mods run
 from a bundle compiled at launch, so a mod installed since the last launch is
