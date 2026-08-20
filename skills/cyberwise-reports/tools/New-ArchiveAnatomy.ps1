@@ -330,6 +330,17 @@ if ($Md) {
         [void]$mb.AppendLine("| $($a.Name -replace '\|','\|') | $('{0:N0}' -f $a.Replaces.Count) | $('{0:N0}' -f $a.Added) |")
     }
     [void]$mb.AppendLine()
+    if ($eclipsed.Count) {
+        [void]$mb.AppendLine('## Nothing survives')
+        [void]$mb.AppendLine()
+        [void]$mb.AppendLine('Installed, enabled, and contributing no file to the game.')
+        [void]$mb.AppendLine()
+        foreach ($e in $eclipsed) {
+            $to = @($e.LostTo.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1 | ForEach-Object { $_.Key })
+            [void]$mb.AppendLine("- **$($e.Name)** - all $($e.Total) file(s) claimed by $($to -join '')")
+        }
+        [void]$mb.AppendLine()
+    }
     if ($topLosers.Count) {
         [void]$mb.AppendLine('## Losing ground')
         [void]$mb.AppendLine()
@@ -430,6 +441,11 @@ $doc = @"
   td.to { color:var(--dim); font-size:11.5px; }
   td.to b { color:var(--text); font-weight:600; }
   tr.gone td.nm { color:var(--red); }
+  .gone-panel { border-color:#3b1d1d; }
+  .gonerow { display:flex; gap:14px; align-items:baseline; padding:5px 0; border-top:1px solid var(--line); }
+  .gonerow:first-of-type { border-top:none; }
+  .gonerow b { font:600 12.5px/1.4 Consolas,monospace; color:var(--red); overflow-wrap:anywhere; }
+  .gonerow span { color:var(--dim); font-size:11.5px; }
   footer { margin-top:26px; color:var(--dim); font:11px/1.7 Consolas,monospace;
            border-top:1px solid var(--line); padding-top:12px; }
 </style></head><body>
@@ -480,6 +496,16 @@ $doc = @"
     <h2>Deepest reach into vanilla<em>orange bar = share of the archive that overrides rather than adds</em></h2>
     <table>$repRows</table>
   </div>
+
+$(if ($eclipsed.Count) { @"
+  <div class="panel wide gone-panel">
+    <h2>Nothing survives<em>installed, enabled, and contributing no file to the game</em></h2>
+    $(($eclipsed | ForEach-Object {
+        $to = @($_.LostTo.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1 | ForEach-Object { $_.Key })
+        "<div class=""gonerow""><b>$(Get-Esc $_.Name)</b><span>all $($_.Total) file(s) claimed by $(Get-Esc ($to -join ''))</span></div>"
+    }) -join '')
+  </div>
+"@ })
 
 $(if ($lossRows) { @"
   <div class="panel wide">
