@@ -105,6 +105,68 @@ keeps winning, and this is where it stops being invisible.
 tools\New-ModDossier.ps1 -Mod 'Visible Bullets' -GameRoot '<path>'
 ```
 
+## Mod credits
+
+234 people, none of whom met, all of whom are in this game.
+
+![Mod credits](docs/images/mod-credits.png)
+
+Every other report here is a diagnostic. This one is not for debugging anything
+— it is the one page you could show somebody who does not mod. A heavily modded
+install is the work of hundreds of people, and the only place that usually shows
+up is a folder listing full of version numbers and hashes.
+
+Two things it has to keep getting right, and both are about honesty rather than
+crashes:
+
+**Distinct mods, not staging folders.** A FOMOD with options installs as several
+folders sharing one Nexus id. Counting folders read 798 where the truth was 715,
+and printed one mod's title four times in its author's line — the flattering
+direction of error, and the one a reader cannot check.
+
+**Adult mods are omitted by default, and the omitted count is printed.** The
+page is built to be shown, so the default is the one that does not surprise
+somebody mid-stream; but silently dropping people from a credits list is its own
+unkindness. `-ShowAdult` includes everything.
+
+```powershell
+tools\New-ModCredits.ps1 -StagingRoot '<staging>' -Md credits.md
+```
+
+---
+
+## Archive anatomy
+
+What the archive layer replaces, what it invents, and where it concentrates.
+
+![Archive anatomy](docs/images/archive-anatomy.png)
+
+The distinction that makes this page possible is **replace versus add**. An
+archive hash the vendored base-game path table knows is an override — the game
+shipped that file and this mod is standing on top of it. A hash it does not know
+is an asset the mod invented. Without the path table those two are
+indistinguishable, and they mean opposite things: 34,086 new assets is a library
+of content, 35,713 overrides is the surface that can break on the next patch.
+
+**Unresolved is not unknown.** The table covers 99.97% of base game and Phantom
+Liberty, which is the only reason the "brand new" column can be trusted — and
+the reason that caveat is printed on the page rather than left to the reader.
+
+The bottom half is precedence: which archives reach deepest into vanilla, and
+which lose files to something earlier in `modlist.txt`. An archive in red has
+nothing left — every file it ships is claimed by something above it, so it is
+installed, enabled and inert. REDmod archives are counted but never ranked
+against loose ones, because `modlist.txt` does not order them and naming a
+winner there would be a guess wearing a verdict's clothing.
+
+About 45 seconds on an 800-mod install, and it writes nothing to the game.
+
+```powershell
+tools\New-ArchiveAnatomy.ps1 -GameRoot '<path>' -Md anatomy.md
+```
+
+---
+
 ## Hotkey cheatsheet
 
 57 bindings, harvested from the five separate places an install keeps them.

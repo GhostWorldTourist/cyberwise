@@ -134,6 +134,59 @@ text and a "paste this".**
 House style - palette, one type base, flex over CSS multi-column, Discord's lack
 of table rendering and the 2000-character cap: `references/report-design.md`.
 
+## Two reports that are not diagnostics
+
+Everything above answers "what is broken". These two answer "what is this
+install", which is a different job and worth keeping distinct - neither one
+should ever be offered as an answer to a problem.
+
+### The credits roll
+
+```powershell
+tools\New-ModCredits.ps1 -StagingRoot '<staging>' -Md credits.md
+```
+
+Every author whose work is in the game, and what each of them made. It is the
+one page here you could show somebody who does not mod.
+
+Two things it must keep getting right:
+
+- **Distinct mods, not staging folders.** A FOMOD with options installs as
+  several folders under one Nexus id. Counting folders inflated a real install
+  from 715 to 798 and printed one mod's title four times in its author's line.
+- **Adult mods are omitted by default, and the count is printed.** The page is
+  built to be shown, so the safe default is the one that does not surprise
+  somebody on a stream - but silently dropping people from a credits list is its
+  own unkindness. `-ShowAdult` includes everything.
+
+Authors come from the Nexus metadata cache the manifest tool builds. A mod that
+has never been enriched appears with no author on record, said plainly rather
+than guessed at.
+
+### The archive anatomy
+
+```powershell
+tools\New-ArchiveAnatomy.ps1 -GameRoot '<path>' -Md anatomy.md
+```
+
+What the archive layer *is*: how much of the base game it replaces, what it is
+made of, and which parts of Night City it concentrates on.
+
+The distinction that makes it possible is **replace versus add**. An archive
+hash the vendored base-game path table knows is an override - the game shipped
+that file and this mod stands on top of it. A hash it does not know is an asset
+the mod invented. Every tool that reads archives without the path table sees
+those as the same thing, and they mean opposite things: 4,000 new meshes is a
+content pack, 40 overridden ones is a mod that can break on the next patch.
+
+**Unresolved is not unknown.** The table covers 99.97% of base game + EP1, which
+is the only reason the "new" column can be trusted at all. That caveat is
+printed on the page, not left to the reader.
+
+It reads the index of every `.archive` in the load order - about 45 seconds on
+an 800-mod install - and writes nothing to the game. REDmod archives are counted
+but never ranked against loose ones, because `modlist.txt` does not order them.
+
 ## Tools
 
 | tool | does |
@@ -141,10 +194,18 @@ of table rendering and the 2000-character cap: `references/report-design.md`.
 | `tools/New-SystemProfile.ps1` | machine + install facts that change a diagnosis, flags first |
 | `tools/New-ModManifest.ps1` | inventory of an installed load order, with descriptions |
 | `tools/New-ModDossier.ps1` | one mod, every layer: what it ships and which parts are actually doing anything |
+| `tools/New-ModCredits.ps1` | the people whose work is in the game, grouped by author; adult omitted by default |
+| `tools/New-ArchiveAnatomy.ps1` | what the archive layer replaces versus what it adds, by area and by type |
 | `tools/ModManifestHtml.ps1` | HTML renderer for the manifest (dot-sourced) |
 | `tools/NexusCredential.ps1` | Nexus API key in Windows Credential Manager |
 | `tools/Show-ViewportProbe.ps1` | asks the user's own browser window how big it is |
 | `tools/Measure-PageFit.ps1` | does a generated page fit a given viewport |
+
+**Every HTML report here takes `-Md` and writes the same facts as markdown**,
+for a forum post, a wiki, or a Discord message where a local HTML file is
+useless to whoever you are talking to. Where the markdown is the variant that
+gets pasted, it carries the redaction too - and anything over 2000 characters
+says so, because Discord refuses an over-long message rather than clipping it.
 
 **Pass the paths explicitly.** These carry defaults for a game root, a staging
 root and a viewport. A default that happens to exist on the wrong machine is
