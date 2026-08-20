@@ -52,11 +52,17 @@ packing, per-mod json conventions: `references/input-bindings.md`.
 ```powershell
 tools\Get-Hotkeys.ps1 -GameRoot '<path>'          # every binding, all five stores
 tools\New-HotkeySheet.ps1 -GameRoot '<path>' -Out sheet.html
+tools\New-HotkeySheet.ps1 -GameRoot '<path>' -Out sheet.html -Md sheet.md
 ```
 
 `Get-Hotkeys.ps1` resolves the install itself from Steam/GOG/Epic records if
 `-GameRoot` is omitted, and errors rather than guessing. Zero bindings is a valid
 result - an archives-only load order declares no keys.
+
+`-Md` writes the same bindings as markdown tables, for pasting somewhere the
+HTML is no use. A full sheet runs past Discord's 2000-character limit, which
+refuses the message rather than truncating it, so the tool prints the length
+when it is over.
 
 `New-HotkeySheet.ps1` renders a self-contained sheet. Anything genuinely not on
 disk - a programmable mouse's hardware mapping, a mod's tap/hold semantics - goes

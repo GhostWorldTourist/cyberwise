@@ -37,6 +37,11 @@ param(
     [string] $Html = (Join-Path (Get-Location) 'mod-dossier.html'),
     [switch] $NoHtml,
 
+    # The same dossier as markdown. This is the report most likely to be pasted
+    # into a help thread - "here is everything this mod ships and what of it is
+    # running" - and a thread wants text, not an HTML file nobody can open.
+    [string] $Md,
+
     # Show the real paths. Off by default: a dossier is something people paste
     # into a thread when asking why a mod does nothing.
     [switch] $NoRedact
@@ -360,6 +365,55 @@ if ($patches.Count) {
     Write-Host "  YOUR OVERRIDES ON IT ($($patches.Count))" -ForegroundColor Cyan
     $patches | ForEach-Object { Write-Host ("    {0} - {1}" -f $_.Name, $_.Note) -ForegroundColor DarkGray }
     Write-Host '    Run Test-ModPatches after any update to this mod.' -ForegroundColor DarkGray
+}
+
+# ----------------------------------------------------------------- markdown --
+
+if ($Md) {
+    $mb = [Text.StringBuilder]::new()
+    $bar = { param($x) ([string]$x) -replace '\|', '\|' }
+
+    [void]$mb.AppendLine("# $($meta.Name)")
+    [void]$mb.AppendLine()
+    $id = @()
+    if ($meta.Version)   { $id += "v$($meta.Version)" }
+    if ($meta.Installed) { $id += "installed $($meta.Installed.ToString('yyyy-MM-dd'))" }
+    if ($meta.NexusId)   { $id += "[nexus $($meta.NexusId)](https://www.nexusmods.com/cyberpunk2077/mods/$($meta.NexusId))" }
+    if ($id) { [void]$mb.AppendLine(($id -join ' - ')); [void]$mb.AppendLine() }
+    [void]$mb.AppendLine("**$verdict**")
+    [void]$mb.AppendLine()
+    [void]$mb.AppendLine('| Layer | State | Detail |')
+    [void]$mb.AppendLine('| --- | --- | --- |')
+    foreach ($f in $findings) {
+        [void]$mb.AppendLine("| $(& $bar $f.Layer) | $(& $bar $f.State) | $(& $bar $f.Detail) |")
+    }
+    [void]$mb.AppendLine()
+    if ($settings.Count) {
+        [void]$mb.AppendLine("## Settings you changed ($($settings.Count))")
+        [void]$mb.AppendLine()
+        foreach ($s in $settings) { [void]$mb.AppendLine("- ``$($s.Key)`` = $($s.Value)") }
+        [void]$mb.AppendLine()
+    }
+    if ($patches.Count) {
+        [void]$mb.AppendLine("## Your overrides on it ($($patches.Count))")
+        [void]$mb.AppendLine()
+        foreach ($pa in $patches) { [void]$mb.AppendLine("- **$($pa.Name)** - $($pa.Note)") }
+        [void]$mb.AppendLine()
+    }
+    # Hide-Path, not the raw path: the markdown is the variant that gets pasted,
+    # so it is the one that must not carry a username.
+    [void]$mb.AppendLine("_$(Hide-Path $stage.FullName) - generated $(Get-Date -Format 'yyyy-MM-dd HH:mm') by cyberwise._")
+
+    $mdText = $mb.ToString()
+    $dirM = Split-Path -Parent $Md
+    if ($dirM -and -not (Test-Path -LiteralPath $dirM)) { New-Item -ItemType Directory -Path $dirM -Force | Out-Null }
+    Set-Content -LiteralPath $Md -Value $mdText -Encoding UTF8
+    Write-Host ''
+    Write-Host "wrote $((Resolve-Path -LiteralPath $Md).Path)" -ForegroundColor Green
+    # Discord refuses a message over 2000 characters rather than truncating it.
+    if ($mdText.Length -gt 2000) {
+        Write-Host "  $($mdText.Length) chars - too long for one Discord message (2000 max); attach the file" -ForegroundColor DarkYellow
+    }
 }
 
 # --------------------------------------------------------------------- html --

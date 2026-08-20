@@ -21,6 +21,10 @@ param(
     [string] $Notes,
     [string] $Out = "$env:USERPROFILE\Downloads\cp2077_hotkeys_cheatsheet.html",
 
+    # The same sheet as markdown, for a forum post, a wiki, or a Discord message
+    # where a local HTML file is useless to whoever you are talking to.
+    [string] $Md,
+
     # Every type size on the sheet derives from one base, so this scales the
     # whole thing without disturbing the proportions. 1.0 is sized for reading
     # from normal seating distance; go up for a TV or a glance across the desk.
@@ -206,6 +210,68 @@ $stamp   = Get-Date -Format 'yyyy-MM-dd HH:mm'
 # No key counts here. How many bindings exist is not something you look up, and
 # the one fact this line has to carry is how stale the sheet is.
 $subline = "READ FROM DISK $stamp"
+
+# ------------------------------------------------------------------ markdown --
+#
+# The HTML sheet is for a second monitor; this is for pasting. It carries the
+# same bindings and drops only what is purely visual - the mouse-pad diagram and
+# the colour coding, neither of which survives as text anyway.
+
+if ($Md) {
+    $mb = [Text.StringBuilder]::new()
+    [void]$mb.AppendLine('# Cyberpunk 2077 - hotkeys')
+    [void]$mb.AppendLine()
+    [void]$mb.AppendLine("Read from disk $stamp. An asterisk means the mod's own default, not a key you chose.")
+    [void]$mb.AppendLine()
+    foreach ($c in $order) {
+        $set = @($binds | Where-Object Context -eq $c | Sort-Object Mod, Action)
+        if (-not $set) { continue }
+        [void]$mb.AppendLine("## $c")
+        [void]$mb.AppendLine()
+        [void]$mb.AppendLine('| Key | Action | Mod |')
+        [void]$mb.AppendLine('| --- | --- | --- |')
+        foreach ($b in $set) {
+            # A pipe in a key name or a mod title ends the cell early and the
+            # rest of the row lands in the wrong column.
+            $cell = { param($x) ([string]$x) -replace '\|', '\|' }
+            $dot  = if ($b.Source -eq 'your setting') { '' } else { ' *' }
+            [void]$mb.AppendLine("| ``$(& $cell $b.Key)`` | $(& $cell $b.Action) | $(& $cell $b.Mod)$dot |")
+        }
+        [void]$mb.AppendLine()
+    }
+    foreach ($g in $n.gestures) {
+        [void]$mb.AppendLine("## $($g.group)$(if ($g.mod) { " - $($g.mod)" })")
+        [void]$mb.AppendLine()
+        foreach ($i in $g.items) {
+            $steps = if ($i.steps) { ' (' + (($i.steps) -join ' > ') + ')' } else { '' }
+            [void]$mb.AppendLine("- ``$($i.key)`` $($i.gesture) - $($i.does)$steps")
+        }
+        [void]$mb.AppendLine()
+    }
+    if ($collisions -and $ShowSharedKeys) {
+        [void]$mb.AppendLine('## Shared keys')
+        [void]$mb.AppendLine()
+        [void]$mb.AppendLine('Bindings scope to an input context, so most of these never fire together.')
+        [void]$mb.AppendLine()
+        foreach ($g in $collisions) {
+            $who = ($g.Group | ForEach-Object { "$($_.Action) ($($_.Context))" }) -join '; '
+            [void]$mb.AppendLine("- ``$($g.Name)`` - $who")
+        }
+        [void]$mb.AppendLine()
+    }
+
+    $mdText = $mb.ToString()
+    Set-Content -LiteralPath $Md -Value $mdText -Encoding UTF8
+    Write-Host "wrote $Md" -ForegroundColor Green
+
+    # DISCORD REFUSES a message over 2000 characters rather than clipping it, and
+    # a full key sheet is comfortably over. Somebody pasting this to ask for help
+    # finds out at the worst moment, so say it here instead.
+    if ($mdText.Length -gt 2000) {
+        Write-Host ("  $($mdText.Length) chars - too long for one Discord message (2000 max); attach the file or paste one section" ) -ForegroundColor DarkYellow
+    }
+}
+
 
 $html = @"
 <!doctype html>
