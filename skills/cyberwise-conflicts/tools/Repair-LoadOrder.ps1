@@ -49,6 +49,9 @@ param(
     [switch] $Fix,
     [switch] $PruneStale,
     [switch] $SkipScan,
+    # Leave REDmod archives out of the scan. They are included by default,
+    # because excluding them silently was the bug.
+    [switch] $SkipRedmod,
     # Name the files one archive loses, and to whom - and what it beats. Needs
     # the vendored resource-path table to turn hashes into paths; without it the
     # relationships still print, as hashes.
@@ -309,19 +312,69 @@ if (-not $SkipScan) {
 
     $owner = @{}
     $total = @{}
+    $domain = @{}     # archive name -> 'loose' or 'redmod'
+
     foreach ($f in (Get-ChildItem -LiteralPath $ModDir -Filter *.archive)) {
         $hs = Get-ArchiveHashes $f.FullName
         if ($null -eq $hs) { Write-Warn "unreadable (not RDAR): $($f.Name)"; continue }
         $total[$f.Name] = $hs.Count
+        $domain[$f.Name] = 'loose'
         foreach ($h in $hs) {
             if (-not $owner.ContainsKey($h)) { $owner[$h] = New-Object 'System.Collections.Generic.List[string]' }
             $owner[$h].Add($f.Name)
         }
     }
 
+    # REDMOD ARCHIVES LIVE SOMEWHERE ELSE ENTIRELY, and until now this scan did
+    # not look at them. That is an unstated boundary rather than a wrong answer,
+    # and it is the worse kind: a report saying "no unexplained inert archives"
+    # was making a claim about `archive\pc\mod` while `mods\<name>rchives`
+    # sat outside its view. A REDmod can win or lose a file without appearing in
+    # any report the user runs.
+    #
+    # They are a SEPARATE PRECEDENCE DOMAIN. `modlist.txt` does not order them -
+    # REDmod deploy does, and this tool does not establish which domain wins a
+    # file contested across both. So they are scanned, reported, and explicitly
+    # NOT ranked against loose archives. Naming a winner here would be a guess
+    # wearing a verdict's clothing.
+    $redmodRoot = $null
+    if (-not $SkipRedmod) {
+        $gameRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $ModDir))
+        $candidate = Join-Path $gameRoot 'mods'
+        if (Test-Path -LiteralPath $candidate) { $redmodRoot = $candidate }
+    }
+    if ($redmodRoot) {
+        foreach ($f in (Get-ChildItem -LiteralPath $redmodRoot -Recurse -Filter *.archive -File -ErrorAction SilentlyContinue)) {
+            # Name it by its REDmod folder, because the bare filename collides
+            # with the loose copy constantly - the same mod shipped both ways is
+            # exactly the case this has to describe clearly.
+            $rel = $f.FullName.Substring($redmodRoot.Length + 1)
+            $key = "redmod:" + ($rel.Split([char]92)[0]) + "/" + $f.Name
+            $hs = Get-ArchiveHashes $f.FullName
+            if ($null -eq $hs) { Write-Warn "unreadable (not RDAR): $key"; continue }
+            $total[$key] = $hs.Count
+            $domain[$key] = 'redmod'
+            foreach ($h in $hs) {
+                if (-not $owner.ContainsKey($h)) { $owner[$h] = New-Object 'System.Collections.Generic.List[string]' }
+                $owner[$h].Add($key)
+            }
+        }
+    }
+
     $lost = @{}
+    $crossDomain = @{}
     foreach ($kv in $owner.GetEnumerator()) {
         if ($kv.Value.Count -lt 2) { continue }
+
+        # A file claimed in both domains cannot be ranked by modlist.txt, which
+        # only orders one of them. Record it and move on rather than inventing a
+        # winner - see the note above.
+        $domains = @($kv.Value | ForEach-Object { $domain[$_] } | Select-Object -Unique)
+        if ($domains.Count -gt 1) {
+            $crossDomain[$kv.Key] = @($kv.Value)
+            continue
+        }
+
         $ranked = $kv.Value | Sort-Object $rank
         foreach ($l in $ranked[1..($ranked.Count - 1)]) {
             if (-not $lost.ContainsKey($l)) { $lost[$l] = @{ Count = 0; To = @{}; Hashes = @{} } }
@@ -358,6 +411,21 @@ if (-not $SkipScan) {
                 $wp = if ($idx.ContainsKey($w)) { $idx[$w] + 1 } else { 'UNLISTED' }
                 Write-Host "         $($lost[$i].To[$w]) file(s) -> $w (line $wp)" -ForegroundColor DarkGray
             }
+        }
+    }
+
+    if ($crossDomain.Count) {
+        Write-Host ''
+        Write-Host ("  {0} file(s) are claimed by BOTH a loose archive and a REDmod." -f $crossDomain.Count) -ForegroundColor Yellow
+        Write-Host '  modlist.txt orders only the loose ones, so which side wins is not' -ForegroundColor DarkGray
+        Write-Host '  established here. Test it in game before assuming either way, or' -ForegroundColor DarkGray
+        Write-Host '  remove one copy - the same mod installed both ways is the usual cause.' -ForegroundColor DarkGray
+        $shown = 0
+        foreach ($kv in $crossDomain.GetEnumerator()) {
+            if ($shown -ge 10) { Write-Host "    ...and $($crossDomain.Count - 10) more" -ForegroundColor DarkGray; break }
+            $namesFor = ($kv.Value -join '  vs  ')
+            Write-Host "    $namesFor" -ForegroundColor DarkGray
+            $shown++
         }
     }
 

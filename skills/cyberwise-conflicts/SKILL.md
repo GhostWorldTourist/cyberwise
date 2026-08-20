@@ -76,6 +76,14 @@ loses routinely inverts what the count implies. One skin mod here kept 13 of its
 microdetail normal, and a shader default: it wins the arithmetic and loses the
 material. A percentage cannot tell you that.
 
+**And the scan sees one of two precedence systems.** REDmod archives live in
+`mods\<name>\archives` and are ordered by REDmod deploy, not by `modlist.txt`.
+They are scanned, but files contested across both domains are reported
+*unranked* - nothing here establishes which side wins, and naming one would be a
+guess wearing a verdict. On one install that was 63 files, on a load order
+previously reported clean. Which build to install in the first place:
+`cyberwise/references/environment.md`.
+
 **But an inert ARCHIVE does not mean an inert MOD.** Before advising an uninstall,
 check the rest of the payload. A mod's real content may be a CET Lua file, an
 entSpawner registration, a `.reds` script or an `.xl` - none of which appear in an

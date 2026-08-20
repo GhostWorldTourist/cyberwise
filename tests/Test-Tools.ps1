@@ -825,6 +825,98 @@ if ($hkErr) {
     }
 }
 
+# ============================================================== collisions ====
+#
+# The collision scan is the most consequential thing in this repo - it decides
+# whether a mod is reported as doing nothing - and until now it had NO test,
+# because the fixtures write stub .archive files that are not RDAR and the
+# reader correctly refuses them. So the scan was only ever exercised against one
+# real install, where you cannot construct the case you want to check.
+#
+# A minimal RDAR writer fixes that. The index is the only part the reader looks
+# at: file bodies are Oodle-compressed and irrelevant, so a valid header plus an
+# index of 56-byte entries whose first 8 bytes are the name hash is a complete
+# fixture.
+
+function New-FixtureArchive {
+    param([string] $Path, [UInt64[]] $Hashes)
+
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+    $ms = New-Object System.IO.MemoryStream
+    $bw = New-Object System.IO.BinaryWriter($ms)
+    $bw.Write([Text.Encoding]::ASCII.GetBytes('RDAR'))   # magic
+    $bw.Write([uint32]12)                                # version
+    # The header is 4+4+8+4 = 20 bytes, so the index starts at 20. An earlier
+    # draft said 24, which made the reader seek four bytes into the index and
+    # take the entry count from the wrong field - a fixture that parses as
+    # garbage rather than failing.
+    $bw.Write([uint64]20)                                # indexPosition
+    $bw.Write([uint32]0)                                 # indexSize, unread
+    $bw.Write([uint32]8); $bw.Write([uint32]0); $bw.Write([uint64]0)
+    $bw.Write([uint32]$Hashes.Count)
+    $bw.Write([uint32]0); $bw.Write([uint32]0)
+    foreach ($h in $Hashes) {
+        $entry = New-Object byte[] 56
+        [Array]::Copy([BitConverter]::GetBytes([uint64]$h), $entry, 8)
+        $bw.Write($entry)
+    }
+    $bw.Flush()
+    [IO.File]::WriteAllBytes($Path, $ms.ToArray())
+    $bw.Dispose(); $ms.Dispose()
+}
+
+$repairTool = Join-Path $Root 'skills\cyberwise-conflicts\tools\Repair-LoadOrder.ps1'
+$colGame = Join-Path $sandbox 'collisions'
+$colMod  = Join-Path $colGame 'archive\pc\mod'
+New-Item -ItemType Directory -Path (Join-Path $colGame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $colGame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+New-Item -ItemType Directory -Path $colMod -Force | Out-Null
+
+# winner holds 1,2,3; loser holds 2,3 and is listed AFTER it, so every file it
+# carries is owned by something earlier: inert, which is the failure this whole
+# scan exists to catch.
+New-FixtureArchive -Path (Join-Path $colMod 'winner.archive') -Hashes @([uint64]1, [uint64]2, [uint64]3)
+New-FixtureArchive -Path (Join-Path $colMod 'loser.archive')  -Hashes @([uint64]2, [uint64]3)
+New-FixtureArchive -Path (Join-Path $colMod 'solo.archive')   -Hashes @([uint64]9)
+Set-Content -LiteralPath (Join-Path $colMod 'modlist.txt') "winner.archive`nloser.archive`nsolo.archive`n" -NoNewline
+
+$colOut = Get-AllOutput { & $repairTool -ModDir $colMod }
+$problems = @(
+    if ($colOut -notmatch 'INERT: loser\.archive')  { 'an archive whose every file is owned earlier was not reported as inert' }
+    if ($colOut -match 'INERT: winner\.archive')    { 'the archive that wins its files was called inert' }
+    if ($colOut -match 'INERT: solo\.archive')      { 'an archive contesting nothing was called inert' }
+)
+if ($problems) { Bad 'collisions: an archive owned entirely by earlier ones is inert' ($problems -join "`n") }
+else           { Ok  'collisions: an archive owned entirely by earlier ones is inert' }
+
+# REDmod archives live under mods\<name>\archives and are ordered by REDmod
+# deploy, not by modlist.txt. Leaving them out was an UNSTATED boundary: a report
+# saying "no unexplained inert archives" described one directory while another
+# sat outside its view, and a REDmod can win or lose a file without appearing.
+$rmPath = Join-Path (Join-Path (Join-Path (Join-Path $colGame 'mods') 'SomeRedmod') 'archives') 'rm.archive'
+New-FixtureArchive -Path $rmPath -Hashes @([uint64]3, [uint64]77)
+$rmOut = Get-AllOutput { & $repairTool -ModDir $colMod }
+$rmProblems = @(
+    if ($rmOut -notmatch 'claimed by BOTH')               { 'a file held by both a loose archive and a REDmod was not reported' }
+    if ($rmOut -notmatch 'redmod:SomeRedmod/rm\.archive') { 'the REDmod side was not named' }
+)
+if ($rmProblems) { Bad 'collisions: a file contested across both domains is reported' ($rmProblems -join "`n") }
+else             { Ok  'collisions: a file contested across both domains is reported' }
+
+# ...and it must not RANK them. modlist.txt orders only the loose side, so
+# declaring a winner across domains would be a guess wearing a verdict.
+if ($rmOut -match 'INERT: redmod:') {
+    Bad 'collisions: a cross-domain contest is not ranked as a loss' 'a REDmod archive was declared inert against a list that does not order it'
+} else {
+    Ok  'collisions: a cross-domain contest is not ranked as a loss'
+}
+
+$skipOut = Get-AllOutput { & $repairTool -ModDir $colMod -SkipRedmod }
+if ($skipOut -notmatch 'claimed by BOTH') { Ok 'collisions: -SkipRedmod leaves REDmod archives out' }
+else { Bad 'collisions: -SkipRedmod leaves REDmod archives out' 'REDmod archives were scanned anyway' }
+
 # ========================================================= resource paths ====
 #
 # The table turns archive hashes into file names, which is the difference between

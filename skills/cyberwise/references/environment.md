@@ -139,6 +139,38 @@ plugin, and that changes what you can see:
 - REDmod deploys automatically before launch, so REDmod state is also a
   launch-time artifact rather than something sitting on disk.
 
+## REDmod or archive? Two precedence systems, not one
+
+Many mods ship both a "default" and a "REDmod" build of identical content. The
+choice is not cosmetic, and it is not about which is newer or more official.
+
+| | default / loose | REDmod |
+|---|---|---|
+| lands in | `archive\pc\mod\` | `mods\<name>\archives\` |
+| ordered by | `modlist.txt`, explicit and editable | REDmod deploy order |
+| deploy step | none | required after every change |
+| visible to a `modlist.txt` conflict scan | yes | **no** |
+
+**Default is the right answer unless the mod needs REDmod.** The list of things
+that genuinely need it is short: **custom audio** - new `.wav` sounds are only
+supported through REDmod - mods shipping REDmod-only scripts or tweaks, and mods
+that offer no other build. Everything else gains nothing and costs visibility.
+
+**The cost is diagnostic, and it is the part people miss.** Two mods contesting a
+file are only comparable when one list orders both of them. `modlist.txt` orders
+the loose archives; REDmod deploy orders the others. So a REDmod can win or lose
+a file without appearing in a load-order report at all, and "no conflicts" then
+means "no conflicts *among the ones I looked at*".
+
+`Repair-LoadOrder.ps1` scans both now and reports files claimed in both domains
+separately - **without ranking them**, because nothing here establishes which
+domain wins. On one install that surfaced 63 files contested between a REDmod
+framework and loose retexture archives, on a load order that had been reported
+clean for months. Test in game or remove one copy; do not guess a winner.
+
+The usual cause of a cross-domain contest is **the same mod installed both
+ways** - someone tries the REDmod build, then the default one, and both remain.
+
 **Practical consequences.** On an MO2 install:
 
 - "The file isn't there" is not evidence the mod isn't installed.
