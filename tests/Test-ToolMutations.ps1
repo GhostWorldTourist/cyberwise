@@ -96,6 +96,8 @@ $liveRel     = 'skills\cyberwise\tools\Test-ScriptsLive.ps1'
 $dossierRel  = 'skills\cyberwise-reports\tools\New-ModDossier.ps1'
 $bisectRel   = 'skills\cyberwise-crashes\tools\Invoke-BisectRound.ps1'
 $resolveRel  = 'skills\cyberwise-conflicts\tools\Resolve-ResourcePath.ps1'
+$creditRel   = 'skills\cyberwise-reports\tools\New-ModCredits.ps1'
+$anatomyRel  = 'skills\cyberwise-reports\tools\New-ArchiveAnatomy.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -341,6 +343,37 @@ Assert-Detects 'unrecognised preset hashes dropped instead of shown' $presetRel 
     'if (-not $group) { continue }
         $label = Get-Label $group' `
     'unknown hashes survive'
+
+# The credits page counted staging folders and called them mods: a FOMOD with
+# options installs several folders under one Nexus id, so the headline read 798
+# where the truth was 715, and four identical titles sat in one author's line.
+Assert-Detects 'the credits page counting staging folders as mods' $creditRel `
+    '$folderCount = $mods.Count
+$mods = $deduped' `
+    '$folderCount = $mods.Count   # mutation: dedupe computed and thrown away' `
+    'one mod installed twice is one credit'
+
+# Adult mods off by default is a promise the page makes to whoever shows it on a
+# stream. Nothing else in the suite would notice it breaking.
+Assert-Detects 'adult mods leaking onto a page built to be shown' $creditRel `
+    'if ($meta -and $meta.adult -and -not $ShowAdult) { $adultHidden++; continue }' `
+    'if ($meta -and $meta.adult -and -not $ShowAdult) { $adultHidden++ }' `
+    'adult mods are omitted by default'
+
+# Replace-versus-add IS the anatomy report. Classify every file as new and it
+# describes an install that overrides nothing, which is both wrong and
+# reassuring - the direction of error that does not get questioned.
+Assert-Detects 'every file classified as new rather than an override' $anatomyRel `
+    'if ($ordOf.TryGetValue($signed, [ref]$o)) { $replaces.Add($paths[$o]) } else { $added++ }' `
+    '$added++   # mutation: the base-game table never consulted' `
+    'tells a replaced file from an added one'
+
+# Precedence comes from modlist.txt, not from the filename. Sorting by name
+# instead still produces a winner for every contest, and a plausible page.
+Assert-Detects 'contests decided alphabetically instead of by load order' $anatomyRel `
+    '$ranked = @($claimants | Sort-Object Rank, Name)' `
+    '$ranked = @($claimants | Sort-Object Name)' `
+    'names what loses, and only what loses'
 
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 

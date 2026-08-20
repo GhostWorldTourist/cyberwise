@@ -825,6 +825,31 @@ if ($hkErr) {
     }
 }
 
+# The sheet's markdown twin, built from the same harvest. A key sheet is the
+# thing people paste when asking why a bind does nothing, so what it must not do
+# is lose a row or break its own table - a pipe inside a key name ends the cell
+# early and every column after it shifts.
+
+$sheetTool = Join-Path $Root 'skills\cyberwise-hotkeys\tools\New-HotkeySheet.ps1'
+$hkMd   = Join-Path $sandbox 'hotkeys.md'
+$hkHtml = Join-Path $sandbox 'hotkeys.html'
+$sheetOut = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $hkHtml -Md $hkMd }
+$hkMdText = Get-Content -LiteralPath $hkMd -Raw
+
+$hkMdBad = @(
+    if ($hkMdText -notmatch '(?m)^\| Key \| Action \| Mod \|') { 'no binding table in the markdown' }
+    # F7 is the user's own rebind; F5 comes from the buttonGroup indirection.
+    # Both are in the harvest, so both have to survive the render.
+    if ($hkMdText -notmatch 'F7') { "the user's rebound key is missing from the markdown" }
+    # Every row must have the same number of cells as the header, or the table
+    # collapses in every renderer that is stricter than GitHub.
+    foreach ($row in ([regex]::Matches($hkMdText, '(?m)^\|.*\|$') | ForEach-Object { $_.Value })) {
+        if ($row -notmatch '^\| --- ' -and (($row -split '(?<!\)\|').Count -ne 5)) { "a table row has the wrong cell count: $row" }
+    }
+)
+if ($hkMdBad) { Bad 'hotkeys: the markdown sheet is a well-formed table of the same bindings' (($hkMdBad | Select-Object -Unique) -join "`n") }
+else          { Ok  'hotkeys: the markdown sheet is a well-formed table of the same bindings' }
+
 # ============================================================== readiness ====
 #
 # The value of this tool is one distinction: problems LAUNCHING FIXES versus
@@ -1334,6 +1359,21 @@ $problems = @(
 if ($problems) { Bad 'dossier: it reports the layers a mod ships, and no others' ($problems -join "`n") }
 else           { Ok  'dossier: it reports the layers a mod ships, and no others' }
 
+# Every HTML report here has a markdown twin. For the dossier the markdown is
+# the MORE exposed of the two - it is what gets pasted into a help thread - so
+# the redaction has to hold on that side as well.
+$dMd = Join-Path $sandbox 'dossier.md'
+$null = Get-AllOutput { & $dossierTool -Mod 'SpacedName' -GameRoot $dgame -StagingRoot $dstage -Html $dHtml -Md $dMd }
+$dMdText = Get-Content -LiteralPath $dMd -Raw
+$dMdBad = @(
+    if ($dMdText -notmatch '(?m)^# Spaced Name') { 'the markdown does not name the mod' }
+    if ($dMdText -notmatch '(?m)^\| Layer \| State \| Detail \|') { 'the markdown has no layer table' }
+    if ($dMdText -notmatch 'not in modlist\.txt') { 'the markdown drops the finding the HTML reports' }
+    if ($dMdText -match "(?i)\$([regex]::Escape($env:USERNAME))") { 'the Windows username is in the markdown' }
+)
+if ($dMdBad) { Bad 'dossier: the markdown variant carries the same facts, redacted' ($dMdBad -join "`n") }
+else         { Ok  'dossier: the markdown variant carries the same facts, redacted' }
+
 $dHtmlText = Get-Content -LiteralPath $dHtml -Raw
 $dLeaks = @(
     if ($dHtmlText -match "(?i)\\$([regex]::Escape($env:USERNAME))\b") { 'the Windows username is in the dossier HTML' }
@@ -1778,6 +1818,245 @@ if ($Quick) {
     if ($rs -match '(?i)fits|\byes\b|OK') { Ok 'page fit: a short page is reported as fitting' }
     else { Bad 'page fit: a short page is reported as fitting' $rs }
 }
+
+# ================================================================= credits ====
+#
+# The credits page is the one report built to be SHOWN to people, which changes
+# what counts as a bug. Two of the three assertions below are about honesty
+# rather than crashes: a headline number that flatters, and a mod list that
+# repeats itself, both look like carelessness to a reader who cannot check.
+
+$credTool = Join-Path $Root 'skills\cyberwise-reports\tools\New-ModCredits.ps1'
+$cStage   = Join-Path $sandbox 'creditstaging'
+New-Item -ItemType Directory -Path $cStage -Force | Out-Null
+
+# Two staging folders, ONE Nexus id: a FOMOD installed twice with different
+# options. This is the shape that made a real run print "Preem Fixes" four
+# times and claim 798 mods when it had 715.
+foreach ($f in 'Preem Fixes-1111-1-0-1700000000', 'Preem Fixes-1111-1-1-1700000001',
+               'Second Thing-3333-2-0-1700000002', 'Naughty Bits-2222-1-0-1700000003',
+               'Hand Made Thing') {
+    New-Item -ItemType Directory -Path (Join-Path $cStage $f) -Force | Out-Null
+}
+
+$cCache = Join-Path $sandbox 'credit-cache.json'
+Set-Content -LiteralPath $cCache -Encoding UTF8 -Value (@{
+    '1111' = @{ name = 'Preem Fixes';  author = 'Alice'; adult = $false }
+    '3333' = @{ name = 'Second Thing'; author = 'Alice'; adult = $false }
+    '2222' = @{ name = 'Naughty Bits'; author = 'Bob';   adult = $true  }
+} | ConvertTo-Json -Depth 5)
+
+$cHtml = Join-Path $sandbox 'credits.html'
+$cMd   = Join-Path $sandbox 'credits.md'
+$cOut  = Get-AllOutput { & $credTool -StagingRoot $cStage -CachePath $cCache -Html $cHtml -Md $cMd }
+$cHtmlText = Get-Content -LiteralPath $cHtml -Raw
+
+# Alice has two DISTINCT mods across three folders. Count the occurrences of the
+# duplicated title rather than just looking for it - "present" was true before
+# the dedupe too.
+$preemCount = ([regex]::Matches($cHtmlText, 'Preem Fixes')).Count
+$cProblems = @(
+    if ($preemCount -ne 1) { "one mod installed as two folders is listed $preemCount times, not once" }
+    # Three folders, two ids, plus the un-idd folder = 3 distinct, not 4.
+    if ($cHtmlText -notmatch '<b>3</b>') { 'the headline count counts staging folders, not mods' }
+    if ($cOut -notmatch '(?i)798|staged folders') { 'the folder count is not reported alongside the mod count' }
+)
+if ($cProblems) { Bad 'credits: one mod installed twice is one credit' ($cProblems -join "`n") }
+else            { Ok  'credits: one mod installed twice is one credit' }
+
+# Adult mods are omitted by DEFAULT - this page gets shown on streams - but the
+# count is printed, because silently dropping somebody from a credits list is
+# its own unkindness.
+$cAdult = @(
+    if ($cHtmlText -match 'Naughty Bits') { 'an adult mod is on the page without -ShowAdult' }
+    if ($cHtmlText -match '\bBob\b')      { 'an adult-only author is credited without -ShowAdult' }
+    if ($cOut -notmatch '(?i)1 adult mod') { 'the omitted count was not printed' }
+)
+if ($cAdult) { Bad 'credits: adult mods are omitted by default, and the omission is stated' ($cAdult -join "`n") }
+else         { Ok  'credits: adult mods are omitted by default, and the omission is stated' }
+
+$cHtml2 = Join-Path $sandbox 'credits-adult.html'
+$null = Get-AllOutput { & $credTool -StagingRoot $cStage -CachePath $cCache -Html $cHtml2 -ShowAdult }
+if ((Get-Content -LiteralPath $cHtml2 -Raw) -match 'Naughty Bits') { Ok 'credits: -ShowAdult includes them' }
+else { Bad 'credits: -ShowAdult includes them' 'the adult mod was still omitted' }
+
+# Every HTML report here has a markdown twin, for a forum post or a Discord
+# message where a web page is useless. It has to carry the same facts.
+$cMdText = Get-Content -LiteralPath $cMd -Raw
+$cMdBad = @(
+    if ($cMdText -notmatch '(?m)^\*\*Alice\*\*') { 'the markdown does not credit the author' }
+    if (([regex]::Matches($cMdText, 'Preem Fixes')).Count -ne 1) { 'the markdown repeats a deduplicated mod' }
+    if ($cMdText -match 'Naughty Bits') { 'the markdown includes an adult mod the HTML omitted' }
+)
+if ($cMdBad) { Bad 'credits: the markdown variant carries the same facts' ($cMdBad -join "`n") }
+else         { Ok  'credits: the markdown variant carries the same facts' }
+
+# ================================================================ anatomy ====
+#
+# The anatomy report rests on one distinction: a hash the base-game table knows
+# is an OVERRIDE, one it does not is a mod-authored asset. Get that backwards
+# and every number on the page inverts - a content pack reads as a mod that
+# rewrites half the game.
+#
+# It runs against a HAND-BUILT index rather than the vendored 11 MB table. Two
+# reasons: the suite must pass in a checkout that has not fetched the data, and
+# the mutation harness runs this file thirty times, where a 30-second table load
+# becomes a quarter of an hour. It also means the CWPX1 reader is tested against
+# bytes written from the format spec rather than against itself.
+
+function New-FixtureIndex {
+    param([string] $Path, [string[]] $Paths, [int] $BlockSize = 4)
+
+    $body = New-Object System.IO.MemoryStream
+    $bw   = New-Object System.IO.BinaryWriter($body)
+    $blockOffsets = New-Object System.Collections.Generic.List[uint32]
+    $prev = $null
+    for ($i = 0; $i -lt $Paths.Count; $i++) {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($Paths[$i])
+        if ($i % $BlockSize -eq 0) {
+            $blockOffsets.Add([uint32]$body.Position)
+            $bw.Write([uint16]$bytes.Length)
+            $bw.Write($bytes)
+        } else {
+            # Shared prefix with the previous entry, capped at 255 - the field is
+            # one byte, which is the whole reason paths are stored in order.
+            $shared = 0
+            $max = [math]::Min([math]::Min($prev.Length, $bytes.Length), 255)
+            while ($shared -lt $max -and $prev[$shared] -eq $bytes[$shared]) { $shared++ }
+            $bw.Write([byte]$shared)
+            $bw.Write([uint16]($bytes.Length - $shared))
+            $bw.Write($bytes, $shared, $bytes.Length - $shared)
+        }
+        $prev = $bytes
+    }
+    $bw.Flush()
+    $bodyBytes = $body.ToArray()
+
+    # Hashes are stored SIGNED and sorted signed, because the upstream table came
+    # out of SQLite, which has no unsigned 64-bit integer.
+    $rows = @()
+    for ($i = 0; $i -lt $Paths.Count; $i++) {
+        $h = Get-ResourceHash $Paths[$i]
+        $rows += [pscustomobject]@{ Signed = [BitConverter]::ToInt64([BitConverter]::GetBytes($h), 0); Ordinal = $i }
+    }
+    $rows = @($rows | Sort-Object Signed)
+
+    $hashBytes = New-Object byte[] ($rows.Count * 12)
+    for ($i = 0; $i -lt $rows.Count; $i++) {
+        [Array]::Copy([BitConverter]::GetBytes([int64]$rows[$i].Signed), 0, $hashBytes, $i * 12, 8)
+        [Array]::Copy([BitConverter]::GetBytes([uint32]$rows[$i].Ordinal), 0, $hashBytes, $i * 12 + 8, 4)
+    }
+    $blkBytes = New-Object byte[] ($blockOffsets.Count * 4)
+    for ($i = 0; $i -lt $blockOffsets.Count; $i++) {
+        [Array]::Copy([BitConverter]::GetBytes([uint32]$blockOffsets[$i]), 0, $blkBytes, $i * 4, 4)
+    }
+
+    $hashOff = 37
+    $blkOff  = $hashOff + $hashBytes.Length
+    $bodyOff = $blkOff + $blkBytes.Length
+
+    $out = New-Object System.IO.MemoryStream
+    $ow  = New-Object System.IO.BinaryWriter($out)
+    $ow.Write([Text.Encoding]::ASCII.GetBytes('CWPX1'))
+    $ow.Write([uint32]$Paths.Count)
+    $ow.Write([uint32]$BlockSize)
+    $ow.Write([uint32]$hashOff);  $ow.Write([uint32]$hashBytes.Length)
+    $ow.Write([uint32]$blkOff);   $ow.Write([uint32]$blkBytes.Length)
+    $ow.Write([uint32]$bodyOff);  $ow.Write([uint32]$bodyBytes.Length)
+    $ow.Write($hashBytes); $ow.Write($blkBytes); $ow.Write($bodyBytes)
+    $ow.Flush()
+
+    # The vendored file is raw-deflated and the tool inflates it to a cache keyed
+    # on write time. Writing it any other way would test a path nothing uses.
+    $fs = [IO.File]::Create($Path)
+    $ds = New-Object IO.Compression.DeflateStream($fs, [IO.Compression.CompressionMode]::Compress)
+    try { $ds.Write($out.ToArray(), 0, [int]$out.Length) } finally { $ds.Dispose(); $fs.Dispose() }
+}
+
+$anatomyTool = Join-Path $Root 'skills\cyberwise-reports\tools\New-ArchiveAnatomy.ps1'
+$anGame = Join-Path $sandbox 'anatomygame'
+$anMod  = Join-Path $anGame 'archive\pc\mod'
+New-Item -ItemType Directory -Path (Join-Path $anGame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $anGame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+New-Item -ItemType Directory -Path $anMod -Force | Out-Null
+
+# Paths in body order, with a shared-prefix run so the block walk has something
+# to rebuild - a set of unrelated strings would pass even a broken decoder.
+$anPaths = @(
+    'base\characters\common\skin\face\microdetail_d.xbm'
+    'base\characters\common\skin\face\microdetail_n.xbm'
+    'base\gameplay\static_data\database\quest.tweak'
+    'base\worlds\03_night_city\sector_a.streamingsector'
+    'base\worlds\03_night_city\sector_b.streamingsector'
+    'engine\materials\defaults\default.sp'
+)
+$anIndex = Join-Path $sandbox 'fixture-paths.cwpx'
+. $resolver
+New-FixtureIndex -Path $anIndex -Paths $anPaths
+
+$vanilla = @($anPaths | ForEach-Object { Get-ResourceHash $_ })
+# Hashes of paths no base game ever shipped: the mod-authored side of the
+# distinction, and the reason "unresolved" must not be read as "unknown".
+$modmade = @(
+    Get-ResourceHash 'custom\mymod\jacket.mesh'
+    Get-ResourceHash 'custom\mymod\jacket.xbm'
+    Get-ResourceHash 'custom\mymod\jacket.app'
+)
+
+# top.archive wins everything it shares; bottom.archive ships only files top also
+# ships, so nothing of it survives; solo.archive shares nothing with either.
+New-FixtureArchive -Path (Join-Path $anMod 'top.archive')    -Hashes ($vanilla[0..3] + $modmade)
+New-FixtureArchive -Path (Join-Path $anMod 'bottom.archive') -Hashes ($vanilla[0..1])
+New-FixtureArchive -Path (Join-Path $anMod 'solo.archive')   -Hashes ($vanilla[4..5])
+Set-Content -LiteralPath (Join-Path $anMod 'modlist.txt') "top.archive`nbottom.archive`nsolo.archive`n" -NoNewline
+
+$anHtml = Join-Path $sandbox 'anatomy.html'
+$anMd   = Join-Path $sandbox 'anatomy.md'
+$anOut  = Get-AllOutput { & $anatomyTool -GameRoot $anGame -IndexPath $anIndex -Html $anHtml -Md $anMd -SkipRedmod }
+$anHtmlText = Get-Content -LiteralPath $anHtml -Raw
+$anMdText   = Get-Content -LiteralPath $anMd -Raw
+
+# 4+2+2 vanilla overrides, 3 mod-authored, 11 files, 9 distinct resources.
+$anBad = @(
+    if ($anOut -notmatch '11 files across 3 archives')  { 'the file total is wrong' }
+    if ($anOut -notmatch '8 replace a base-game file')  { 'the override count is wrong - replace/add is the whole report' }
+    if ($anOut -notmatch '3 are new')                   { 'mod-authored assets were not counted as new' }
+    if ($anOut -notmatch '9 distinct resources')        { 'overlapping claims were not collapsed into one resource' }
+)
+if ($anBad) { Bad 'anatomy: it tells a replaced file from an added one' ($anBad -join "`n") }
+else        { Ok  'anatomy: it tells a replaced file from an added one' }
+
+# The breakdown is what makes the numbers mean anything - it has to name real
+# areas and extensions rather than hashes.
+$anGroup = @(
+    if ($anHtmlText -notmatch 'base\\characters')  { 'the area breakdown does not name base\characters' }
+    if ($anHtmlText -notmatch 'base\\worlds')      { 'the area breakdown does not name base\worlds' }
+    if ($anHtmlText -notmatch '\.streamingsector') { 'the type breakdown does not name .streamingsector' }
+    # Mod-authored paths are unknown by definition, so they must not appear in a
+    # breakdown that claims to describe the base game.
+    if ($anHtmlText -match 'mymod')                { 'a mod-authored path was counted as a vanilla area' }
+)
+if ($anGroup) { Bad 'anatomy: the breakdown names real areas and types' ($anGroup -join "`n") }
+else          { Ok  'anatomy: the breakdown names real areas and types' }
+
+# bottom.archive ships two files and loses both; solo.archive shares nothing and
+# must not be reported as losing anything.
+$anLoss = @(
+    if ($anOut -notmatch '1 archive\(s\) fully eclipsed') { 'an archive whose every file loses was not reported as eclipsed' }
+    if ($anHtmlText -notmatch 'bottom\.archive')          { 'the losing archive is not on the page' }
+    if ($anMdText -notmatch 'bottom\.archive')            { 'the losing archive is not in the markdown' }
+    if ($anHtmlText -match 'solo\.archive</td><td class="num">[1-9]') { 'an uncontested archive was reported as losing files' }
+)
+if ($anLoss) { Bad 'anatomy: it names what loses, and only what loses' ($anLoss -join "`n") }
+else         { Ok  'anatomy: it names what loses, and only what loses' }
+
+$anMdBad = @(
+    if ($anMdText -notmatch '(?m)^# Archive anatomy')   { 'the markdown has no title' }
+    if ($anMdText -notmatch '\*\*8\*\* files replace')  { 'the markdown disagrees with the console on the override count' }
+    if ($anMdText -notmatch '(?m)^\| Area of the game') { 'the markdown has no area table' }
+)
+if ($anMdBad) { Bad 'anatomy: the markdown variant carries the same numbers' ($anMdBad -join "`n") }
+else          { Ok  'anatomy: the markdown variant carries the same numbers' }
 
 # =================================================================== report ==
 
