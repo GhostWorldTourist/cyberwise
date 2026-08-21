@@ -2073,14 +2073,21 @@ else          { Ok  'anatomy: the markdown variant carries the same numbers' }
 
 # ============================================================ sitebuilder ====
 #
-# The site builder has one design rule - DO NOT FLATTEN THE DOCUMENTS - and the
-# tests below are almost all about that. The characters it was built for are
-# written in four different in-world formats, and a renderer that quietly turns
-# a form into a run-on paragraph, or a nested list into a flat one, destroys the
-# thing that makes them worth publishing.
+# Two rules carry this whole tool, and the tests below are almost all about
+# them.
 #
-# The second concern is that the output has to work when double-clicked. No
-# fetch, no absolute paths, nothing loaded from another host.
+# 1. DO NOT FLATTEN THE DOCUMENTS. The characters are written in four different
+#    in-world formats, and a renderer that turns a form into a run-on paragraph
+#    or a nested list into a flat one destroys what makes them worth publishing.
+#
+# 2. IDENTICAL MARKUP, DIFFERENT STYLESHEET. It is CSS Zen Garden: every
+#    character page emits the same structure and a per-character theme owns the
+#    look. The moment the builder starts emitting different HTML per character,
+#    a theme can no longer be written blind, and that is the property worth
+#    defending with a test rather than a comment.
+#
+# The third concern is that the output works when double-clicked: no fetch, no
+# absolute paths, nothing from another host.
 
 $mdTool   = Join-Path $Root 'skills\cyberwise-sitebuilder\tools\ConvertFrom-Markdown.ps1'
 $siteTool = Join-Path $Root 'skills\cyberwise-sitebuilder\tools\New-CharacterSite.ps1'
@@ -2107,26 +2114,19 @@ An_underscored_name.archive survives.
 $mdOut = ConvertTo-Html -Markdown $mdSrc
 
 $mdBad = @(
-    # The nested list belongs INSIDE its parent item. Emitting </li><ul> renders
-    # correctly in every browser and is invalid in all of them, and a reader
-    # mode drops the indentation entirely.
     if ($mdOut -notmatch '(?s)<li>two\s*<ul>') { 'a nested list was emitted beside its parent item, not inside it' }
-    # Backticks must survive emphasis: `a**b` is the only way to write literal
-    # asterisks, and these documents do.
     if ($mdOut -notmatch '<code>a\*\*b</code>') { 'emphasis was applied inside a code span' }
     if ($mdOut -notmatch '<strong>bold</strong>') { 'bold did not render' }
     if ($mdOut -notmatch '<em>italic</em>')       { 'italic did not render' }
-    # Escaping has to happen before markup, or the tags get eaten by it.
     if ($mdOut -notmatch '5 &lt; 6 &amp; Q&amp;A') { 'HTML metacharacters were not escaped' }
     if ($mdOut -match '<script')                   { 'raw HTML passed through' }
-    # Underscores are file names here, not emphasis.
     if ($mdOut -notmatch 'An_underscored_name\.archive') { 'underscores were treated as emphasis' }
     if ($mdOut -notmatch '<td>a \| b</td>')              { 'an escaped pipe did not survive as a table cell' }
 )
 if ($mdBad) { Bad 'sitebuilder: the markdown subset renders what these documents contain' ($mdBad -join "`n") }
 else        { Ok  'sitebuilder: the markdown subset renders what these documents contain' }
 
-# --- the rule the whole tool exists for ------------------------------------
+# --- the documents keep their shape ----------------------------------------
 
 $fieldSrc = @'
 SUBJECT: VALERIE AURUM CLEMENS / ID NC770416
@@ -2135,17 +2135,31 @@ AKAS: "V", "GOLDEN CHILD"
 
 Constant across every look: palest skin, the same nose,
 mouth, ears and brows, which wraps mid sentence like prose.
+
+REF AR-NA-CI-D07-INT-0442
+
+He was assessed at level four and the finding was filed (L4//NO-EXT) without further comment on the matter.
+
+[Interview ended prematurely, interviewee medically subdued]
 '@
 $fieldOut = ConvertTo-Html -Markdown $fieldSrc
 $fieldBad = @(
     if ($fieldOut -notmatch 'NC770416<br>CODENAME') { 'a field block was joined into a run-on paragraph' }
     if ($fieldOut -notmatch 'VALKYRIE<br>AKAS')     { 'a field block was joined into a run-on paragraph' }
     # ...and the opposite error, which is just as bad: hard-wrapped prose must
-    # NOT gain ragged line breaks.
+    # NOT gain ragged line breaks. PowerShell's -match is case-insensitive by
+    # default, which once made "Constant across every look:" read as a field.
     if ($fieldOut -match 'the same nose,<br>') { 'hard-wrapped prose was broken at the source line endings' }
+    # A theme cannot ask what a line is, so the class list has to say.
+    if ($fieldOut -notmatch '<p class="allcaps">REF AR-NA-CI-D07-INT-0442</p>') { 'a reference line was not marked as a stamp' }
+    if ($fieldOut -notmatch '<span class="cls">L4//NO-EXT</span>')              { 'a classification marker was not tagged' }
+    if ($fieldOut -notmatch '<span class="redact">Interview ended prematurely') { 'a redaction was not tagged' }
+    # The field block is also all capitals, and it is a FORM, not a stamp -
+    # tagging it .allcaps would take its line breaks away again.
+    if ($fieldOut -match '<p class="allcaps">SUBJECT') { 'the opening field block was mistaken for a stamp line' }
 )
-if ($fieldBad) { Bad 'sitebuilder: a field block keeps its lines and prose does not' ($fieldBad -join "`n") }
-else           { Ok  'sitebuilder: a field block keeps its lines and prose does not' }
+if ($fieldBad) { Bad 'sitebuilder: a document keeps its own shape' ($fieldBad -join "`n") }
+else           { Ok  'sitebuilder: a document keeps its own shape' }
 
 # --- building a site -------------------------------------------------------
 
@@ -2158,6 +2172,7 @@ Set-Content -LiteralPath (Join-Path $siteSrc 'valkyrie\Profile - Valkyrie.md') -
 # DOSSIER "VALERIE AURUM CLEMENS" AR-NA-CI-D07
 
 SUBJECT: VALERIE AURUM CLEMENS / ID NC770416
+CODENAME: VALKYRIE
 STATUS: TERMINATED WITH PREJUDICE
 
 ## BACKGROUND
@@ -2167,35 +2182,43 @@ Set-Content -LiteralPath (Join-Path $siteSrc 'valkyrie\Meta - Valkyrie.md') -Val
 # Appearance
 Gold everything.
 '@
-# The character with media, to prove images are copied and referenced relatively.
 New-Item -ItemType Directory -Path (Join-Path $siteSrc 'venom\media') -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $siteSrc 'venom\Profile - Venom.md') -Value @'
 # Too Bad, Too Bad
 
-I have a story for you, one long enough to be chosen as the card lead rather than a label.
+I have a story for you, one long enough to be chosen as the directory line rather than a label.
 '@
-Copy-Item -LiteralPath (Join-Path $sandbox 'icon.png') -Destination (Join-Path $siteSrc 'venom\media\one.png') -ErrorAction SilentlyContinue
-if (-not (Test-Path -LiteralPath (Join-Path $siteSrc 'venom\media\one.png'))) {
-    Set-Content -LiteralPath (Join-Path $siteSrc 'venom\media\one.png') -Value 'not really a png' -NoNewline
-}
-# A draft folder, which must not be published.
+Set-Content -LiteralPath (Join-Path $siteSrc 'venom\media\one.png') -Value 'stub' -NoNewline
+# A character with no theme of its own must still get a page.
+New-Item -ItemType Directory -Path (Join-Path $siteSrc 'nobody') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $siteSrc 'nobody\Profile - Nobody.md') -Value @'
+# Someone Undesigned
+
+They have no theme file and no stylesheet named after them, and the site still has to hold them.
+'@
+# A draft, which must not be published.
 New-Item -ItemType Directory -Path (Join-Path $siteSrc '_wip') -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $siteSrc '_wip\Profile - Wip.md') -Value '# Unfinished'
 
-$siteLog = Get-AllOutput { & $siteTool -From $siteSrc -Out $siteOut -Title 'Test Files' }
-$index = Get-Content -LiteralPath (Join-Path $siteOut 'index.html') -Raw
-$valk  = Get-Content -LiteralPath (Join-Path $siteOut 'valkyrie.html') -Raw
+$siteLog = Get-AllOutput { & $siteTool -From $siteSrc -Out $siteOut -Title 'V of Night City' }
+$index  = Get-Content -LiteralPath (Join-Path $siteOut 'index.html') -Raw
+$valk   = Get-Content -LiteralPath (Join-Path $siteOut 'valkyrie.html') -Raw
+$venom  = Get-Content -LiteralPath (Join-Path $siteOut 'venom.html') -Raw
+$nobody = Get-Content -LiteralPath (Join-Path $siteOut 'nobody.html') -Raw
 
 $siteBad = @(
-    foreach ($f in 'index.html', 'valkyrie.html', 'venom.html', 'site.css', 'site.js') {
+    foreach ($f in 'index.html', 'valkyrie.html', 'venom.html', 'nobody.html', 'site.js',
+                   'themes\_base.css', 'themes\index.css', 'themes\valkyrie.css', 'themes\default.css') {
         if (-not (Test-Path -LiteralPath (Join-Path $siteOut $f))) { "$f was not written" }
     }
     if ($index -notmatch 'href="valkyrie\.html"') { 'the index does not link to a character page' }
     if ($index -match '(?i)unfinished|_wip')      { 'a draft folder was published' }
-    # The Meta document is a second section, not a second page.
     if ($valk -notmatch '(?i)Gold everything')    { 'the Meta document was dropped' }
-    # It must work from a file:// URL, so nothing may be absolute or remote.
-    foreach ($page in $index, $valk) {
+    # The page headline IS the document's H1, so the body must not open with it
+    # again - every page printed its own title twice.
+    $valkBody = [regex]::Match($valk, '(?s)<div class="content">(.*?)</div>').Groups[1].Value
+    if ($valkBody -match 'DOSSIER') { 'the document title is repeated inside the body' }
+    foreach ($page in $index, $valk, $venom, $nobody) {
         if ($page -match '(?i)https?://(?!www\.w3\.org)') { 'the page loads something from another host' }
         if ($page -match '(?i)[a-z]:\\\\')                { 'an absolute Windows path leaked into the page' }
         if ($page -match "(?i)\\\\$([regex]::Escape($env:USERNAME))\b") { 'the Windows username leaked into the page' }
@@ -2204,21 +2227,229 @@ $siteBad = @(
 if ($siteBad) { Bad 'sitebuilder: it writes a self-contained site and publishes only what it should' (($siteBad | Select-Object -Unique) -join "`n") }
 else          { Ok  'sitebuilder: it writes a self-contained site and publishes only what it should' }
 
-# The prototype was built for somebody with NO images at all. A missing photo
-# must not render as a broken frame, and a character that has one must actually
-# get it copied.
-$venom = Get-Content -LiteralPath (Join-Path $siteOut 'venom.html') -Raw
+# --- the Zen Garden invariant ----------------------------------------------
+#
+# Same structure, different stylesheet. Compared as the SEQUENCE OF TAGS AND
+# CLASSES with all text stripped: if two characters ever diverge structurally, a
+# theme written against one of them silently misses elements on the other.
+
+function Get-Skeleton {
+    param([string] $Html)
+    $body = [regex]::Match($Html, '(?s)<body.*?>(.*)</body>').Groups[1].Value
+    # THE DOCUMENT ITSELF IS NOT PART OF THE CONTRACT. What goes inside .content
+    # is whatever the author wrote - one character's file has tables and nested
+    # lists, another is unbroken prose - so comparing that would only ever prove
+    # the two documents are different, which is the point of the site. The
+    # invariant is the SHELL around it, which is what a theme is written
+    # against. Same reason the gallery is dropped: it is present exactly when
+    # the character has images.
+    $body = $body -replace '(?s)(<div class="content">).*?(</div>)', '$1$2'
+    $body = $body -replace '(?s)<div class="gallery">.*?</div>', ''
+    $tags = [regex]::Matches($body, '<(\w+)(?:[^>]*?\sclass="([^"]*)")?[^>]*>') |
+            ForEach-Object { $_.Groups[1].Value + $(if ($_.Groups[2].Success) { '.' + $_.Groups[2].Value }) }
+    # The character's own slug is in one class and legitimately differs.
+    ($tags -join ' ') -replace 'is-\w+', 'is-X'
+}
+$skelValk  = Get-Skeleton $valk
+$skelVenom = Get-Skeleton $venom
+
+$zenBad = @(
+    # Both must load the base sheet and their OWN theme, and they must differ.
+    if ($valk  -notmatch 'themes/valkyrie\.css') { 'the dossier page does not load its own theme' }
+    if ($venom -notmatch 'themes/venom\.css')    { 'the monologue page does not load its own theme' }
+    if ($nobody -notmatch 'themes/default\.css') { 'an undesigned character did not fall back to the default theme' }
+    foreach ($page in $valk, $venom, $nobody) {
+        if ($page -notmatch 'themes/_base\.css') { 'a page does not load the base stylesheet' }
+    }
+    # Structure identical. The meta section is the one legitimate difference -
+    # Valkyrie has a Meta document and Venom does not - so it is removed before
+    # comparing rather than special-cased away.
+    $a = $skelValk  -replace 'section\.meta.*?(?=footer)', ''
+    $b = $skelVenom -replace 'section\.meta.*?(?=footer)', ''
+    if ($a -ne $b) { "two characters emit different markup:`n  $a`n  $b" }
+)
+if ($zenBad) { Bad 'sitebuilder: identical markup, different stylesheet' (($zenBad | Select-Object -Unique) -join "`n") }
+else         { Ok  'sitebuilder: identical markup, different stylesheet' }
+
+# --- media is optional ------------------------------------------------------
+
 $mediaBad = @(
-    if ($index -notmatch 'class="nameplate">VALKYRIE<') { 'a character with no media did not get a nameplate tile' }
-    if ($index -notmatch 'media/venom/one\.png')        { 'a character with media did not get its image on the card' }
+    if ($venom -notmatch 'media/venom/one\.png') { 'a character with media did not get a gallery' }
     if (-not (Test-Path -LiteralPath (Join-Path $siteOut 'media\venom\one.png'))) { 'the image was referenced but never copied' }
-    # Every card carries the character NAME as its heading. All four of these
-    # characters are Vs, so a first-letter monogram drew the same glyph on every
-    # card - the bug this replaced.
-    if ($index -notmatch '<h2>Valkyrie</h2>') { 'the card does not lead with the character name' }
+    # The prototype was built for somebody with no images at all: a character
+    # without media must not emit an empty <img>, which renders as a broken icon.
+    if ($valk -match '<img(?![^>]*alt="">)') { 'a character with no media emitted an image tag' }
+    if ($valk -notmatch 'class="gallery"' -and $valk -match 'class="gallery"') { 'unreachable' }
 )
 if ($mediaBad) { Bad 'sitebuilder: media is optional and its absence is not a broken image' ($mediaBad -join "`n") }
 else           { Ok  'sitebuilder: media is optional and its absence is not a broken image' }
+
+# ================================================================ anatomy ====
+#
+# The anatomy report rests on one distinction: a hash the base-game table knows
+# is an OVERRIDE, one it does not is a mod-authored asset. Get that backwards
+# and every number on the page inverts - a content pack reads as a mod that
+# rewrites half the game.
+#
+# It runs against a HAND-BUILT index rather than the vendored 11 MB table. Two
+# reasons: the suite must pass in a checkout that has not fetched the data, and
+# the mutation harness runs this file thirty times, where a 30-second table load
+# becomes a quarter of an hour. It also means the CWPX1 reader is tested against
+# bytes written from the format spec rather than against itself.
+
+function New-FixtureIndex {
+    param([string] $Path, [string[]] $Paths, [int] $BlockSize = 4)
+
+    $body = New-Object System.IO.MemoryStream
+    $bw   = New-Object System.IO.BinaryWriter($body)
+    $blockOffsets = New-Object System.Collections.Generic.List[uint32]
+    $prev = $null
+    for ($i = 0; $i -lt $Paths.Count; $i++) {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($Paths[$i])
+        if ($i % $BlockSize -eq 0) {
+            $blockOffsets.Add([uint32]$body.Position)
+            $bw.Write([uint16]$bytes.Length)
+            $bw.Write($bytes)
+        } else {
+            # Shared prefix with the previous entry, capped at 255 - the field is
+            # one byte, which is the whole reason paths are stored in order.
+            $shared = 0
+            $max = [math]::Min([math]::Min($prev.Length, $bytes.Length), 255)
+            while ($shared -lt $max -and $prev[$shared] -eq $bytes[$shared]) { $shared++ }
+            $bw.Write([byte]$shared)
+            $bw.Write([uint16]($bytes.Length - $shared))
+            $bw.Write($bytes, $shared, $bytes.Length - $shared)
+        }
+        $prev = $bytes
+    }
+    $bw.Flush()
+    $bodyBytes = $body.ToArray()
+
+    # Hashes are stored SIGNED and sorted signed, because the upstream table came
+    # out of SQLite, which has no unsigned 64-bit integer.
+    $rows = @()
+    for ($i = 0; $i -lt $Paths.Count; $i++) {
+        $h = Get-ResourceHash $Paths[$i]
+        $rows += [pscustomobject]@{ Signed = [BitConverter]::ToInt64([BitConverter]::GetBytes($h), 0); Ordinal = $i }
+    }
+    $rows = @($rows | Sort-Object Signed)
+
+    $hashBytes = New-Object byte[] ($rows.Count * 12)
+    for ($i = 0; $i -lt $rows.Count; $i++) {
+        [Array]::Copy([BitConverter]::GetBytes([int64]$rows[$i].Signed), 0, $hashBytes, $i * 12, 8)
+        [Array]::Copy([BitConverter]::GetBytes([uint32]$rows[$i].Ordinal), 0, $hashBytes, $i * 12 + 8, 4)
+    }
+    $blkBytes = New-Object byte[] ($blockOffsets.Count * 4)
+    for ($i = 0; $i -lt $blockOffsets.Count; $i++) {
+        [Array]::Copy([BitConverter]::GetBytes([uint32]$blockOffsets[$i]), 0, $blkBytes, $i * 4, 4)
+    }
+
+    $hashOff = 37
+    $blkOff  = $hashOff + $hashBytes.Length
+    $bodyOff = $blkOff + $blkBytes.Length
+
+    $out = New-Object System.IO.MemoryStream
+    $ow  = New-Object System.IO.BinaryWriter($out)
+    $ow.Write([Text.Encoding]::ASCII.GetBytes('CWPX1'))
+    $ow.Write([uint32]$Paths.Count)
+    $ow.Write([uint32]$BlockSize)
+    $ow.Write([uint32]$hashOff);  $ow.Write([uint32]$hashBytes.Length)
+    $ow.Write([uint32]$blkOff);   $ow.Write([uint32]$blkBytes.Length)
+    $ow.Write([uint32]$bodyOff);  $ow.Write([uint32]$bodyBytes.Length)
+    $ow.Write($hashBytes); $ow.Write($blkBytes); $ow.Write($bodyBytes)
+    $ow.Flush()
+
+    # The vendored file is raw-deflated and the tool inflates it to a cache keyed
+    # on write time. Writing it any other way would test a path nothing uses.
+    $fs = [IO.File]::Create($Path)
+    $ds = New-Object IO.Compression.DeflateStream($fs, [IO.Compression.CompressionMode]::Compress)
+    try { $ds.Write($out.ToArray(), 0, [int]$out.Length) } finally { $ds.Dispose(); $fs.Dispose() }
+}
+
+$anatomyTool = Join-Path $Root 'skills\cyberwise-reports\tools\New-ArchiveAnatomy.ps1'
+$anGame = Join-Path $sandbox 'anatomygame'
+$anMod  = Join-Path $anGame 'archive\pc\mod'
+New-Item -ItemType Directory -Path (Join-Path $anGame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $anGame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+New-Item -ItemType Directory -Path $anMod -Force | Out-Null
+
+# Paths in body order, with a shared-prefix run so the block walk has something
+# to rebuild - a set of unrelated strings would pass even a broken decoder.
+$anPaths = @(
+    'base\characters\common\skin\face\microdetail_d.xbm'
+    'base\characters\common\skin\face\microdetail_n.xbm'
+    'base\gameplay\static_data\database\quest.tweak'
+    'base\worlds\03_night_city\sector_a.streamingsector'
+    'base\worlds\03_night_city\sector_b.streamingsector'
+    'engine\materials\defaults\default.sp'
+)
+$anIndex = Join-Path $sandbox 'fixture-paths.cwpx'
+. $resolver
+New-FixtureIndex -Path $anIndex -Paths $anPaths
+
+$vanilla = @($anPaths | ForEach-Object { Get-ResourceHash $_ })
+# Hashes of paths no base game ever shipped: the mod-authored side of the
+# distinction, and the reason "unresolved" must not be read as "unknown".
+$modmade = @(
+    Get-ResourceHash 'custom\mymod\jacket.mesh'
+    Get-ResourceHash 'custom\mymod\jacket.xbm'
+    Get-ResourceHash 'custom\mymod\jacket.app'
+)
+
+# top.archive wins everything it shares; bottom.archive ships only files top also
+# ships, so nothing of it survives; solo.archive shares nothing with either.
+New-FixtureArchive -Path (Join-Path $anMod 'top.archive')    -Hashes ($vanilla[0..3] + $modmade)
+New-FixtureArchive -Path (Join-Path $anMod 'bottom.archive') -Hashes ($vanilla[0..1])
+New-FixtureArchive -Path (Join-Path $anMod 'solo.archive')   -Hashes ($vanilla[4..5])
+Set-Content -LiteralPath (Join-Path $anMod 'modlist.txt') "top.archive`nbottom.archive`nsolo.archive`n" -NoNewline
+
+$anHtml = Join-Path $sandbox 'anatomy.html'
+$anMd   = Join-Path $sandbox 'anatomy.md'
+$anOut  = Get-AllOutput { & $anatomyTool -GameRoot $anGame -IndexPath $anIndex -Html $anHtml -Md $anMd -SkipRedmod }
+$anHtmlText = Get-Content -LiteralPath $anHtml -Raw
+$anMdText   = Get-Content -LiteralPath $anMd -Raw
+
+# 4+2+2 vanilla overrides, 3 mod-authored, 11 files, 9 distinct resources.
+$anBad = @(
+    if ($anOut -notmatch '11 files across 3 archives')  { 'the file total is wrong' }
+    if ($anOut -notmatch '8 replace a base-game file')  { 'the override count is wrong - replace/add is the whole report' }
+    if ($anOut -notmatch '3 are new')                   { 'mod-authored assets were not counted as new' }
+    if ($anOut -notmatch '9 distinct resources')        { 'overlapping claims were not collapsed into one resource' }
+)
+if ($anBad) { Bad 'anatomy: it tells a replaced file from an added one' ($anBad -join "`n") }
+else        { Ok  'anatomy: it tells a replaced file from an added one' }
+
+# The breakdown is what makes the numbers mean anything - it has to name real
+# areas and extensions rather than hashes.
+$anGroup = @(
+    if ($anHtmlText -notmatch 'base\\characters')  { 'the area breakdown does not name base\characters' }
+    if ($anHtmlText -notmatch 'base\\worlds')      { 'the area breakdown does not name base\worlds' }
+    if ($anHtmlText -notmatch '\.streamingsector') { 'the type breakdown does not name .streamingsector' }
+    # Mod-authored paths are unknown by definition, so they must not appear in a
+    # breakdown that claims to describe the base game.
+    if ($anHtmlText -match 'mymod')                { 'a mod-authored path was counted as a vanilla area' }
+)
+if ($anGroup) { Bad 'anatomy: the breakdown names real areas and types' ($anGroup -join "`n") }
+else          { Ok  'anatomy: the breakdown names real areas and types' }
+
+# bottom.archive ships two files and loses both; solo.archive shares nothing and
+# must not be reported as losing anything.
+$anLoss = @(
+    if ($anOut -notmatch '1 archive\(s\) fully eclipsed') { 'an archive whose every file loses was not reported as eclipsed' }
+    if ($anHtmlText -notmatch 'bottom\.archive')          { 'the losing archive is not on the page' }
+    if ($anMdText -notmatch 'bottom\.archive')            { 'the losing archive is not in the markdown' }
+    if ($anHtmlText -match 'solo\.archive</td><td class="num">[1-9]') { 'an uncontested archive was reported as losing files' }
+)
+if ($anLoss) { Bad 'anatomy: it names what loses, and only what loses' ($anLoss -join "`n") }
+else         { Ok  'anatomy: it names what loses, and only what loses' }
+
+$anMdBad = @(
+    if ($anMdText -notmatch '(?m)^# Archive anatomy')   { 'the markdown has no title' }
+    if ($anMdText -notmatch '\*\*8\*\* files replace')  { 'the markdown disagrees with the console on the override count' }
+    if ($anMdText -notmatch '(?m)^\| Area of the game') { 'the markdown has no area table' }
+)
+if ($anMdBad) { Bad 'anatomy: the markdown variant carries the same numbers' ($anMdBad -join "`n") }
+else          { Ok  'anatomy: the markdown variant carries the same numbers' }
 
 # =================================================================== report ==
 

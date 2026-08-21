@@ -53,6 +53,19 @@ function ConvertTo-HtmlText {
     $Text = [regex]::Replace($Text, '\*\*(.+?)\*\*', '<strong>$1</strong>')
     $Text = [regex]::Replace($Text, '(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)', '<em>$1</em>')
 
+    # DOCUMENT MARKERS. These are not Markdown - they are the furniture of the
+    # in-world documents this renders, and tagging them is what lets a theme
+    # treat a classification stamp as a stamp and a redaction as an object lying
+    # on the page, instead of as more prose.
+    #
+    # Both run AFTER links, so a [label](url) has already become an anchor and
+    # cannot be mistaken for a redacted passage.
+    #
+    #   (L5//YOMOTSU//NO-EXT)              a classification marker
+    #   [Interview ended prematurely...]   a redaction or an editor's note
+    $Text = [regex]::Replace($Text, '\((L\d[^)]*)\)', '<span class="cls">$1</span>')
+    $Text = [regex]::Replace($Text, '\[([^\]]{8,})\]', '<span class="redact">$1</span>')
+
     for ($i = 0; $i -lt $codes.Count; $i++) {
         $safe = $codes[$i] -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;'
         $Text = $Text.Replace("`u{E000}CODE$i`u{E000}", "<code>$safe</code>")
@@ -113,7 +126,25 @@ function ConvertTo-Html {
                 }
                 [void]$sb.Append((ConvertTo-HtmlText $para[$k]))
             }
-            [void]$out.Add("<p>$($sb.ToString())</p>")
+            # WHAT KIND OF PARAGRAPH IS THIS? A theme cannot ask, so the answer
+            # has to be in the class list.
+            #
+            #   .allcaps  a single line carrying no lowercase - a reference
+            #             number, a machine state, END REPORT. Restricted to one
+            #             line on purpose: the dossier's opening field block is
+            #             also all capitals, and it is a form, not a stamp.
+            #   .brief    short enough to be a beat rather than a paragraph -
+            #             the aside, the interruption, the one-line answer.
+            $joined = ($para -join ' ').Trim()
+            $cls = @()
+            if ($para.Count -eq 1 -and $joined -cmatch '^[^a-z]+$' -and $joined -cmatch '[A-Z]{2}') {
+                $cls += 'allcaps'
+            } elseif ($joined.Length -lt 150) {
+                $cls += 'brief'
+            }
+            $attr = if ($cls.Count) { " class=""$($cls -join ' ')""" } else { '' }
+
+            [void]$out.Add("<p$attr>$($sb.ToString())</p>")
             $para.Clear()
         }
     }
