@@ -38,16 +38,37 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Ask the STOREFRONT where the game is; never guess a path. Steam, GOG and Epic
+# all differ and the drive is whatever the user chose - the first version of this
+# file carried a hardcoded Steam library path from one machine, written three
+# paragraphs below its own skill saying never to assume a default install
+# location. The family test that forbids absolute user paths is what caught it,
+# and then caught the rewritten COMMENT for quoting the offending path verbatim -
+# a real directory in a shipped file is a real directory whether it is code or
+# prose.
 if (-not $GameRoot) {
-    foreach ($c in @(
-        'C:\Games\Steam\steamapps\common\Cyberpunk 2077'
-        'C:\Program Files (x86)\Steam\steamapps\common\Cyberpunk 2077'
-        'C:\GOG Games\Cyberpunk 2077')) {
-        if (Test-Path -LiteralPath (Join-Path $c 'bin\x64\Cyberpunk2077.exe')) { $GameRoot = $c; break }
+    $seen = New-Object System.Collections.Generic.List[string]
+    try {
+        $steam = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam' -ErrorAction SilentlyContinue).InstallPath
+        if ($steam) {
+            $seen.Add((Join-Path $steam 'steamapps\common\Cyberpunk 2077'))
+            $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
+            if (Test-Path -LiteralPath $vdf) {
+                foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw), '"path"\s+"([^"]+)"')) {
+                    $seen.Add((Join-Path ($m.Groups[1].Value -replace '\\\\', '\') 'steamapps\common\Cyberpunk 2077'))
+                }
+            }
+        }
+    } catch {}
+    foreach ($k in 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\Games\1423049311', 'HKLM:\SOFTWARE\GOG.com\Games\1423049311') {
+        try { $g = (Get-ItemProperty $k -ErrorAction SilentlyContinue).path; if ($g) { $seen.Add($g) } } catch {}
+    }
+    foreach ($p in $seen) {
+        if ($p -and (Test-Path -LiteralPath (Join-Path $p 'bin\x64\Cyberpunk2077.exe'))) { $GameRoot = $p; break }
     }
 }
 if (-not $GameRoot -or -not (Test-Path -LiteralPath $GameRoot)) {
-    throw "game root not found - pass -GameRoot. Never assume a default install location."
+    throw "Could not find Cyberpunk 2077. Pass -GameRoot 'X:\path\to\Cyberpunk 2077'."
 }
 
 # Each row: what it is, how to see it, what is lost without it, and what it needs
