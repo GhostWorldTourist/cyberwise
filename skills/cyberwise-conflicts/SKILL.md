@@ -90,6 +90,16 @@ entSpawner registration, a `.reds` script or an `.xl` - none of which appear in 
 archive conflict scan. Uninstalling on archive evidence alone has destroyed
 working functionality.
 
+**So a `BenignInert` note must never say a mod can be uninstalled.** Its job is to
+record *why being inert is fine* - nothing more. Three notes on one install said
+some version of "redundant, could be uninstalled"; every one was wrong, because
+each mod's real payload was scripts or a `.xl` the scan never looked at. One of
+them cost an afternoon: a companion mod whose archive carries a single shared
+localisation string, while the feature the user actually plays with lives in two
+`.reds` files beside it. Write the note as "inert because X, keep it", and if you
+genuinely believe a mod is removable, prove it by listing its whole staging
+folder first.
+
 **The same trap exists outside archives.** If redscript fails to compile, *every*
 `.reds` mod on the install is silently off, with no in-game sign at all - no
 error, no warning, no missing-feature message. Nothing reports it, so the state
