@@ -1104,6 +1104,145 @@ else { Bad 'collisions: -SkipRedmod leaves REDmod archives out' 'REDmod archives
 
 
 
+# ======================================================= recommendations ====
+#
+# Two failures, opposite in shape, and this skill is the line between them:
+# staying silent when someone cannot do what they asked (a prerequisite), and
+# speaking when they told you not to (a recommendation). Both look like
+# politeness from the inside.
+
+$capTool  = Join-Path $Root 'skills\cyberwise-recommends\tools\Test-Capabilities.ps1'
+$prefTool = Join-Path $Root 'skills\cyberwise-recommends\tools\ModPreference.ps1'
+
+$recGame = Join-Path $sandbox 'recgame'
+New-Item -ItemType Directory -Path (Join-Path $recGame 'bin\x64') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $recGame 'bin\x64\Cyberpunk2077.exe') 'stub' -NoNewline
+
+# Nothing installed: the capability is blocked, and the DEPENDENCY is named too.
+# "Install ACU" is useless advice to somebody who has no CET, and a gate that
+# names only the leaf sends them in a circle.
+$bare = Get-AllOutput { & $capTool -GameRoot $recGame -For presets }
+$bareCode = $LASTEXITCODE
+$bareProblems = @(
+    if ($bareCode -eq 0)                                  { 'a capability with nothing installed reported as available' }
+    if ($bare -notmatch 'Appearance Change Unlocker')     { 'the missing mod was not named' }
+    if ($bare -notmatch 'Cyber Engine Tweaks')            { 'the missing dependency was not named' }
+)
+if ($bareProblems) { Bad 'recommends: a blocked capability names the whole chain' ($bareProblems -join "`n") }
+else               { Ok  'recommends: a blocked capability names the whole chain' }
+
+# Installed: exit 0, and nothing to say. A tool that always finds something to
+# recommend is the thing this skill was written to avoid.
+New-Item -ItemType Directory -Force -Path (Join-Path $recGame 'bin\x64\plugins\cyber_engine_tweaks\mods\AppearanceChangeUnlocker') | Out-Null
+Set-Content -LiteralPath (Join-Path $recGame 'bin\x64\plugins\cyber_engine_tweaks.asi') 'stub' -NoNewline
+$null = Get-AllOutput { & $capTool -GameRoot $recGame -For presets }
+if ($LASTEXITCODE -eq 0) { Ok 'recommends: a satisfied capability is silent' }
+else { Bad 'recommends: a satisfied capability is silent' 'an installed capability still reported as blocked' }
+
+# THE PROBE TEST. The first version of this tool looked for Mod Settings under
+# CET mods; it lives in red4ext\plugins. That single wrong path produced a false
+# ABSENT on the first real install it saw - a recommendation to install something
+# already installed, which is the exact annoyance the skill exists to prevent.
+# So: every probe path must be one this family says mods actually live at.
+$capJson = (Get-AllOutput { & $capTool -GameRoot $recGame -Json }) -join "`n"
+$known = 'bin\x64\plugins', 'red4ext\plugins', 'r6\scripts', 'archive\pc\mod', 'mods\', 'r6\tweaks'
+$badProbe = @()
+foreach ($m in [regex]::Matches($capJson, '"([A-Za-z0-9_\\ .-]+(?:\\[A-Za-z0-9_ .-]+)+)"')) {
+    $v = $m.Groups[1].Value -replace '\\', '\'
+    if ($v -match '^(bin|red4ext|r6|archive|mods)\') {
+        if (-not ($known | Where-Object { $v.StartsWith($_) })) { $badProbe += $v }
+    }
+}
+if ($badProbe) { Bad 'recommends: every probe path is a real mod location' (($badProbe | Sort-Object -Unique) -join "`n") }
+else           { Ok  'recommends: every probe path is a real mod location' }
+
+# --- the preference store ---------------------------------------------------
+. $prefTool
+$prefRoot = Join-Path $sandbox 'recprefs'
+
+# Default is on, and a MISSING file is not an error - the common case must not be
+# the broken one.
+if ((Test-RecommendAllowed -Item 'ACU' -RecordsRoot $prefRoot)) { Ok 'recommends: with no preferences file, recommending is allowed' }
+else { Bad 'recommends: with no preferences file, recommending is allowed' 'a missing file blocked recommendations' }
+
+$null = Register-Decline -Item 'ACU' -Reason 'test' -RecordsRoot $prefRoot
+$declineProblems = @(
+    if (Test-RecommendAllowed -Item 'ACU' -RecordsRoot $prefRoot)      { 'a declined item was still allowed' }
+    if (-not (Test-RecommendAllowed -Item 'AMM' -RecordsRoot $prefRoot)) { 'declining one item silenced a different one' }
+)
+if ($declineProblems) { Bad 'recommends: a decline binds to one item and persists' ($declineProblems -join "`n") }
+else                  { Ok  'recommends: a decline binds to one item and persists' }
+
+# Saying no twice must not produce two entries or move the original date.
+$firstOn = (Get-CwPreferences -RecordsRoot $prefRoot).declined[0].on
+$null = Register-Decline -Item 'ACU' -Reason 'again' -On '2099-01-01' -RecordsRoot $prefRoot
+$after = Get-CwPreferences -RecordsRoot $prefRoot
+$dupProblems = @(
+    if (@($after.declined | Where-Object { $_.mod -eq 'ACU' }).Count -ne 1) { 'declining twice created a duplicate entry' }
+    if (($after.declined | Where-Object { $_.mod -eq 'ACU' }).on -ne $firstOn) { 'declining again moved the original date' }
+)
+if ($dupProblems) { Bad 'recommends: declining twice is idempotent' ($dupProblems -join "`n") }
+else              { Ok  'recommends: declining twice is idempotent' }
+
+$null = Set-RecommendMode -Mode off -RecordsRoot $prefRoot
+if (-not (Test-RecommendAllowed -Item 'AMM' -RecordsRoot $prefRoot)) { Ok 'recommends: "never again" silences everything' }
+else { Bad 'recommends: "never again" silences everything' 'mode off still allowed a recommendation' }
+
+# FAIL CLOSED. A corrupt preferences file must never silently re-enable something
+# the user switched off - the failure would be invisible and would look exactly
+# like the tool working.
+Set-Content -LiteralPath (Join-Path $prefRoot 'preferences.json') '{ this is not json' -NoNewline
+$corrupt = Test-RecommendAllowed -Item 'AMM' -RecordsRoot $prefRoot -WarningAction SilentlyContinue
+if (-not $corrupt) { Ok 'recommends: an unreadable preferences file fails closed' }
+else { Bad 'recommends: an unreadable preferences file fails closed' 'a corrupt file re-enabled recommendations' }
+
+# ========================================================== tool index ====
+#
+# The family ships 30 tools across 11 skills, and the failure that matters is
+# not a broken one - it is a FORGOTTEN one. A preset decoder was proposed and
+# half-designed on 2026-08-22 while `Decode-Preset.ps1` sat in the tree with the
+# exact mode being asked for. A second copy of a tool splits its tests and
+# whoever comes next finds whichever they find first.
+#
+# The index in cyberwise/SKILL.md is the fix, and this test is what keeps it
+# true. A hand-kept index is right the day it is written and quietly wrong
+# afterwards - worse than none, because an index gets trusted.
+
+$indexTool = Join-Path $Root 'skills\cyberwise\tools\Get-ToolIndex.ps1'
+$idxOut = Get-AllOutput { & $indexTool -Root $Root -Check }
+if ($LASTEXITCODE -eq 0) { Ok 'tool index: SKILL.md lists every tool on disk' }
+else { Bad 'tool index: SKILL.md lists every tool on disk' "the index has drifted:`n$idxOut" }
+
+# The check is worthless if it cannot see a tool arriving. Plant one, confirm it
+# is reported missing by NAME, and take it away again.
+$plantDir = Join-Path $Root 'skills\cyberwise-hotkeys\tools'
+$plant    = Join-Path $plantDir 'Test-PlantedTool.ps1'
+Set-Content -LiteralPath $plant -Value '# Test-PlantedTool.ps1 -- a tool planted by the test suite.' -NoNewline
+try {
+    $plantOut = Get-AllOutput { & $indexTool -Root $Root -Check }
+    $plantProblems = @(
+        if ($LASTEXITCODE -eq 0)                              { 'a new tool absent from the index did not fail the check' }
+        if ($plantOut -notmatch 'Test-PlantedTool\.ps1')      { 'the drifting tool was not named in the output' }
+    )
+    if ($plantProblems) { Bad 'tool index: a tool missing from the index is named' ($plantProblems -join "`n") }
+    else                { Ok  'tool index: a tool missing from the index is named' }
+} finally {
+    Remove-Item -LiteralPath $plant -Force -ErrorAction SilentlyContinue
+}
+
+# Every tool must SAY what it is for in its opening lines, or the index carries a
+# row that tells the reader nothing and the whole table stops being worth reading.
+$noPurpose = @()
+foreach ($t in (Get-ChildItem (Join-Path $Root 'skills') -Recurse -Filter *.ps1 -File |
+                Where-Object { $_.Directory.Name -eq 'tools' })) {
+    $head = (Get-Content -LiteralPath $t.FullName -TotalCount 12) -join "`n"
+    if ($head -notmatch '(?m)^\s*\.SYNOPSIS\s*$' -and $head -notmatch '(?m)^#\s*[\w.-]+\.ps1\s+--\s+\S') {
+        $noPurpose += $t.Name
+    }
+}
+if ($noPurpose) { Bad 'tool index: every tool states its purpose in its header' ($noPurpose -join ', ') }
+else            { Ok  'tool index: every tool states its purpose in its header' }
+
 # ==================================================== wildcard precedence ====
 #
 # A precedence rule names an archive exactly, which breaks for every mod that

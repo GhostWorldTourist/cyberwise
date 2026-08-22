@@ -232,6 +232,61 @@ It refuses files over 50 MB without `-Force`, because `.archive` files run to
 gigabytes and are never hand-edited - a backup tool that fills the disk is its
 own kind of damage.
 
+## Every tool in the family
+
+**Before you write a tool, read this table.** It is the whole point of it. On
+2026-08-22 a preset decoder was proposed and half-designed before anyone noticed
+that `Decode-Preset.ps1` had shipped months earlier with the exact `-Compare`
+mode being asked for. A second copy of a tool is worse than no tool: it splits
+the tests, and whoever comes next finds whichever one they find first.
+
+The table is **generated from the tools on disk** by
+`cyberwise/tools/Get-ToolIndex.ps1`, and the test suite fails when it drifts - a
+hand-kept index would be right the day it was written and quietly wrong after,
+which is worse than none, because an index gets trusted.
+
+```powershell
+tools\Get-ToolIndex.ps1            # print it
+tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
+```
+
+<!-- TOOL-INDEX:START -->
+| tool | skill | what it does |
+|---|---|---|
+| `Get-ToolIndex.ps1` | `cyberwise` | every tool in the family, in one table. |
+| `ModFileBackup.ps1` | `cyberwise` | take back the ability to undo. |
+| `ModPatchWatch.ps1` | `cyberwise` | notice when a mod you patched or overrode has changed. |
+| `Test-InstallReady.ps1` | `cyberwise` | if you launched right now, what would be wrong? |
+| `Test-ScriptsLive.ps1` | `cyberwise` | is a script mod's code actually in the compiled bundle? |
+| `Find-QuestConflicts.ps1` | `cyberwise-conflicts` | which mods touch a quest, and which of them win. |
+| `Repair-LoadOrder.ps1` | `cyberwise-conflicts` | Check (and optionally repair) the Cyberpunk 2077 archive load order. |
+| `Resolve-ResourcePath.ps1` | `cyberwise-conflicts` | turn archive hashes into file paths, and back. |
+| `Compare-InstallSnapshot.ps1` | `cyberwise-crashes` | answer "what changed?" |
+| `Invoke-BisectRound.ps1` | `cyberwise-crashes` | park a set of mods, record the round, launch the game. |
+| `New-InstallSnapshot.ps1` | `cyberwise-crashes` | record what the install looks like right now. |
+| `Register-CrashWatch.ps1` | `cyberwise-crashes` | keep the crash watcher alive without a terminal. |
+| `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
+| `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
+| `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
+| `New-HotkeySheet.ps1` | `cyberwise-hotkeys` | build a self-contained hotkey cheatsheet from the bindings actually present in a Cyberpunk install. |
+| `ModPreference.ps1` | `cyberwise-recommends` | what this user has already said about being recommended things. |
+| `Test-Capabilities.ps1` | `cyberwise-recommends` | what this install cannot do, and what is missing to do it. |
+| `Compare-Collection.ps1` | `cyberwise-reports` | what a curated Nexus collection has that you do not. |
+| `Measure-PageFit.ps1` | `cyberwise-reports` | does a page fit a given viewport without scrolling? |
+| `ModManifestHtml.ps1` | `cyberwise-reports` | render a mod manifest as a self-contained HTML report. |
+| `New-ArchiveAnatomy.ps1` | `cyberwise-reports` | what the archive layer actually contains. |
+| `New-ModCredits.ps1` | `cyberwise-reports` | the people whose work is in your game, as end credits. |
+| `New-ModDossier.ps1` | `cyberwise-reports` | everything this install knows about ONE mod. |
+| `New-ModManifest.ps1` | `cyberwise-reports` | Generate a readable manifest of an installed Cyberpunk 2077 mod list. |
+| `New-SystemProfile.ps1` | `cyberwise-reports` | a deterministic profile of a modded Cyberpunk 2077 install, in Discord-pasteable markdown and as an HTML report. |
+| `NexusCredential.ps1` | `cyberwise-reports` | keep a Nexus API key in Windows Credential Manager instead of in a script, a config file, or a chat log. |
+| `Show-ViewportProbe.ps1` | `cyberwise-reports` | ask the user's actual browser window how big it is. |
+| `Decode-Preset.ps1` | `cyberwise-saves` | turn AppearanceChangeUnlocker .preset files into readable appearance fields. |
+| `Expand-Save.ps1` | `cyberwise-saves` | decompress a Cyberpunk 2077 sav.dat into a flat blob. |
+| `ConvertFrom-Markdown.ps1` | `cyberwise-sitebuilder` | the small Markdown subset these documents use. |
+| `New-CharacterSite.ps1` | `cyberwise-sitebuilder` | a website from a folder of character documents. |
+<!-- TOOL-INDEX:END -->
+
 ## Which skill covers it
 
 Load the one that matches. They are separate so that reading about keybinds does
@@ -242,6 +297,7 @@ not cost you anything when the question is about textures.
 | `cyberwise-conflicts` | a mod is installed but does nothing; textures or body parts look wrong; load order, override direction, inert archives, `.archive` internals |
 | `cyberwise-crashes` | the game crashes, hangs or fails to launch; reading logs; finding which mod is responsible |
 | `cyberwise-saves` | reading a save, character appearance data, ACU appearance presets |
+| `cyberwise-recommends` | a task needs a tool this install lacks; before mentioning any mod nobody asked about |
 | `cyberwise-hotkeys` | what a key is bound to, rebinding, generating a hotkey cheatsheet |
 | `cyberwise-reports` | inventory the mod list, profile the machine, or generate any HTML/markdown deliverable |
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua and console commands, finding game text |

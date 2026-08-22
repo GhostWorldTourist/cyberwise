@@ -100,6 +100,8 @@ $creditRel   = 'skills\cyberwise-reports\tools\New-ModCredits.ps1'
 $anatomyRel  = 'skills\cyberwise-reports\tools\New-ArchiveAnatomy.ps1'
 $repairRel   = 'skills\cyberwise-conflicts\tools\Repair-LoadOrder.ps1'
 $indexRel    = 'skills\cyberwise\tools\Get-ToolIndex.ps1'
+$capRel      = 'skills\cyberwise-recommends\tools\Test-Capabilities.ps1'
+$prefRel     = 'skills\cyberwise-recommends\tools\ModPreference.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -118,6 +120,8 @@ Save-Original $creditRel
 Save-Original $anatomyRel
 Save-Original $repairRel
 Save-Original $indexRel
+Save-Original $capRel
+Save-Original $prefRel
 
 # Three of the mutations below are owned by bisect tests, and those tests skip
 # themselves while Cyberpunk is running (the tool refuses to move mod files under
@@ -434,6 +438,36 @@ Assert-Detects 'an all-pairs pattern obeyed instead of refused' $repairRel `
     'if ($befores.Count * $afters.Count -gt $MaxPairs) {' `
     'if ($false) {' `
     'over-broad pattern is refused'
+
+# The index exists so nobody rebuilds a tool the family already ships. A -Check
+# that always passes turns it back into a hand-kept list: right the day it was
+# written, quietly wrong after, and trusted the whole time.
+Assert-Detects 'a tool index check that always passes' $indexRel `
+    'if ($existing -eq $tableText) {' `
+    'if ($true) {' `
+    'a tool missing from the index is named'
+
+# A preferences file that cannot be parsed must not silently re-enable what the
+# user turned off. Failing OPEN here looks exactly like the tool working, and the
+# person who said "never again" is the last to find out it stopped holding.
+Assert-Detects 'a corrupt preferences file failing open instead of closed' $prefRel `
+    "recommendations = 'off'; declined = @(); source = " `
+    "recommendations = 'on'; declined = @(); source = " `
+    'an unreadable preferences file fails closed'
+
+# Naming only the leaf sends the user in a circle: they cannot install ACU
+# without CET, and a gate that never says so is advice that cannot be followed.
+Assert-Detects 'a blocked capability that hides the missing dependency' $capRel `
+    'if ($dep -and -not $dep.Installed -and $missing.Name -notcontains $dep.Name) { $missing += $dep }' `
+    '# mutation: dependency never added' `
+    'names the whole chain'
+
+# A decline that does not stick is the whole failure this skill exists to
+# prevent, and it reads as forgetfulness rather than as a bug.
+Assert-Detects 'a decline that never binds' $prefRel `
+    'return -not (Test-CwDeclined -Item $Item -RecordsRoot $RecordsRoot)' `
+    'return $true' `
+    'a decline binds to one item and persists'
 
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
