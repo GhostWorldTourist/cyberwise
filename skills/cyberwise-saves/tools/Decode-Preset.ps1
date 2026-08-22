@@ -19,6 +19,14 @@
 # Hash-to-group mappings live in preset-groups.csv beside this script. Keys with
 # no known name are printed as "?<hash>" rather than dropped, so a preset is
 # never silently reported as smaller than it is.
+#
+# Most mappings were confirmed by hashing group names recovered from a save. ONE
+# was not: "pubic_hair" (13523242420079111419) is identified by OBSERVATION - the
+# user changed that setting alone between two presets and this key alone moved
+# with it, 5 -> 0. No preimage has been found for it; 133 candidate names hashed
+# to nothing. The label is correct; the internal name behind the hash is not
+# known, and if one is ever recovered it should replace this entry rather than
+# sit beside it.
 
 param(
     [string]$Path,
@@ -64,6 +72,7 @@ $labels = [ordered]@{
     'breast'            = 'Chest'
     'nipples'           = 'Nipples'
     'genitals'          = 'Genitals'
+    'pubic_hair'        = 'Pubic Hair'
     'sedth_eyes_l'      = 'Eye Cyberware (L)'
     'sedth_eyes_r'      = 'Eye Cyberware (R)'
     'sedth_eyes_l_glow' = 'Eye Glow (L)'
