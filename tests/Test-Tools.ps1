@@ -1121,12 +1121,21 @@ Set-Content -LiteralPath (Join-Path $recGame 'bin\x64\Cyberpunk2077.exe') 'stub'
 # Nothing installed: the capability is blocked, and the DEPENDENCY is named too.
 # "Install ACU" is useless advice to somebody who has no CET, and a gate that
 # names only the leaf sends them in a circle.
-$bare = Get-AllOutput { & $capTool -GameRoot $recGame -For presets }
+# Assert the MISSING LIST, not the printed prose. The first version of this test
+# matched the text 'Cyber Engine Tweaks' - which the human output prints from the
+# ACU row's own Needs field, by a different path, whether or not the dependency
+# was ever added to the list. Deleting the line that adds it left every test
+# green. The mutation harness is the only reason that was ever noticed.
+$bare = Get-AllOutput { & $capTool -GameRoot $recGame -For presets -Json }
 $bareCode = $LASTEXITCODE
+$bareJson = try { ($bare -join "`n") | ConvertFrom-Json } catch { $null }
+$bareMissing = @($bareJson.Missing)
 $bareProblems = @(
-    if ($bareCode -eq 0)                                  { 'a capability with nothing installed reported as available' }
-    if ($bare -notmatch 'Appearance Change Unlocker')     { 'the missing mod was not named' }
-    if ($bare -notmatch 'Cyber Engine Tweaks')            { 'the missing dependency was not named' }
+    if ($bareCode -eq 0)                                          { 'a capability with nothing installed reported as available' }
+    if ($null -eq $bareJson)                                      { 'the -Json output did not parse' }
+    if ($bareJson.Satisfied)                                      { 'an install with nothing on it reported the capability satisfied' }
+    if ($bareMissing -notcontains 'Appearance Change Unlocker')   { 'the missing mod was absent from the missing list' }
+    if ($bareMissing -notcontains 'Cyber Engine Tweaks')          { 'the unmet dependency was absent from the missing list' }
 )
 if ($bareProblems) { Bad 'recommends: a blocked capability names the whole chain' ($bareProblems -join "`n") }
 else               { Ok  'recommends: a blocked capability names the whole chain' }
