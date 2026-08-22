@@ -93,6 +93,8 @@ The fix offered was a small companion mod setting those friction values, loading
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
 | `cyberwise-backstory` | building a character: V's history, voice, roleplay decisions, a dossier |
 | `cyberwise-feedback` | Cyberwise itself got something wrong, or you want to reach the author |
+| `cyberwise-sitebuilder` | turning character documents into a website with no toolchain to install |
+| `cyberwise-recommends` | a task needs a tool this install lacks; before mentioning any mod nobody asked about |
 
 **They work together automatically:** a hotkey sheet is also an HTML deliverable, so Cyberwise will use both `cyberwise-hotkeys` and `cyberwise-reports`.
 
@@ -156,7 +158,7 @@ Show-ModPatchDrift -Name 'x'    # what THEY changed, when it says CHANGED
 
 ## Included tools
 
-Tools live with the skill that uses them: `cyberwise/tools/` (the backup helper above, which is cross-cutting), `cyberwise-hotkeys/tools/`, `cyberwise-conflicts/tools/`, `cyberwise-crashes/tools/`, `cyberwise-reports/tools/`, `cyberwise-saves/tools/` and `cyberwise-feedback/tools/`.
+Tools live with the skill that uses them: `cyberwise/tools/` (the backup helper above, which is cross-cutting), `cyberwise-hotkeys/tools/`, `cyberwise-conflicts/tools/`, `cyberwise-crashes/tools/`, `cyberwise-reports/tools/`, `cyberwise-saves/tools/`, `cyberwise-feedback/tools/`, `cyberwise-sitebuilder/tools/` and `cyberwise-recommends/tools/`. `cyberwise/SKILL.md` carries a generated index of every one of them - read it before writing a new tool.
 
 `New-ModManifest.ps1` builds a readable inventory of an installed load order: every mod, what it deploys, its Nexus link and install date, and - with an API key - a one-line description of what it actually does. `-HideNSFW` omits adult content.
 

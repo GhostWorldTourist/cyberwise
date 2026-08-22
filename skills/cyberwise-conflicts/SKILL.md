@@ -174,11 +174,27 @@ have. Theirs live in a data file beside their game:
         @{ Before = 'specific_retex.archive'
            After  = 'catch_all_aio.archive'
            Why    = 'an AIO should lose to anything specific' }
+
+        # Either side may be a WILDCARD (* or ?), matched against the archives
+        # present and expanded to one rule per match. Use it for any mod whose
+        # archive is RENAMED when you switch variant - a skin tone, a hair
+        # colour - so the rule survives the swap:
+        @{ Before = 'SkinTone_BODY_*.archive'
+           After  = 'catch_all_aio.archive'
+           Why    = 'whichever tone is installed still beats the AIO' }
     )
     BenignInert      = @{ 'some.archive' = 'why being inert is fine here' }
     RuntimeGenerated = @{ 'other.archive' = 'why it appears and vanishes' }
 }
 ```
+
+**An exact-name rule stops applying the moment the mod renames its archive, and
+it fails SILENTLY** - nothing errors, the new archive is merely unlisted, and
+unlisted sorts LAST. A skin texture that has to beat a catch-all ends up losing
+to it, and the only symptom is that the character looks wrong. That is what
+wildcards are for. Two guards come with them: a pattern matching nothing says so
+rather than passing quietly, and a pattern that would pair more than 200
+archives is refused as a typo.
 
 **Add a rule whenever a conflict is settled by hand**, or the next redeploy
 undoes the decision silently. The two suppression maps stop known-harmless cases
