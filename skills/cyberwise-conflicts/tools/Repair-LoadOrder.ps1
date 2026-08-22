@@ -106,6 +106,15 @@ if (-not $ModDir -or -not (Test-Path -LiteralPath $ModDir)) {
 #           @{ Before = 'specific_retex.archive'
 #              After  = 'catch_all_aio.archive'
 #              Why    = 'AIO should lose to anything specific' }
+#
+#           # Either side may be a WILDCARD (* or ?), matched against the
+#           # archives present and expanded to one rule per match. Use this for
+#           # any mod whose archive is renamed when you switch variant - a skin
+#           # tone, a hair colour - so the rule survives the swap instead of
+#           # quietly ceasing to apply:
+#           @{ Before = 'SkinTone_BODY_*.archive'
+#              After  = 'catch_all_aio.archive'
+#              Why    = 'whichever tone is installed still beats the AIO' }
 #       )
 #       BenignInert      = @{ 'some.archive' = 'why this being inert is fine' }
 #       RuntimeGenerated = @{ 'other.archive' = 'why this appears and vanishes' }
@@ -253,6 +262,55 @@ else {
 Write-Section 'PRECEDENCE RULES'
 
 function Get-Index { param($List) $h = @{}; for ($i = 0; $i -lt $List.Count; $i++) { $h[$List[$i]] = $i }; return $h }
+
+# A rule name containing * or ? is a PATTERN. It is matched against the entries
+# actually present and expands to one concrete rule per match, so everything
+# downstream still deals only in exact names.
+#
+# The reason this exists: tone- and variant-selectable mods rename their archive
+# on every swap (##_Arkhe_UniversalSkinTone_BODY_PALE -> ..._BODY_FAIR). An
+# exact-name rule stops applying the instant the name changes, and it fails
+# SILENTLY - the archive is merely reported unlisted, and unlisted sorts LAST,
+# which is exactly where a skin texture must not be. A pattern follows the swap.
+#
+# Caveat worth knowing when writing one: -like treats [ ] in the PATTERN as a
+# character class. Archive names full of #, !, ~ and & are fine; a literal
+# bracket in a pattern needs escaping as `[.
+function Expand-Rules {
+    param($Rules, $Entries, [int] $MaxPairs = 200)
+
+    $out = New-Object System.Collections.Generic.List[object]
+    foreach ($r in $Rules) {
+        if (($r.Before -notmatch '[*?]') -and ($r.After -notmatch '[*?]')) { $out.Add($r); continue }
+
+        $befores = if ($r.Before -match '[*?]') { @($Entries | Where-Object { $_ -like $r.Before }) } else { @($r.Before) }
+        $afters  = if ($r.After  -match '[*?]') { @($Entries | Where-Object { $_ -like $r.After  }) } else { @($r.After)  }
+
+        if ($befores.Count -eq 0 -or $afters.Count -eq 0) {
+            Write-Ok ("skipped (pattern matched nothing): {0} -> {1}" -f $r.Before, $r.After)
+            continue
+        }
+        # A pattern broad enough to pair hundreds of archives is a typo, not an
+        # intention. Refuse it rather than reordering the whole load order.
+        if ($befores.Count * $afters.Count -gt $MaxPairs) {
+            Write-Bad ("pattern too broad ({0} x {1} pairs): {2} -> {3}" -f $befores.Count, $afters.Count, $r.Before, $r.After)
+            continue
+        }
+        foreach ($b in $befores) {
+            foreach ($a in $afters) {
+                if ($b -eq $a) { continue }
+                $out.Add(@{
+                    Before = $b
+                    After  = $a
+                    Why    = "$($r.Why) [pattern: $($r.Before) -> $($r.After)]"
+                })
+            }
+        }
+    }
+    return $out
+}
+
+$Rules = @(Expand-Rules -Rules $Rules -Entries $lines)
 
 $violations = @()
 $idx = Get-Index $lines

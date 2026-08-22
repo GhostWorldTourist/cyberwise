@@ -1,4 +1,4 @@
-# Test-ToolMutations.ps1 -- proves Test-Tools.ps1 can actually fail.
+﻿# Test-ToolMutations.ps1 -- proves Test-Tools.ps1 can actually fail.
 #
 #     .\tests\Test-ToolMutations.ps1
 #
@@ -98,6 +98,8 @@ $bisectRel   = 'skills\cyberwise-crashes\tools\Invoke-BisectRound.ps1'
 $resolveRel  = 'skills\cyberwise-conflicts\tools\Resolve-ResourcePath.ps1'
 $creditRel   = 'skills\cyberwise-reports\tools\New-ModCredits.ps1'
 $anatomyRel  = 'skills\cyberwise-reports\tools\New-ArchiveAnatomy.ps1'
+$repairRel   = 'skills\cyberwise-conflicts\tools\Repair-LoadOrder.ps1'
+$indexRel    = 'skills\cyberwise\tools\Get-ToolIndex.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -114,6 +116,22 @@ Save-Original $bisectRel
 Save-Original $resolveRel
 Save-Original $creditRel
 Save-Original $anatomyRel
+Save-Original $repairRel
+Save-Original $indexRel
+
+# Three of the mutations below are owned by bisect tests, and those tests skip
+# themselves while Cyberpunk is running (the tool refuses to move mod files under
+# a live game, correctly). A skipped test cannot fail, so asserting on it would
+# report the MUTATION as undetected - blaming the code for a game window being
+# open. Say what is actually true instead: this mutation was not exercised.
+$script:gameRunning = @(Get-Process -Name 'Cyberpunk2077' -ErrorAction SilentlyContinue).Count -gt 0
+$script:skipped = 0
+function Skip-WhileRunning {
+    param([string] $Name)
+    $script:skipped++
+    Write-Host "SKIP  $Name" -ForegroundColor DarkYellow
+    Write-Host "        Cyberpunk 2077 is running - the test that owns this cannot run" -ForegroundColor DarkGray
+}
 
 function Assert-Detects {
     param([string]$Name, [string]$Rel, [string]$From, [string]$To, [string]$Expect)
@@ -177,7 +195,8 @@ $base = Invoke-Suite
 if ($base.Code -ne 0) {
     Write-Host 'FAIL  the unmutated copy does not pass - nothing below would be meaningful' -ForegroundColor Red
     Write-Host $base.Text
-    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+
+Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
 }
 $script:pass++
@@ -294,27 +313,33 @@ Assert-Detects 'the signed conversion dropped, losing half of all hashes' $resol
 # Containment is one `if`, and without it a cut list can move any file the user
 # can read. Nothing errors, the round reports success, and the manifest records
 # a file that was never part of the game.
+if ($script:gameRunning) { Skip-WhileRunning 'path containment removed, letting a list escape the game directory' } else {
 Assert-Detects 'path containment removed, letting a list escape the game directory' $bisectRel `
     'if (-not (Test-InsideGameRoot $full)) {' `
     'if ($false) {' `
     'cannot escape the game directory'
+}
 
 # A round is armed while the manager still believes the mods are deployed, so a
 # deployment puts them back without anyone noticing. Not checking is how a round
 # scores a result on a configuration nobody recorded.
+if ($script:gameRunning) { Skip-WhileRunning 'a bisect status that never checks whether the manager undid the round' } else {
 Assert-Detects 'a bisect status that never checks whether the manager undid the round' $bisectRel `
     'if (Test-Path -LiteralPath (Join-Path $GameRoot $item.Rel)) { $undone += "$($r.Round): $($item.Rel)" }' `
     '# mutation: no re-deploy check' `
     'manager undid is reported as void'
+}
 
 # The quiet one. Parking the names that happen to resolve and shrugging at the
 # rest produces a round that exists in no manifest, and its result scores exactly
 # like a real one.
+if ($script:gameRunning) { Skip-WhileRunning 'a bisect round arming with only the names that resolved' } else {
 Assert-Detects 'a bisect round arming with only the names that resolved' $bisectRel `
     'Write-Host ''Nothing was parked. Fix the list and re-run - a partly-parked round tests a configuration nobody recorded.'' -ForegroundColor Yellow
     exit 1' `
     'Write-Host ''carrying on with what resolved'' -ForegroundColor Yellow' `
     'unresolvable name refuses the whole round'
+}
 
 #
 # BOTH lines have to go. The fix is two independent guards - a key check and a
@@ -386,9 +411,34 @@ Assert-Detects 'contests decided alphabetically instead of by load order' $anato
     '$ranked = @($claimants | Sort-Object Name)' `
     'names what loses, and only what loses'
 
+# Wildcard rules exist because a variant swap renames the archive. Stop expanding
+# them and the rule quietly stops applying: no error, the archive is merely
+# unlisted, and unlisted sorts LAST - which for a skin texture beaten by a
+# catch-all AIO is the whole failure this feature was built to end.
+Assert-Detects 'pattern rules never expanded, so a renamed variant goes unpositioned' $repairRel `
+    '$Rules = @(Expand-Rules -Rules $Rules -Entries $lines)' `
+    '# mutation: patterns left literal, matching nothing' `
+    'positions whichever variant is installed'
+
+# An unmatched pattern reporting nothing is indistinguishable from a satisfied
+# rule. Silence is the failure mode; the line saying so is the feature.
+Assert-Detects 'an unmatched pattern passing in silence' $repairRel `
+    'Write-Ok ("skipped (pattern matched nothing): {0} -> {1}" -f $r.Before, $r.After)' `
+    '# mutation: nothing said about a pattern that matched nothing' `
+    'a pattern matching nothing is skipped'
+
+# Obeying `*` on both sides reorders the entire load order into an arbitrary
+# shape while reporting every rule satisfied - the most destructive thing this
+# tool can do, and it would look exactly like success.
+Assert-Detects 'an all-pairs pattern obeyed instead of refused' $repairRel `
+    'if ($befores.Count * $afters.Count -gt $MaxPairs) {' `
+    'if ($false) {' `
+    'over-broad pattern is refused'
+
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
-if ($script:fail) { Write-Host "$($script:pass) passed, $($script:fail) FAILED" -ForegroundColor Red; exit 1 }
-Write-Host "$($script:pass) passed, 0 failed - every shipped defect is detected by the test that owns it" -ForegroundColor Green
+$skipNote = if ($script:skipped) { ", $($script:skipped) skipped (game running)" } else { '' }
+if ($script:fail) { Write-Host "$($script:pass) passed, $($script:fail) FAILED$skipNote" -ForegroundColor Red; exit 1 }
+Write-Host "$($script:pass) passed, 0 failed$skipNote - every shipped defect is detected by the test that owns it" -ForegroundColor Green
 exit 0

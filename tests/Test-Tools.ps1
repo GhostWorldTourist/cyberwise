@@ -1,4 +1,4 @@
-# Test-Tools.ps1 -- behaviour tests for the shipped tools, against fixtures.
+﻿# Test-Tools.ps1 -- behaviour tests for the shipped tools, against fixtures.
 #
 #     .\tests\Test-Tools.ps1
 #
@@ -1102,6 +1102,92 @@ $skipOut = Get-AllOutput { & $repairTool -ModDir $colMod -SkipRedmod }
 if ($skipOut -notmatch 'claimed by BOTH') { Ok 'collisions: -SkipRedmod leaves REDmod archives out' }
 else { Bad 'collisions: -SkipRedmod leaves REDmod archives out' 'REDmod archives were scanned anyway' }
 
+
+
+# ==================================================== wildcard precedence ====
+#
+# A precedence rule names an archive exactly, which breaks for every mod that
+# renames its archive when you switch variant - a skin tone, a hair colour. The
+# rule stops applying, and it does so SILENTLY: nothing errors, the new archive
+# is merely unlisted, and unlisted sorts LAST. A skin texture that must beat a
+# catch-all AIO ends up losing to it, and the only symptom is that the character
+# looks wrong.
+
+$wcGame = Join-Path $sandbox 'wildcards'
+$wcMod  = Join-Path $wcGame 'archive\pc\mod'
+New-Item -ItemType Directory -Path $wcMod -Force | Out-Null
+$wcRules = Join-Path $wcGame 'rules.psd1'
+
+function Reset-WcFixture {
+    param([string] $ToneArchive)
+    Get-ChildItem $wcMod -File | Remove-Item -Force
+    New-FixtureArchive -Path (Join-Path $wcMod $ToneArchive) -Hashes @([uint64]1)
+    New-FixtureArchive -Path (Join-Path $wcMod 'aio.archive') -Hashes @([uint64]2)
+    # Only the AIO is listed: this is the state a variant swap leaves behind.
+    Set-Content -LiteralPath (Join-Path $wcMod 'modlist.txt') "aio.archive`n" -NoNewline
+}
+function Get-WcList { @(Get-Content (Join-Path $wcMod 'modlist.txt') | Where-Object { $_ }) }
+
+Set-Content -LiteralPath $wcRules @'
+@{ Rules = @(
+    @{ Before = 'skin_BODY_*.archive'
+       After  = 'aio.archive'
+       Why    = 'whichever tone is installed still beats the catch-all' }
+) }
+'@
+
+# The rule never names FAIR or VANILLA. If it only works for the tone someone
+# typed into the rules file, it has not solved anything.
+$wcFails = @()
+foreach ($tone in 'skin_BODY_FAIR.archive', 'skin_BODY_VANILLA.archive') {
+    Reset-WcFixture -ToneArchive $tone
+    $null = Get-AllOutput { & $repairTool -ModDir $wcMod -RulesFile $wcRules -Fix -SkipScan }
+    $l = Get-WcList
+    $iTone = [array]::IndexOf($l, $tone); $iAio = [array]::IndexOf($l, 'aio.archive')
+    if ($iTone -lt 0)       { $wcFails += "$tone was never listed at all" }
+    elseif ($iTone -gt $iAio) { $wcFails += "$tone landed at $iTone, after the AIO at $iAio" }
+}
+if ($wcFails) { Bad 'wildcards: a pattern rule positions whichever variant is installed' ($wcFails -join "`n") }
+else          { Ok  'wildcards: a pattern rule positions whichever variant is installed' }
+
+# A pattern matching nothing is the normal case for a mod you have not installed.
+# It must report and move on - not throw, and not invent an entry for a name that
+# is a pattern rather than a file.
+Reset-WcFixture -ToneArchive 'skin_BODY_FAIR.archive'
+Set-Content -LiteralPath $wcRules @'
+@{ Rules = @(
+    @{ Before = 'nothing_matches_*.archive'; After = 'aio.archive'; Why = 'absent mod' }
+) }
+'@
+$wcMiss = Get-AllOutput { & $repairTool -ModDir $wcMod -RulesFile $wcRules -Fix -SkipScan }
+$missProblems = @(
+    if ($wcMiss -notmatch 'pattern matched nothing') { 'an unmatched pattern was not reported as skipped' }
+    if ((Get-WcList) -contains 'nothing_matches_*.archive') { 'the pattern itself was inserted into modlist.txt as if it were an archive' }
+)
+if ($missProblems) { Bad 'wildcards: a pattern matching nothing is skipped, not inserted' ($missProblems -join "`n") }
+else               { Ok  'wildcards: a pattern matching nothing is skipped, not inserted' }
+
+# `*` on both sides pairs every archive with every other one. That is a typo, and
+# obeying it would reorder the entire load order into an arbitrary shape - the
+# single most destructive thing this tool could do while reporting success.
+Get-ChildItem $wcMod -File | Remove-Item -Force
+$wcMany = 1..20 | ForEach-Object { "many_$_.archive" }
+foreach ($n in $wcMany) { New-FixtureArchive -Path (Join-Path $wcMod $n) -Hashes @([uint64]1) }
+Set-Content -LiteralPath (Join-Path $wcMod 'modlist.txt') (($wcMany -join "`n") + "`n") -NoNewline
+$wcBefore = Get-WcList
+Set-Content -LiteralPath $wcRules @'
+@{ Rules = @(
+    @{ Before = '*.archive'; After = '*.archive'; Why = 'a typo, not an intention' }
+) }
+'@
+$wcBroad = Get-AllOutput { & $repairTool -ModDir $wcMod -RulesFile $wcRules -Fix -SkipScan }
+$broadProblems = @(
+    if ($wcBroad -notmatch 'pattern too broad') { 'an all-pairs pattern was not refused' }
+    if (((Get-WcList) -join '|') -ne ($wcBefore -join '|')) { 'the load order was reordered by an all-pairs pattern' }
+)
+if ($broadProblems) { Bad 'wildcards: an over-broad pattern is refused, not obeyed' ($broadProblems -join "`n") }
+else                { Ok  'wildcards: an over-broad pattern is refused, not obeyed' }
+
 # ========================================================= resource paths ====
 #
 # The table turns archive hashes into file names, which is the difference between
@@ -1190,6 +1276,28 @@ if (-not (Test-Path -LiteralPath $cwpx)) {
 # suite should do to somebody's machine.
 
 $bisectTool = Join-Path $Root 'skills\cyberwise-crashes\tools\Invoke-BisectRound.ps1'
+
+# The tool refuses to move mod files while Cyberpunk is running, and it is right
+# to. But that refusal is about the REAL install, not this sandbox, and it THROWS
+# rather than returning - so an open game window kills the rest of the suite.
+#
+# Under the mutation harness that surfaced as "the restore did not put the tree
+# back" on every mutation from here on: a message accusing the harness of leaving
+# a mutated file behind, when the only thing wrong was that someone was playing.
+# An environmental stop must say it is environmental.
+$bisectBlocked = @(Get-Process -Name 'Cyberpunk2077' -ErrorAction SilentlyContinue).Count -gt 0
+if ($bisectBlocked) {
+    foreach ($n in 'a round parks exactly the named set, and records it',
+                   'an unresolvable name refuses the whole round',
+                   'restore puts the round back from its manifest',
+                   '-Plan reports without touching anything',
+                   'a round the manager undid is reported as void',
+                   'a name cannot escape the game directory',
+                   'a doctored manifest cannot write outside the game directory',
+                   'a parked file that vanished is reported, not skipped') {
+        Skip "bisect: $n" 'Cyberpunk 2077 is running - the tool refuses to move mod files, correctly'
+    }
+} else {
 $bgame = Join-Path $sandbox 'bisectgame'
 $brecs = Join-Path $sandbox 'bisectrecords'
 New-Item -ItemType Directory -Path (Join-Path $bgame 'bin\x64') -Force | Out-Null
@@ -1315,6 +1423,7 @@ Remove-Item -LiteralPath (Join-Path $bgame '_bisect_parked\C\archive\pc\mod\gamm
 $bLost = Get-AllOutput { & $bisectTool -GameRoot $bgame -Round 'C' -Restore -RecordDir $brecs }
 if ($bLost -match 'NOT in the park folder') { Ok 'bisect: a parked file that vanished is reported, not skipped' }
 else { Bad 'bisect: a parked file that vanished is reported, not skipped' "restore said nothing about the missing file:`n$bLost" }
+}
 
 # ================================================================ dossier ====
 #
