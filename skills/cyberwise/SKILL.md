@@ -137,6 +137,37 @@ word is not proof either, but it is a strong signal that a label was trusted or
 a layer was never opened. Check again at the authoritative source before either
 defending the reading or folding to the claim.
 
+## NEVER name a mod you have not confirmed is installed
+
+```powershell
+tools\Test-ModPresent.ps1 -GameRoot '<path>' -Name 'Immersive Gigs','Dark Future'
+```
+
+Exit 1 if any of them is absent. Run it before a report, a suspect list, or a
+sentence that names mods.
+
+**Why it matters more than it looks.** On 2026-08-23 a crash suspect list named
+`AnywherePrologueUnlock`. It had been uninstalled, and the user had to say so.
+The cost was not the wasted line - it was that every other name in the list
+became worth less, because a diagnosis is only worth what its weakest claim is
+worth. "That mod isn't even installed" is the fastest way to make somebody stop
+believing the rest.
+
+**It happens by taking a name from memory instead of from disk**, and the stale
+sources all look authoritative:
+
+| source | why it lies |
+|---|---|
+| a bisect park manifest | a snapshot of a PAST state, by design |
+| a backup folder | things that WERE installed |
+| `modlist.txt` | holds slots for disabled mods on purpose |
+| the mod manager's list | staged is not deployed |
+| earlier in this conversation | the install changes under you - purges, deploys, uninstalls |
+
+That last one is the one that catches an agent. A list assembled twenty minutes
+ago is not evidence about now, and on an install being actively worked on it is
+frequently wrong.
+
 ## A feature that works for everyone else is not the thing to route around
 
 **If something is supposed to work, and works for thousands of other people, and
@@ -305,6 +336,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `ModFileBackup.ps1` | `cyberwise` | take back the ability to undo. |
 | `ModPatchWatch.ps1` | `cyberwise` | notice when a mod you patched or overrode has changed. |
 | `Test-InstallReady.ps1` | `cyberwise` | if you launched right now, what would be wrong? |
+| `Test-ModPresent.ps1` | `cyberwise` | is this mod actually installed right now? |
 | `Test-ScriptsLive.ps1` | `cyberwise` | is a script mod's code actually in the compiled bundle? |
 | `Find-QuestConflicts.ps1` | `cyberwise-conflicts` | which mods touch a quest, and which of them win. |
 | `Repair-LoadOrder.ps1` | `cyberwise-conflicts` | Check (and optionally repair) the Cyberpunk 2077 archive load order. |

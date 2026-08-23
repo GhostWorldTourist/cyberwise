@@ -1254,6 +1254,42 @@ else            { Ok  'tool index: every tool states its purpose in its header' 
 
 
 
+
+# ======================================================== naming a real mod ==
+#
+# A suspect list that names an uninstalled mod discredits every other name in it.
+# The guard has to FAIL on the absent one - a checker that only ever agrees is
+# the same as no checker.
+
+$presentTool = Join-Path $Root 'skills\cyberwise\tools\Test-ModPresent.ps1'
+$pmGame = Join-Path $sandbox 'modpresent'
+foreach ($d in 'archive\pc\mod', 'r6\scripts', 'bin\x64\plugins\cyber_engine_tweaks\mods') {
+    New-Item -ItemType Directory -Path (Join-Path $pmGame $d) -Force | Out-Null
+}
+Set-Content -LiteralPath (Join-Path $pmGame 'archive\pc\mod\RealMod.archive') 'x' -NoNewline
+New-Item -ItemType Directory -Path (Join-Path $pmGame 'r6\scripts\ScriptedMod') -Force | Out-Null
+
+$pmOut = Get-AllOutput { & $presentTool -GameRoot $pmGame -Name 'RealMod','ScriptedMod' }
+$pmCode = $LASTEXITCODE
+$missOut = Get-AllOutput { & $presentTool -GameRoot $pmGame -Name 'RealMod','GhostMod' }
+$missCode = $LASTEXITCODE
+
+$pmProblems = @(
+    if ($pmCode -ne 0)                        { 'installed mods were reported as missing' }
+    if ($pmOut -notmatch 'archive\pc\mod')  { 'it did not say WHERE the mod lives' }
+    if ($missCode -eq 0)                      { 'an uninstalled mod passed the check' }
+    if ($missOut -notmatch 'GhostMod')        { 'the absent mod was not named' }
+    if ($missOut -notmatch '(?i)not installed|NOT FOUND') { 'the output does not say it is not installed' }
+)
+if ($pmProblems) { Bad 'mod present: an uninstalled mod fails the check and is named' ($pmProblems -join "`n") }
+else             { Ok  'mod present: an uninstalled mod fails the check and is named' }
+
+# A mod can be found under any of the layouts, not just archives - a checker
+# that only knows about archive\pc\mod calls every script mod uninstalled.
+$kindOut = Get-AllOutput { & $presentTool -GameRoot $pmGame -Name 'ScriptedMod' }
+if ($kindOut -match 'redscript:') { Ok 'mod present: a non-archive mod is found in its own layout' }
+else { Bad 'mod present: a non-archive mod is found in its own layout' "a redscript mod was not located:`n$kindOut" }
+
 # ==================================================== physical input inventory ==
 #
 # The tool reported 58 bindings on the install this was written against and every
