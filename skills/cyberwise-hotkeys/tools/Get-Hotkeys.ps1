@@ -57,8 +57,124 @@ param(
     # Where Cyberpunk 2077 is installed. Left empty, the install is located from
     # the storefront records on this machine - see Resolve-GameRoot below.
     [string] $GameRoot,
-    [switch] $IncludeGamepad
+    [switch] $IncludeGamepad,
+
+    # Include the keys the BASE GAME claims (r6\config\inputUserMappings.xml).
+    # Off by default because 99 vanilla rows would swamp a report about mods.
+    [switch] $IncludeBaseGame,
+
+    # Answer one question: is this key safe to bind? Exits 1 if anything already
+    # claims it. THIS IS THE GATE - see the comment on Get-BaseGameKeys.
+    [string] $CheckKey,
+
+    # Inventory the PHYSICAL inputs instead of the bindings. Read the comment on
+    # Get-InputDevices before deciding this is a curiosity.
+    [switch] $Devices
 )
+
+
+
+# ======================================================== physical inputs ====
+#
+# WHY A HOTKEY TOOL ENUMERATES HARDWARE
+#
+# On 2026-08-22 a Cyberpunk install lost its CET overlay. Five hours went into
+# software: five binding stores, CET config and state files, the D3D12 render
+# hook, ReShade, RTSS, Discord, DisplayFusion, Game Bar, Windows accessibility
+# filters, keyboard filter drivers, and 425 mods parked in a bisect round.
+#
+# The cause was a second keyboard - an Apple Magic Keyboard cabled to a dock,
+# switched OFF, still enumerating. On power transition it emitted key-downs with
+# no matching key-up. CET believed a key was permanently held, so every binding
+# it captured became a chord (the stored value decoded to VK 255 + Delete) and no
+# plain keypress ever matched it again.
+#
+# `Win32_Keyboard` reported FOUR keyboards the whole time. Nothing asked.
+#
+# So: for any input problem, inventory the physical inputs BEFORE the software.
+# One WMI query answers in a second what a day of elimination will not, and a
+# second keyboard nobody remembers owning is not an exotic case - docks, KVMs,
+# laptops with a built-in board, and RGB software with virtual HID endpoints all
+# produce one.
+function Get-InputDevices {
+    $out = New-Object System.Collections.Generic.List[object]
+
+    foreach ($d in (Get-PnpDevice -Class Keyboard -Status OK -ErrorAction SilentlyContinue)) {
+        # A VIRTUALDEVICE endpoint is created by software (RGB suites, macro
+        # tools, remote-desktop agents). It injects at driver level, so its
+        # events look like real hardware to every hook above it - which is
+        # exactly why "nothing is injecting" can be measured and still be wrong.
+        $virtual = $d.InstanceId -match 'VIRTUALDEVICE|^ROOT'
+        $out.Add([pscustomobject]@{
+            Kind     = 'keyboard'
+            Name     = $d.FriendlyName
+            Id       = $d.InstanceId
+            Virtual  = [bool]$virtual
+            Vendor   = if ($d.InstanceId -match 'VID_([0-9A-F]{4})') { $matches[1] } else { '' }
+        })
+    }
+    return $out
+}
+
+# Vendor ids worth naming, because "VID_05AC" means nothing at 2am and "Apple"
+# means everything. Not exhaustive - an unknown id is printed as the raw value
+# rather than guessed at.
+$script:KnownVendors = @{
+    '05AC' = 'Apple'; '1B1C' = 'Corsair'; '046D' = 'Logitech'; '1532' = 'Razer'
+    '0B05' = 'ASUS';  '045E' = 'Microsoft'; '04D9' = 'Holtek (many OEM boards)'
+    '3434' = 'Keychron'; '320F' = 'Glorious'; '1E7D' = 'ROCCAT'; '0853' = 'Topre'
+}
+
+# ========================================================= base-game claims ==
+#
+# WHY THIS EXISTS, AND WHY IT IS NOT OPTIONAL BEFORE PROPOSING A KEY
+#
+# This script harvested 58 bindings on the install it was written against and
+# every one of them belonged to a MOD. It knew nothing about the game's own
+# keys - so asked "is F9 free?", it would have said yes, and F9 is quickload.
+#
+# On 2026-08-22 that is exactly what happened: a diagnostic hotkey was bound to
+# F9 to test whether the CET overlay would open, and pressing it would have
+# reloaded the user's save. A test key that also does something in the game
+# makes the result unreadable - you cannot tell "the tool responded" from "the
+# game did its own thing" - so this is a correctness problem, not a nuisance.
+#
+# The claims are read from the install rather than hardcoded. A table of vanilla
+# defaults typed out here would be right until the next patch and wrong
+# silently after it; the game ships its own answer and it is 74 KB of XML.
+function Get-BaseGameKeys {
+    param([string] $Root)
+
+    $out = New-Object System.Collections.Generic.List[object]
+    $path = [IO.Path]::Combine($Root, 'r6\config\inputUserMappings.xml')
+    if (-not (Test-Path -LiteralPath $path)) { return $out }
+
+    # Deliberately a regex over the raw text rather than an XML parse: the file
+    # carries duplicate attribute names in places, which [xml] rejects outright,
+    # and a hard failure here would take the whole hotkey report with it.
+    $raw = Get-Content -LiteralPath $path -Raw
+    foreach ($m in [regex]::Matches($raw, '<button\s+id="IK_([A-Za-z0-9_]+)"([^>]*)>')) {
+        $key = $m.Groups[1].Value
+        $rest = $m.Groups[2].Value
+        $action = if ($rest -match '(?:overridableUI|action)="([^"]+)"') { $matches[1] } else { '' }
+        if (-not $action) { continue }
+        $out.Add([pscustomobject]@{
+            Mod = 'Cyberpunk 2077'; Action = $action; Key = $key
+            Pad = ''; Context = 'base game'; Source = 'game default'; System = 'base game'
+        })
+    }
+    # One key can carry several actions across contexts; one row per key is what
+    # a "who claims this?" question needs.
+    $out | Group-Object Key | ForEach-Object {
+        $g = $_.Group
+        [pscustomobject]@{
+            Mod = 'Cyberpunk 2077'
+            Action = (($g.Action | Sort-Object -Unique) -join ', ')
+            Key = $_.Name; Pad = ''; Context = 'base game'
+            Source = 'game default'; System = 'base game'
+        }
+    }
+}
 
 # ============================================================= install lookup ==
 
@@ -529,6 +645,69 @@ $final = $final |
         # Prefer the input-xml row: it carries the real context.
         ($_.Group | Sort-Object { if ($_.System -eq 'input xml') { 0 } else { 1 } })[0]
     }
+
+# --- the inventory ------------------------------------------------------------
+if ($Devices) {
+    $devs = @(Get-InputDevices)
+    $kb   = @($devs | Where-Object { $_.Kind -eq 'keyboard' })
+    $real = @($kb | Where-Object { -not $_.Virtual })
+
+    Write-Host "keyboards present: $($kb.Count)  ($($real.Count) physical, $($kb.Count - $real.Count) virtual)" -ForegroundColor Cyan
+    Write-Host ''
+    foreach ($d in $kb) {
+        $vendor = if ($d.Vendor -and $script:KnownVendors.ContainsKey($d.Vendor)) { $script:KnownVendors[$d.Vendor] }
+                  elseif ($d.Vendor) { "VID_$($d.Vendor)" } else { '' }
+        $tag = if ($d.Virtual) { 'virtual ' } else { '        ' }
+        Write-Host ("  {0}{1,-26} {2}" -f $tag, $vendor, $d.Name)
+        Write-Host ("            {0}" -f $d.Id) -ForegroundColor DarkGray
+    }
+    Write-Host ''
+
+    # The finding, not the data. A list nobody interprets is why four keyboards
+    # sat in a report all evening and changed nothing.
+    if ($real.Count -gt 1) {
+        Write-Host "MORE THAN ONE PHYSICAL KEYBOARD IS ATTACHED." -ForegroundColor Yellow
+        Write-Host "  A second board can emit key-downs with no key-up - on plug-in, on power" -ForegroundColor DarkGray
+        Write-Host "  transition, or continuously if it is faulty. Anything running at that" -ForegroundColor DarkGray
+        Write-Host "  moment believes that key is held FOREVER, and every hotkey it captures" -ForegroundColor DarkGray
+        Write-Host "  afterwards becomes a chord that no real keypress will match." -ForegroundColor DarkGray
+        Write-Host "  A keyboard switched OFF but still cabled STILL ENUMERATES and still reports." -ForegroundColor DarkGray
+        Write-Host "  Unplug the others and retest before blaming any mod." -ForegroundColor DarkGray
+    } else {
+        Write-Host "One physical keyboard. Nothing here explains a phantom key." -ForegroundColor Green
+    }
+    if ($kb.Count -ne $real.Count) {
+        Write-Host ''
+        Write-Host "Virtual keyboard endpoints are present (RGB suites, macro tools, remote agents)." -ForegroundColor DarkGray
+        Write-Host "They inject at driver level, so their events look like real hardware to every" -ForegroundColor DarkGray
+        Write-Host "hook above them - a low-level capture showing 'nothing injected' does not clear them." -ForegroundColor DarkGray
+    }
+    exit 0
+}
+
+if ($IncludeBaseGame -or $CheckKey) {
+    $final = @($final) + @(Get-BaseGameKeys -Root $GameRoot)
+}
+
+# --- the gate -----------------------------------------------------------------
+#
+# One question, one answer, and a non-zero exit when the key is taken - so a
+# script or an agent cannot proceed past it by not reading the output.
+if ($CheckKey) {
+    $want = $CheckKey -replace '^IK_', ''
+    $claims = @($final | Where-Object { $_.Key -and $_.Key -ieq $want })
+    if ($claims.Count) {
+        Write-Host "$want is ALREADY CLAIMED:" -ForegroundColor Red
+        foreach ($c in $claims) {
+            Write-Host ("  {0,-22} {1}" -f $c.Mod, $c.Action) -ForegroundColor Yellow
+            Write-Host ("  {0,-22} {1}" -f '', "($($c.System))") -ForegroundColor DarkGray
+        }
+        Write-Host 'Pick another key. A test key that also does something in game makes the result unreadable.' -ForegroundColor DarkGray
+        exit 1
+    }
+    Write-Host "$want is free - nothing in the base game or any installed mod claims it." -ForegroundColor Green
+    exit 0
+}
 
 return @($final | Sort-Object Context, Mod, Action)
 

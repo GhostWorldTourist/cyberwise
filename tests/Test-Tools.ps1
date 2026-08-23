@@ -1252,6 +1252,83 @@ foreach ($t in (Get-ChildItem (Join-Path $Root 'skills') -Recurse -Filter *.ps1 
 if ($noPurpose) { Bad 'tool index: every tool states its purpose in its header' ($noPurpose -join ', ') }
 else            { Ok  'tool index: every tool states its purpose in its header' }
 
+
+
+# ==================================================== physical input inventory ==
+#
+# The tool reported 58 bindings on the install this was written against and every
+# one belonged to a mod. It knew nothing about the hardware, so it could not say
+# the sentence that would have ended a five-hour hunt in a minute: "you have more
+# than one keyboard attached."
+#
+# These assert the inventory says something rather than just listing devices - a
+# list nobody interprets is exactly what sat in a report all evening changing
+# nothing.
+
+$devOut = Get-AllOutput { & $hkTool -Devices }
+$devProblems = @(
+    if ($devOut -notmatch '(?i)keyboards present')                    { 'no keyboard count reported' }
+    if ($devOut -notmatch '(?i)physical' -or $devOut -notmatch '(?i)virtual') { 'physical and virtual are not distinguished' }
+    # It must reach a CONCLUSION either way, not leave the reader to count rows.
+    if ($devOut -notmatch '(?i)MORE THAN ONE PHYSICAL KEYBOARD|One physical keyboard') { 'no verdict on how many keyboards there are' }
+)
+if ($devProblems) { Bad 'devices: the inventory states a finding, not just a list' ($devProblems -join "`n") }
+else              { Ok  'devices: the inventory states a finding, not just a list' }
+
+# The advice only earns its place if it carries the fact that makes it
+# actionable: a keyboard that is switched OFF still enumerates. Without that
+# sentence the reader unplugs nothing, because the spare board "isn't on".
+if ($devOut -match '(?i)MORE THAN ONE PHYSICAL KEYBOARD') {
+    if ($devOut -match '(?i)switched OFF' -and $devOut -match '(?i)enumerat') {
+        Ok 'devices: the multi-keyboard warning says a powered-off board still counts'
+    } else {
+        Bad 'devices: the multi-keyboard warning says a powered-off board still counts' 'the warning omits the fact that makes it actionable'
+    }
+} else {
+    Skip 'devices: the multi-keyboard warning says a powered-off board still counts' 'this machine has one physical keyboard'
+}
+
+# ================================================ backups stay in the sandbox ==
+#
+# The tool wrote every backup to a fixed path under %USERPROFILE%, so running the
+# TEST SUITE wrote into the live user's modlist vault. It was found holding 415
+# junk files - 411 of them this suite's own "aio.archive" fixture, twelve bytes
+# each, burying the backups of a hand-built 744-line load order.
+#
+# A test that damages the thing it is testing is not a test. This asserts the
+# damage cannot recur: a run against a sandbox backs up inside the sandbox.
+
+$bkGame = Join-Path $sandbox 'backuploc'
+$bkMod  = Join-Path $bkGame 'archive\pc\mod'
+New-Item -ItemType Directory -Path $bkMod -Force | Out-Null
+New-FixtureArchive -Path (Join-Path $bkMod 'one.archive') -Hashes @([uint64]1)
+New-FixtureArchive -Path (Join-Path $bkMod 'two.archive') -Hashes @([uint64]2)
+# Wrong order AND a rule that says so: -Fix only writes when it has something to
+# fix, and a run that writes nothing takes no backup - which would make this test
+# pass for the wrong reason.
+Set-Content -LiteralPath (Join-Path $bkMod 'modlist.txt') "two.archive`none.archive`n" -NoNewline
+$bkRules = Join-Path $bkGame 'rules.psd1'
+Set-Content -LiteralPath $bkRules @'
+@{ Rules = @(
+    @{ Before = 'one.archive'; After = 'two.archive'; Why = 'forces a rewrite so a backup is taken' }
+) }
+'@
+
+$realVault = Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\modlist-backups'
+$before = if (Test-Path -LiteralPath $realVault) { @(Get-ChildItem $realVault -File).Count } else { 0 }
+
+$null = Get-AllOutput { & $repairTool -ModDir $bkMod -RulesFile $bkRules -Fix -SkipScan }
+
+$after = if (Test-Path -LiteralPath $realVault) { @(Get-ChildItem $realVault -File).Count } else { 0 }
+$sandboxVault = Join-Path $bkGame '_loadorder\modlist-backups'
+$bkProblems = @(
+    if ($after -ne $before) { "the run added $($after - $before) file(s) to the REAL vault at $realVault" }
+    if (-not (Test-Path -LiteralPath $sandboxVault)) { 'no backup was written beside the sandbox' }
+    elseif (-not @(Get-ChildItem $sandboxVault -File).Count) { 'the sandbox backup folder is empty' }
+)
+if ($bkProblems) { Bad 'backups: a sandbox run backs up in the sandbox, not the user vault' ($bkProblems -join "`n") }
+else             { Ok  'backups: a sandbox run backs up in the sandbox, not the user vault' }
+
 # ==================================================== wildcard precedence ====
 #
 # A precedence rule names an archive exactly, which breaks for every mod that

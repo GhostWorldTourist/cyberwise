@@ -137,6 +137,54 @@ word is not proof either, but it is a strong signal that a label was trusted or
 a layer was never opened. Check again at the authoritative source before either
 defending the reading or folding to the claim.
 
+## A feature that works for everyone else is not the thing to route around
+
+**If something is supposed to work, and works for thousands of other people, and
+does not work on this install - something is WRONG. Find it.** Do not design a
+way to live without it.
+
+A workaround written down becomes a rule, and the rule outlives the fault. On
+2026-08-22 a CET overlay was dead for five hours. Once the cause was known - a
+second keyboard emitting phantom key events - the tempting conclusion was "never
+rebind CET's overlay through its UI, write the value to the file instead." CET's
+UI is not broken. It works for everyone. Recording that would have taught every
+future reader a false fact about CET that outlasted the broken keyboard.
+
+A workaround is legitimate only as a **stated temporary measure while the hunt
+continues**. It is never the answer, and it never goes into a skill, a reference
+or a memory as guidance. When the cause turns out to be hardware or environment,
+fix or remove THAT - do not adapt the practice around it.
+
+The same rule applies to describing what happened: **what was done on the night
+is history; what to do next time is guidance.** Only the second kind should read
+as instruction, and only when it is actually true in general.
+
+## For an input problem, inventory the physical inputs FIRST
+
+One WMI query, before any software:
+
+```powershell
+cyberwise-hotkeys	ools\Get-Hotkeys.ps1 -Devices
+```
+
+It names every keyboard the machine has, flags virtual endpoints, and says what
+more than one physical keyboard means. The failure that produced this rule went
+through five binding stores, CET's config and state files, the D3D12 render hook,
+ReShade, RTSS, Discord, DisplayFusion, Game Bar, accessibility filters, keyboard
+filter drivers and 425 mods parked in a bisect round - while `Win32_Keyboard`
+had been reporting **four keyboards** the entire time and nobody asked.
+
+**A keyboard switched OFF but still cabled still enumerates and still reports.**
+Its switch is the radio, not the USB interface. On plug-in or power transition a
+faulty one emits a key-down with no key-up; every program running at that instant
+believes the key is held for the rest of its life. That is how a hotkey binding
+becomes a chord nothing can match, and how one app is unusable while others are
+fine - each tracks its own copy of the key state.
+
+**A virtual HID endpoint injects at driver level**, so its events carry no
+INJECTED flag. A low-level capture showing "nothing is being injected" does not
+clear them.
+
 ## Where records live - one place, agent-neutral
 
 Anything this family must **remember about an install** goes on disk beside the

@@ -46,6 +46,12 @@
 param(
     [string] $ModDir,
     [string] $RulesFile,
+
+    # Where modlist.txt backups are written. Defaults to the user's save-game
+    # vault for a REAL install, and to <root>\_loadorder\modlist-backups for
+    # anything else - see the derivation below.
+    [string] $BackupDir,
+
     [switch] $Fix,
     [switch] $PruneStale,
     [switch] $SkipScan,
@@ -198,7 +204,31 @@ if (-not (Test-Path -LiteralPath $listPath)) { throw "modlist.txt not found at $
 #
 # modlist.txt is a deliberate custom order that nothing else can reconstruct, so
 # this one matters more than most.
-$backupDir = Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\modlist-backups'
+# WHERE THIS GOES IS DERIVED FROM -ModDir, NOT FROM THE USER PROFILE.
+#
+# It used to be a fixed path under %USERPROFILE%. That meant EVERY run wrote
+# there - including every run against a test sandbox. On 2026-08-22 the real
+# vault was found holding 415 junk backups, 411 of them twelve bytes containing
+# "aio.archive": the test suite's fixture, written into a live user's backups by
+# the suite that was supposed to prove the tool safe.
+#
+# Worse than the clutter is what it does to the backups that matter. The vault is
+# the only copy of a hand-built 744-line load order, and burying it under
+# hundreds of fixtures is how the real one stops being findable.
+#
+# So: a sandbox backs up beside the sandbox, and the real install backs up where
+# it always did. -BackupDir still overrides both.
+if (-not $BackupDir) {
+    $gameRoot = Split-Path (Split-Path (Split-Path $ModDir))   # <root>\archive\pc\mod
+    $realSaved = Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077'
+    $isRealInstall = Test-Path -LiteralPath (Join-Path $gameRoot 'bin\x64\Cyberpunk2077.exe')
+    $BackupDir = if ($isRealInstall -and (Test-Path -LiteralPath $realSaved)) {
+        Join-Path $realSaved 'Cyberwise\modlist-backups'
+    } else {
+        Join-Path $gameRoot '_loadorder\modlist-backups'
+    }
+}
+$backupDir = $BackupDir
 $lines     = [System.Collections.Generic.List[string]](Get-Content -LiteralPath $listPath)
 $onDisk    = (Get-ChildItem -LiteralPath $ModDir -Filter *.archive).Name
 $dirty     = $false

@@ -20,6 +20,69 @@ the patch first - the bit layout is an internal format:
 (Get-Item "$GameRoot\bin\x64\Cyberpunk2077.exe").VersionInfo.ProductVersion
 ```
 
+
+## The CET overlay will not open
+
+Five hours, once. It is a checklist now. Work it in this order - each step rules
+out a layer, and the cheap ones come first.
+
+**1. Is anything else attached?**
+
+```powershell
+tools\Get-Hotkeys.ps1 -Devices
+```
+
+More than one physical keyboard is the finding. See the front-door skill for why
+a keyboard that is switched off still counts.
+
+**2. Is the key free, and is the binding a single key or a chord?**
+
+```powershell
+tools\Get-Hotkeys.ps1 -CheckKey Delete
+```
+
+Then decode what CET actually stored. `bindings.json` packs a chord into four
+16-bit slots, most significant first:
+
+```powershell
+$v = (Get-Content '<game>ind\plugins\cyber_engine_tweaksindings.json' -Raw |
+      ConvertFrom-Json -AsHashtable).cet.overlay_key
+0..3 | ForEach-Object { [math]::Floor($v / [math]::Pow(2, 48 - 16*$_)) % 65536 }
+```
+
+`46, 0, 0, 0` is Delete alone. **`255, 46, 0, 0` is the failure**: VK 255 is HID
+filler, and a stored chord never matches a plain keypress. Use `-AsHashtable` -
+`bindings.json` has keys differing only in case and `ConvertFrom-Json` throws
+without it.
+
+**3. Did CET's render layer ever start?**
+
+```powershell
+Select-String '<game>ind\plugins\cyber_engine_tweaks\cyber_engine_tweaks.log' -Pattern 'D3D12::Initialize'
+```
+
+A working session logs `D3D12::Initialize() - initialization successful!` about a
+minute after the hooks complete. **No line means the overlay has nowhere to
+draw** - the key is fine and nothing will ever appear. Wait the full minute
+before concluding it is absent: the line is written late, and reading too early
+produces a confident wrong answer.
+
+**4. Does CET receive input at all?** A CET mod with `registerInput` and a
+heartbeat, bound by editing `bindings.json` directly, answers this without the
+overlay. Log every press AND a periodic "still alive" line - otherwise silence
+cannot be told from a mod that never loaded.
+
+**5. Only then, the software.** CET's four state files (`bindings.json`,
+`config.json`, `persistent.json`, `layout.ini`) are written by CET, not the mod
+manager, so they survive a purge and a reinstall. Moving them aside and letting
+CET regenerate is the whole configuration surface in one launch.
+
+### What this checklist is not for
+
+Do not end it with a workaround. If the overlay is broken, CET is not the thing
+to stop using - it works for everyone else. Find the cause.
+
+
 ## Never hand-transcribe a keybind. There are five stores.
 
 They disagree on format, and only one of them holds what the player actually
