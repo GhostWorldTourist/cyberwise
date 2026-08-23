@@ -38,6 +38,15 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $GameRoot)) { throw "no such game root: $GameRoot" }
 
+# SPLIT COMMA-JOINED INPUT.
+#
+# `pwsh -File script.ps1 -Name 'a','b'` does NOT pass an array - the shell hands
+# over one string, "a,b". The tool then searched for a single mod with a comma in
+# its name, found nothing, and reported NOT INSTALLED with full confidence. A
+# false negative here is worse than no tool at all: it is the exact claim this
+# script exists to stop anyone making.
+$Name = @($Name | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+
 # Every place a mod can put itself. Kept in step with the "Know where each kind
 # of mod lives" table in SKILL.md - a location missing here reads as "not
 # installed", which is the exact wrong answer this tool exists to prevent.

@@ -1255,6 +1255,56 @@ else            { Ok  'tool index: every tool states its purpose in its header' 
 
 
 
+
+# ========================================================= crash step zero ==
+#
+# A relaunch destroys the logs. The snapshot has to grab them BEFORE anyone
+# thinks, and it has to say what it grabbed - a preserver that silently skips a
+# file leaves you certain you have evidence you do not have.
+
+$snapTool = Join-Path $Root 'skills\cyberwise-crashes\tools\Save-CrashSnapshot.ps1'
+$scGame = Join-Path $sandbox 'crashsnap'
+foreach ($d in 'r6\logs', 'bin\x64\plugins\cyber_engine_tweaks', 'archive\pc\mod', 'r6\scripts\SomeScriptMod', '_crashwatch') {
+    New-Item -ItemType Directory -Path (Join-Path $scGame $d) -Force | Out-Null
+}
+Set-Content -LiteralPath (Join-Path $scGame 'r6\logs\redscript_rCURRENT.log') 'compile log' -NoNewline
+Set-Content -LiteralPath (Join-Path $scGame 'bin\x64\plugins\cyber_engine_tweaks\scripting.log') 'lua log' -NoNewline
+Set-Content -LiteralPath (Join-Path $scGame 'archive\pc\mod\Deployed.archive') 'a' -NoNewline
+Set-Content -LiteralPath (Join-Path $scGame '_crashwatch\session-20260101-000000.csv') "stamp`n00:00:00" -NoNewline
+
+$scOut = Join-Path $sandbox 'crashsnapout'
+$snapText = Get-AllOutput { & $snapTool -GameRoot $scGame -OutRoot $scOut -Note 'near a door' }
+$folder = @(Get-ChildItem $scOut -Directory -ErrorAction SilentlyContinue | Select-Object -First 1)
+
+$scProblems = @(
+    if (-not $folder)                                              { 'no snapshot folder was created' }
+    else {
+        $f = $folder[0].FullName
+        if (-not (Test-Path (Join-Path $f 'redscript_rCURRENT.log'))) { 'the redscript log was not preserved' }
+        if (-not (Test-Path (Join-Path $f 'scripting.log')))          { 'the CET scripting log was not preserved' }
+        if (-not (Test-Path (Join-Path $f 'deployed.txt')))           { 'no deployed list was written' }
+        if (-not (Test-Path (Join-Path $f 'note.txt')))               { "the user's own words were not recorded" }
+        else {
+            # The user's description is the most valuable line in the folder;
+            # storing it paraphrased or truncated defeats the point.
+            if ((Get-Content (Join-Path $f 'note.txt') -Raw) -notmatch 'near a door') { 'the note was not stored verbatim' }
+        }
+        $dep = if (Test-Path (Join-Path $f 'deployed.txt')) { Get-Content (Join-Path $f 'deployed.txt') -Raw } else { '' }
+        if ($dep -notmatch 'Deployed\.archive')   { 'deployed.txt missed an installed archive' }
+        if ($dep -notmatch 'SomeScriptMod')       { 'deployed.txt missed a non-archive mod' }
+    }
+)
+if ($scProblems) { Bad 'crash snapshot: it preserves the volatile logs and what is deployed' ($scProblems -join "`n") }
+else             { Ok  'crash snapshot: it preserves the volatile logs and what is deployed' }
+
+# The whole point of the ordering is that the next move is a question. If the
+# tool stops printing it, the step that saves the hour is the one that vanishes.
+if ($snapText -match '(?i)what quest was active' -and $snapText -match '(?i)what were you doing') {
+    Ok 'crash snapshot: it ends by telling you to ask the user, not to theorise'
+} else {
+    Bad 'crash snapshot: it ends by telling you to ask the user, not to theorise' "the prompt to ask the user is missing:`n$snapText"
+}
+
 # ======================================================== naming a real mod ==
 #
 # A suspect list that names an uninstalled mod discredits every other name in it.

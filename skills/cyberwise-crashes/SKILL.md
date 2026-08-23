@@ -23,6 +23,55 @@ Load `cyberwise` alongside this for the method rules. Two matter enormously here
 - **Confirm the mod is deployed.** A crash blamed on a mod that was never
   actually deployed is a whole evening.
 
+## When a crash happens, in this order
+
+The order matters more than any single step, and step 3 is the one that gets
+skipped.
+
+**0. Preserve, before anything else - including thinking.**
+
+```powershell
+.	ools\Save-CrashSnapshot.ps1 -GameRoot '<path>'
+```
+
+A relaunch destroys the evidence. `redscript_rCURRENT.log` is replaced at every
+launch; CET truncates `scripting.log` and `gamelog.log`; `CrashInfo.json` is
+overwritten by the *next* crash. On 2026-08-23 a crash was looked at twenty
+minutes later and every one of those had already been rewritten - the only
+survivor was `CrashInfo.json`, and only because the watcher had copied it.
+
+**1. Take the bare facts from the crash reporter.** Time, district, coordinates,
+tracked quest, `isOom`, session length. Facts, not readings. Resist the theory
+forming while you read them - the first theory becomes the frame everything else
+gets fitted into, and it is usually wrong.
+
+**2. List what is deployed, trusting nothing but the disk.** Not the mod
+manager, not `modlist.txt`, not a bisect manifest, not what was said earlier in
+the conversation. `Save-CrashSnapshot.ps1` writes `deployed.txt` for exactly
+this. See **NEVER name a mod you have not confirmed is installed** in the
+front-door skill.
+
+**3. ASK THE USER what quest was active and what they were doing.**
+
+This is the step that saves the hour. The crash reporter knows the *tracked*
+quest, which is often not what the player was doing, and it knows nothing at all
+about the last thirty seconds - a scene, a menu, a vehicle, a load. On
+2026-08-23 the coordinates and quest id were in hand and the search space was
+still enormous; the user said "corpo-rat intro, near Jenkins' office" and it
+collapsed immediately.
+
+Ask before analysing, every time. It costs one message. Analysis before asking
+costs an hour and arrives at a worse question.
+
+**4. Only now, analyse and dereference.** Cross the deployed list against the
+quest, the district, the coordinates and what the user described. Check the
+telemetry for a resource signature - and be willing to find there is none:
+crashed sessions on one install peaked at 3,090-3,548 handles while healthy ones
+reached 7,731, which killed the leak theory outright.
+
+**Not step 5: a suspect list.** A crash with one occurrence and no reproduction
+does not get a culprit named. It gets a watcher left running and more captures.
+
 ## Start by asking what changed - and now you can answer it
 
 ```powershell
@@ -63,6 +112,13 @@ could have named in zero.
 `references/bisecting.md` sizes the method to the list, and covers why parking
 files on disk is unreliable on a managed install - a manager can restore a parked
 file mid-test, and on MO2 the archives may not physically be there at all.
+
+**Snapshot `modlist.txt` before the first round.** A bisect parks archives and
+rewrites the load order repeatedly, and a run that ends in a crash - or a mod
+manager that redeploys mid-test - can leave the order in a state nobody can
+reconstruct. `cyberwise/tools/ModFileBackup.ps1` takes the snapshot and restores
+it; `-Restore` on the round below only undoes the parking, not an order that
+something else rewrote underneath it.
 
 **When you do bisect: arm the round AND launch the game yourself.**
 

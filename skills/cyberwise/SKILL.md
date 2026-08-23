@@ -137,6 +137,40 @@ word is not proof either, but it is a strong signal that a label was trusted or
 a layer was never opened. Check again at the authoritative source before either
 defending the reading or folding to the claim.
 
+## Ask the running game - CETMonkey is a prerequisite
+
+Everything else here reads an install **at rest**. Live state - what is actually
+in the player's inventory, which status effects are applied, what a vendor really
+stocks - is answerable only from inside the running game, and CETMonkey is how.
+
+```
+bind\plugins\cyber_engine_tweaks\mods\cetmonkey\scripts\*.lua
+```
+
+**List that folder before writing anything.** Each script's first two comment
+lines are its title and description, so the Library reads as its own index. A
+whole duplicate CET mod was once built to dump an inventory while CETMonkey sat
+installed with a Library that runs scripts from a button - the same failure as
+inventing a load-order rule without opening `modlist.txt`.
+
+Three things that decide whether a live query works at all:
+
+- **The CET console strips newlines from multi-line pastes**, concatenating
+  statements into a syntax error. Anything past one line must be read from a
+  file. "Paste this into the console" is valid advice only for a true one-liner.
+- **Wrap every field read in its own `pcall`.** The record worth finding is
+  usually the one that does not resolve, so `MISSING` or `<THREW>` in a column
+  *is* the finding - and a dump that dies on it, or skips it silently, destroys
+  the only row that mattered.
+- **New scripts go in Vortex STAGING, then hardlink back.** A file written into
+  the deployed folder has link count 1 and dies at the next purge.
+
+Read `output.txt` and `log.txt` yourself. Never ask for a screenshot of something
+that was written to a file.
+
+Full contract - helpers, LuaJIT limits, the out-param return-slot trap, and the
+`uiData` / `resolves` columns: `references/cetmonkey.md`.
+
 ## NEVER name a mod you have not confirmed is installed
 
 ```powershell
@@ -345,6 +379,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Invoke-BisectRound.ps1` | `cyberwise-crashes` | park a set of mods, record the round, launch the game. |
 | `New-InstallSnapshot.ps1` | `cyberwise-crashes` | record what the install looks like right now. |
 | `Register-CrashWatch.ps1` | `cyberwise-crashes` | keep the crash watcher alive without a terminal. |
+| `Save-CrashSnapshot.ps1` | `cyberwise-crashes` | preserve what a relaunch destroys, then state the facts. |
 | `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
