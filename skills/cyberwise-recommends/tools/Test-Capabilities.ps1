@@ -30,7 +30,7 @@ param(
     [string] $GameRoot,
 
     # Ask about one capability: exits 0 when the install can do it, 1 when not.
-    [ValidateSet('presets', 'appearance', 'modsettings', 'console', 'photo')]
+    [ValidateSet('presets', 'appearance', 'modsettings', 'console', 'photo', 'livequery')]
     [string] $For,
 
     [switch] $Json
@@ -112,6 +112,18 @@ $capabilities = @(
         Needs   = 'Cyber Engine Tweaks'
         Without = 'CET and Lua mods that rely on it have no options screen at all'
         Enables = @('modsettings')
+    }
+    # The only way to ask the RUNNING game a question. Without it the console is
+    # the sole route, and the console strips newlines from multi-line pastes - so
+    # anything past a one-liner cannot be run at all, and a one-liner cannot
+    # afford the per-field pcall that live inspection needs.
+    [pscustomobject]@{
+        Name    = 'CETMonkey'
+        Short   = 'cetmonkey'
+        Probe   = @('bin\x64\plugins\cyber_engine_tweaks\mods\cetmonkey')
+        Needs   = 'Cyber Engine Tweaks'
+        Without = 'no way to run a multi-line script in the running game, so live state - inventory contents, applied status effects, real vendor stock - cannot be read at all'
+        Enables = @('livequery')
     }
     [pscustomobject]@{
         Name    = 'Appearance Menu Mod'
