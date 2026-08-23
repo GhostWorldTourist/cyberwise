@@ -86,3 +86,4 @@ overstates coverage is how a documentation pass quietly stops being trusted.
 | tool | what it does |
 |---|---|
 | `tools/Get-ModInventory.ps1` | every deployed mod, its layers, its files, and its derived Nexus id with the pattern that produced it |
+| `tools/New-ModStubs.ps1` | one OKF article per deployed mod in the USER bundle, recording only what is true from disk |

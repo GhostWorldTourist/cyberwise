@@ -5,10 +5,11 @@
  * and the only honest way to list them is as a directory of files that somebody
  * should probably not have.
  *
- * The reader should arrive slightly unsure what they have opened. The rows do
- * not sit in boxes; they are separated by broken rules, they are numbered like
- * evidence, and hovering one floods it with the colour of the world it leads
- * into - so the front door never settles into one look.
+ * The reader should arrive slightly unsure what they have opened. At rest the
+ * page is four names and almost nothing else - no count, no numbering, no rules
+ * between them, no chrome. Everything else has to be reached for: hovering a row
+ * paints it, and each character is painted by their own story rather than by a
+ * shared highlight. The front door never settles into one look.
  */
 
 :root {
@@ -49,22 +50,10 @@ body::after {
   z-index: 0; pointer-events: none; user-select: none;
 }
 
-.top {
-  position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: baseline; gap: 18px;
-  padding: 11px clamp(16px, 4vw, 46px);
-  background: rgba(5,5,6,.92); border-bottom: 1px solid #191920;
-  font: 400 11px/1 var(--mono); letter-spacing: .3em; text-transform: uppercase;
-  color: var(--dim); backdrop-filter: blur(4px);
-}
-.top a.home { text-decoration: none; color: var(--ink); }
-.top .spacer { flex: 1; }
-.top input {
-  background: #0b0b0e; border: 1px solid #21212a; color: var(--ink);
-  font: 11px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase;
-  padding: 8px 12px; min-width: 190px;
-}
-.top input:focus { outline: none; border-color: var(--ice); }
+/* The index carries no top bar. A strip reading V OF NIGHT CITY above a title
+ * that already says it is the page apologising for itself, and a filter over
+ * four rows is a control that can only ever be in the way. Document pages keep
+ * their own .top, styled by their own theme. */
 
 /* ---- the head ------------------------------------------------------------ */
 
@@ -86,6 +75,13 @@ body::after {
   transform: translate(-5px, 3px); z-index: -1;
 }
 
+/* KEPT DELIBERATELY, AND NOTHING EMITS IT YET.
+ *
+ * The standing line - terminal prompt, red, live cursor - was carrying a line
+ * of flavour text that read better as an instruction to the designer than as
+ * copy on the page. The sentence went; the treatment is worth keeping for the
+ * first thing that genuinely needs to be said in the site's own voice. Add
+ * <p class="standing"> to use it. */
 .standing {
   margin: 30px 0 0; max-width: 46ch;
   font: 400 clamp(17px, 2.3vw, 25px)/1.42 var(--mono);
@@ -97,39 +93,23 @@ body::after {
 }
 @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
-.count {
-  margin: 46px 0 0; font: 400 11px/1 var(--mono); letter-spacing: .34em;
-  text-transform: uppercase; color: var(--dim);
-}
-
 /* ---- the directory ------------------------------------------------------- */
 
-.files { list-style: none; margin: 34px 0 0; padding: 0; }
+.files { list-style: none; margin: 46px 0 0; padding: 0; }
 
-.file { --c: #8a8a93; border-top: 1px solid #17171d; }
-.file:last-child { border-bottom: 1px solid #17171d; }
+/* No rules between rows. The names are big enough to be their own separation,
+ * and a line between two stories asserts they are items in a list of the same
+ * kind of thing - which is the one claim this page should not make. */
+.file { --c: #8a8a93; }
 
 .file a {
-  display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) minmax(0, 22ch);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
   gap: clamp(14px, 3vw, 44px); align-items: baseline;
-  padding: clamp(20px, 3.2vw, 40px) clamp(10px, 2vw, 26px);
-  text-decoration: none; position: relative;
-  transition: background .12s, color .12s;
+  padding: clamp(22px, 3.4vw, 44px) clamp(10px, 2vw, 26px);
+  text-decoration: none; position: relative; isolation: isolate;
+  color: var(--ink);
 }
-.file a::before {
-  /* the slab that floods in on hover, cut jagged down its right edge */
-  content: ""; position: absolute; inset: 0; background: var(--c); z-index: -1;
-  clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
-  transition: clip-path .18s ease-out;
-}
-.file a:hover::before, .file a:focus-visible::before {
-  clip-path: polygon(0 0, 99% 0, 96% 38%, 100% 62%, 97% 100%, 0 100%);
-}
-.file a:hover, .file a:focus-visible { color: #07070a; }
-.file a:hover .doctitle, .file a:hover .lead, .file a:hover .idx { color: rgba(7,7,10,.72); }
 .file a:focus-visible { outline: none; }
-
-.idx { font: 700 12px/1 var(--mono); letter-spacing: .2em; color: var(--c); padding-top: .7em; }
 
 .name {
   font: 900 clamp(34px, 6.6vw, 82px)/.9 var(--heavy);
@@ -137,29 +117,193 @@ body::after {
   overflow-wrap: anywhere;
 }
 
+/* The subtitle. It was 11.5px and read as a caption on the name; at 15 it reads
+ * as a second line of the same thought, which is what it is. */
 .doctitle {
-  display: block; font: 400 11.5px/1.6 var(--mono); letter-spacing: .18em;
-  text-transform: uppercase; color: var(--dim); margin-top: 12px;
+  display: block; font: 400 15px/1.55 var(--mono); letter-spacing: .13em;
+  text-transform: uppercase; color: var(--dim); margin-top: 15px;
+  max-width: 52ch;
 }
 
-.lead { font: 400 14px/1.62 var(--mono); color: var(--dim); }
-.stat { display: block; margin-top: 12px; font: 400 11px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--c); }
+/* Only shown past one chapter. "Chapter 1 of 1" is not information. */
+.chapter {
+  display: block; margin-top: 16px;
+  font: 700 12px/1 var(--mono); letter-spacing: .26em; text-transform: uppercase;
+  color: var(--c);
+}
 
-/* The character's own colour, so the front door carries a taste of each world.
- * Unknown characters fall back to the neutral above. */
-.file.is-valkyrie   { --c: #d4af37; }
-.file.is-venom      { --c: #6dff8a; }
-.file.is-vindicator { --c: #ff7a2f; }
-.file.is-vanish     { --c: #7dffcf; }
+.when {
+  font: 400 11px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase;
+  color: var(--dim); white-space: nowrap; padding-top: .8em;
+}
 
-footer {
-  margin-top: 88px; padding-top: 16px; border-top: 1px solid #17171d;
-  font: 11px/2 var(--mono); letter-spacing: .26em; text-transform: uppercase; color: var(--dim);
-  position: relative; z-index: 3;
+/* ---- the paint ----------------------------------------------------------- */
+/*
+ * Hovering a row does not highlight it. It PAINTS it, and each character is
+ * painted by their own story.
+ *
+ * The mechanism is shared so it stays templatable - an agent adding a fifth V
+ * writes one block, not a new system:
+ *
+ *   .file a::before        the slab of colour arriving   (--slab-in)
+ *   .file .excerpt         the authored line, revealed   (--paint-in)
+ *   --c                    the character's colour
+ *   --ease                 how the arrival is timed
+ *
+ * A character with no block of its own still works: it gets the defaults
+ * below, which is a plain hard wipe. Nothing breaks, it just is not special.
+ */
+.file a::before {
+  content: ""; position: absolute; inset: 0; background: var(--c); z-index: -1;
+  clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+  animation: var(--slab-out, none) .22s ease-in forwards;
+}
+.file a:hover::before, .file a:focus-visible::before {
+  animation: var(--slab-in, slab-wipe) .34s var(--ease, ease-out) forwards;
+}
+.file a:hover, .file a:focus-visible { color: #07070a; }
+.file a:hover .doctitle, .file a:focus-visible .doctitle,
+.file a:hover .when, .file a:focus-visible .when,
+.file a:hover .chapter, .file a:focus-visible .chapter { color: rgba(7,7,10,.74); }
+
+/* The excerpt is not in the resting page at all. It is authored in the
+ * document's front matter, and it arrives with the paint. */
+.excerpt {
+  position: absolute; left: clamp(10px, 2vw, 26px); right: clamp(10px, 2vw, 26px);
+  bottom: clamp(14px, 2vw, 22px);
+  font: 400 15px/1.5 var(--mono); color: #07070a;
+  opacity: 0; pointer-events: none;
+  max-width: 62ch;
+}
+.excerpt i { font-style: normal; display: block; }
+.file a:hover .excerpt, .file a:focus-visible .excerpt {
+  animation: var(--paint-in, paint-wipe) .5s var(--ease, ease-out) .06s forwards;
+}
+
+@keyframes slab-wipe {
+  from { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+  to   { clip-path: polygon(0 0, 99% 0, 96% 38%, 100% 62%, 97% 100%, 0 100%); }
+}
+@keyframes paint-wipe {
+  from { opacity: 1; clip-path: inset(0 100% 0 0); }
+  to   { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+
+/* ---- VALKYRIE: gold leaf, laid in plates, one of them out of register -----
+ * She is corpo gilding over an instrument. Gold leaf is applied panel by panel
+ * and the seams show if the hand is not steady - so the slab arrives in hard
+ * vertical steps rather than a sweep, and the excerpt is laid down in bands
+ * with one band late. Expensive, and very slightly wrong. */
+.file.is-valkyrie {
+  --c: #d4af37;
+  --ease: cubic-bezier(.2, .9, .1, 1);
+  --slab-in: gild;
+  --paint-in: gild-text;
+}
+@keyframes gild {
+  0%   { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+  30%  { clip-path: polygon(0 0, 34% 0, 34% 100%, 0 100%); }
+  31%  { clip-path: polygon(0 0, 33% 0, 33% 100%, 0 100%); }
+  62%  { clip-path: polygon(0 0, 71% 0, 69% 100%, 0 100%); }
+  100% { clip-path: polygon(0 0, 100% 0, 98.5% 46%, 100% 54%, 99% 100%, 0 100%); }
+}
+@keyframes gild-text {
+  0%   { opacity: 1; clip-path: inset(0 100% 0 0); }
+  34%  { opacity: 1; clip-path: inset(0 62% 0 0); }
+  36%  { opacity: 1; clip-path: inset(0 62% 0 0); }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+
+/* ---- VANISH: it does not arrive, it removes ------------------------------
+ * The only one of the four whose name is an instruction. So hovering does the
+ * opposite of the others: the slab comes in already eroded and keeps eroding,
+ * and the excerpt does not paint on - it surfaces briefly and is going again
+ * before you finish it. Nothing here ever fully lands. */
+.file.is-vanish {
+  --c: #7dffcf;
+  --ease: cubic-bezier(.7, 0, .3, 1);
+  --slab-in: erode;
+  --paint-in: surface;
+}
+@keyframes erode {
+  0%   { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); opacity: .95; }
+  45%  { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); opacity: .95; }
+  100% {
+    opacity: .82;
+    clip-path: polygon(0 0, 100% 0, 100% 26%, 88% 30%, 100% 36%, 100% 63%,
+                       74% 68%, 100% 72%, 100% 100%, 0 100%, 0 78%, 13% 74%,
+                       0 70%, 0 41%, 22% 36%, 0 31%);
+  }
+}
+@keyframes surface {
+  0%   { opacity: 0; clip-path: inset(0 0 0 0); filter: blur(3px); }
+  38%  { opacity: 1; filter: blur(0); }
+  72%  { opacity: 1; }
+  100% { opacity: .34; clip-path: inset(0 0 0 22%); filter: blur(1.5px); }
+}
+
+/* ---- VENOM: it soaks in from above ---------------------------------------
+ * Not a wipe. A spill. The slab comes down from the top edge in uneven
+ * fingers, the way something wet finds the low places first, and the text
+ * comes up through it a beat later. */
+.file.is-venom {
+  --c: #6dff8a;
+  --ease: cubic-bezier(.35, .1, .2, 1);
+  --slab-in: bleed;
+  --paint-in: seep;
+}
+@keyframes bleed {
+  0%   { clip-path: polygon(0 0, 100% 0, 100% 0, 0 0); }
+  55%  { clip-path: polygon(0 0, 100% 0, 100% 44%, 78% 61%, 54% 40%, 31% 66%, 12% 45%, 0 58%); }
+  100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+@keyframes seep {
+  0%   { opacity: 0; transform: translateY(7px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- VINDICATOR: it is a strike ------------------------------------------
+ * Retribution does not seep or gild. It arrives from the far side, fast, with
+ * a torn leading edge, and it overshoots before it settles - the shape of
+ * something swung rather than applied. */
+.file.is-vindicator {
+  --c: #ff7a2f;
+  --ease: cubic-bezier(.85, -0.3, .15, 1.3);
+  --slab-in: strike;
+  --paint-in: strike-text;
+}
+@keyframes strike {
+  0%   { clip-path: polygon(100% 0, 100% 0, 100% 100%, 100% 100%); }
+  70%  { clip-path: polygon(0 0, 100% 0, 100% 100%, -6% 100%); }
+  100% { clip-path: polygon(3% 0, 100% 0, 100% 100%, 0 100%, 1% 52%); }
+}
+@keyframes strike-text {
+  0%   { opacity: 0; clip-path: inset(0 0 0 100%); transform: translateX(14px); }
+  60%  { opacity: 1; clip-path: inset(0 0 0 0); transform: translateX(-3px); }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translateX(0); }
+}
+
+/* Motion here is the characterisation, so it is not removed under
+ * prefers-reduced-motion - it is made instant. The reader still gets each
+ * character's colour and their line; nothing moves to get there. */
+@media (prefers-reduced-motion: reduce) {
+  .file a::before, .file a:hover::before, .file a:focus-visible::before,
+  .file a:hover .excerpt, .file a:focus-visible .excerpt {
+    animation-duration: .01ms !important;
+    animation-delay: 0ms !important;
+  }
 }
 
 @media (max-width: 880px) {
-  .file a { grid-template-columns: 3rem 1fr; }
-  .lead { display: none; }
+  /* Hover does not exist on a phone, so the excerpt would never be reachable.
+     It is printed instead - dim, small, under the subtitle - rather than being
+     silently unavailable to half the readers. */
+  .file a { grid-template-columns: 1fr; }
+  .when { padding-top: 14px; }
   .ghost { display: none; }
+  .excerpt {
+    position: static; opacity: 1; animation: none !important;
+    margin-top: 16px; color: var(--dim); font-size: 14px;
+    clip-path: none; max-width: none;
+  }
 }

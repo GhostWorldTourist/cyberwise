@@ -385,6 +385,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
 | `New-HotkeySheet.ps1` | `cyberwise-hotkeys` | build a self-contained hotkey cheatsheet from the bindings actually present in a Cyberpunk install. |
 | `Get-ModInventory.ps1` | `cyberwise-modbase` | every mod actually deployed, what layers it touches, and its Nexus id where one can be derived. |
+| `New-ModStubs.ps1` | `cyberwise-modbase` | one OKF article per deployed mod, built from the install. |
 | `ModPreference.ps1` | `cyberwise-recommends` | what this user has already said about being recommended things. |
 | `Test-Capabilities.ps1` | `cyberwise-recommends` | what this install cannot do, and what is missing to do it. |
 | `Compare-Collection.ps1` | `cyberwise-reports` | what a curated Nexus collection has that you do not. |

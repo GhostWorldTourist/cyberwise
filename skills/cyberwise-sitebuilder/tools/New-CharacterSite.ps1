@@ -48,10 +48,6 @@ param(
 
     [string] $Title = 'V of Night City',
 
-    # The line under the title. It is a question rather than a description on
-    # purpose - a subtitle that explains the site turns it into a brochure.
-    [string] $Standing = 'Which side of the Blackwall are we on right now?',
-
     [switch] $Open,
     [switch] $IncludeDrafts,
 
@@ -73,6 +69,55 @@ function Get-Slug {
     return $s
 }
 function Get-Esc { param([string] $s) ($s -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;') }
+
+# --- front matter ------------------------------------------------------------
+#
+# The excerpt used to be GUESSED - first line over 70 characters - and a guess is
+# exactly wrong for the one line meant to make someone open the file. It is
+# authored now, in front matter at the top of the document:
+#
+#   ---
+#   excerpt: She has never once been asked a question she could not answer.
+#   chapters:
+#     - The Golden Child
+#     - Termination With Prejudice
+#   ---
+#
+# Deliberately NOT a YAML parser. Two shapes are supported - "key: value" and a
+# list of "- item" under a key - because that is all this needs, and a real YAML
+# implementation is a dependency for a file nobody but the author will ever
+# write. Anything it does not understand is ignored rather than fatal: a
+# document that will not publish because of a stray colon is a worse failure
+# than one that publishes without its excerpt.
+function Read-FrontMatter {
+    param([string[]] $Lines)
+
+    $result = @{ Data = @{}; Body = $Lines }
+    if (-not $Lines.Count -or $Lines[0].Trim() -ne '---') { return $result }
+
+    $end = -1
+    for ($i = 1; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i].Trim() -eq '---') { $end = $i; break }
+    }
+    # An opening fence with no closing one is a document that starts with a
+    # horizontal rule, not broken front matter. Leave it alone.
+    if ($end -lt 0) { return $result }
+
+    $data = @{}
+    $key = $null
+    for ($i = 1; $i -lt $end; $i++) {
+        $line = $Lines[$i]
+        if (-not $line.Trim()) { continue }
+        if ($line -match '^\s*-\s+(.+)$' -and $key) {
+            $data[$key] = @($data[$key]) + $matches[1].Trim().Trim('"', "'")
+        } elseif ($line -match '^\s*([A-Za-z][\w-]*)\s*:\s*(.*)$') {
+            $key = $matches[1].ToLower()
+            $value = $matches[2].Trim().Trim('"', "'")
+            if ($value) { $data[$key] = $value } else { $data[$key] = @() }
+        }
+    }
+    return @{ Data = $data; Body = $Lines[($end + 1)..($Lines.Count - 1)] }
+}
 
 # ------------------------------------------------------------------ gather ---
 
@@ -119,7 +164,15 @@ foreach ($dir in (Get-ChildItem -LiteralPath $From -Directory | Sort-Object Name
     }
 
     $raw = Get-Content -LiteralPath $doc.FullName -Raw
-    $lines = ($raw -replace "`r`n", "`n") -split "`n"
+    $fm = Read-FrontMatter -Lines (($raw -replace "`r`n", "`n") -split "`n")
+    $lines = $fm.Body
+    $excerpt = "$($fm.Data['excerpt'])".Trim()
+    $chapters = @($fm.Data['chapters'])
+
+    # WHEN THE STORY CHANGED, not when the site was built. Nobody returning to a
+    # directory of four documents wants to know about the build; they want to
+    # know whether there is anything new to read.
+    $changed = $doc.LastWriteTime.ToString('yyyy-MM-dd')
 
     # The document's own H1. It is usually NOT the character's name - "Too Bad,
     # Too Bad", "Campfire Myth", a case number - and that is the useful thing to
@@ -147,15 +200,10 @@ foreach ($dir in (Get-ChildItem -LiteralPath $From -Directory | Sort-Object Name
         if ($subhead.Length -gt 210) { $subhead = $subhead.Substring(0, 207).TrimEnd() + '...' }
     }
 
-    # A line for the directory. Long enough to be a sentence, or the first line
-    # of any kind when the document has none.
-    $cand = @($lines | Select-Object -First 40 | Where-Object {
-        $_.Trim() -and $_ -notmatch '^#' -and $_ -notmatch '^[-*|>]'
-    })
-    $lead = @($cand | Where-Object { $_.Trim().Length -ge 70 } | Select-Object -First 1)
-    if (-not $lead) { $lead = @($cand | Select-Object -First 1) }
-    $lead = (($lead | Select-Object -First 1) -replace '\*', '').Trim()
-    if ($lead.Length -gt 190) { $lead = $lead.Substring(0, 187).TrimEnd() + '...' }
+    if (-not $excerpt) {
+        Write-Warning "$($dir.Name): no 'excerpt:' in front matter - its row will have nothing to paint on hover"
+    }
+    if ($excerpt.Length -gt 190) { $excerpt = $excerpt.Substring(0, 187).TrimEnd() + '...' }
 
     # THE DOCUMENT'S OWN H1 BECOMES THE PAGE HEADLINE, so it must not also open
     # the body - every page printed its title twice, once in the theme's display
@@ -179,7 +227,14 @@ foreach ($dir in (Get-ChildItem -LiteralPath $From -Directory | Sort-Object Name
         Theme     = $theme
         DocTitle  = $docTitle
         Subhead   = $subhead
-        Lead      = $lead
+        Excerpt   = $excerpt
+        Chapters  = $chapters
+        # A single chapter is not a chapter, it is just the document. Saying
+        # "chapter 1 of 1" tells the reader nothing and implies a structure the
+        # story does not have.
+        Latest    = if ($chapters.Count -gt 1) { $chapters[-1] } else { '' }
+        ChapterNo = if ($chapters.Count -gt 1) { $chapters.Count } else { 0 }
+        Changed   = $changed
         Body      = ConvertTo-Html -Markdown ($bodyLines -join "`n")
         MetaBody  = if ($meta) { ConvertTo-Html -Markdown (Get-Content -LiteralPath $meta.FullName -Raw) } else { $null }
         MetaTitle = if ($meta) { ($meta.BaseName -replace '^Meta\s*-\s*', '') } else { $null }
@@ -208,22 +263,10 @@ foreach ($sheet in (@('_base', 'index') + @($chars.Theme) | Select-Object -Uniqu
     if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $themeOut "$sheet.css") -Force }
 }
 
-$stamp = Get-Date -Format 'yyyy-MM-dd'
-
 Set-Content -LiteralPath (Join-Path $Out 'site.js') -Encoding UTF8 -Value @'
 // Nothing here fetches. The site has to work opened straight off the
 // filesystem, where the browser blocks fetch() from a file:// origin - and
 // that is also why it carries no tracking: there is nowhere for it to phone.
-
-var box = document.getElementById('filter');
-if (box) {
-  box.addEventListener('input', function () {
-    var q = box.value.toLowerCase();
-    document.querySelectorAll('.file').forEach(function (row) {
-      row.style.display = row.innerText.toLowerCase().indexOf(q) === -1 ? 'none' : '';
-    });
-  });
-}
 
 var lb = document.querySelector('.lightbox');
 if (lb) {
@@ -243,8 +286,16 @@ if (lb) {
 function Write-Page {
     param(
         [string] $File, [string] $PageTitle, [string] $Theme,
-        [string] $BodyClass, [string] $Crumb, [string] $Body, [string] $Extra = ''
+        [string] $BodyClass, [string] $Crumb, [string] $Body
     )
+    # The index carries NO chrome at all - no wordmark strip, no filter, no
+    # breadcrumb. Four stories do not need to be searched, and a bar that names
+    # the site above a title already saying it is the site apologising for
+    # itself. Document pages keep one link, because a reader deep in a dossier
+    # does need the way back.
+    $topBar = if ($Crumb) {
+        "<div class=""top""><a class=""home"" href=""index.html"">$(Get-Esc $Title)</a><span class=""crumb"">$(Get-Esc $Crumb)</span></div>"
+    } else { '' }
     $doc = @"
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
@@ -254,12 +305,7 @@ function Write-Page {
 <link rel="stylesheet" href="themes/$Theme.css">
 </head><body class="$BodyClass">
 <a class="skip" href="#doc">Skip to the document</a>
-<div class="top">
-  <a class="home" href="index.html">$(Get-Esc $Title)</a>
-  <span class="crumb">$(Get-Esc $Crumb)</span>
-  <span class="spacer"></span>
-  $Extra
-</div>
+$topBar
 $Body
 <script src="site.js"></script>
 </body></html>
@@ -297,7 +343,7 @@ foreach ($c in $chars) {
 $($c.Body)
   </div>
   $metaSection
-  <footer>$($c.Words) words &middot; built $stamp</footer>
+  <footer>Last changed $($c.Changed)</footer>
 </main>
 <div class="lightbox"><img alt=""></div>
 "@
@@ -306,15 +352,24 @@ $($c.Body)
 }
 
 # ---- the directory ----
-$n = 0
+#
+# No numbering, no file count, no build date, no rules between rows. Four
+# stories do not need to be enumerated, and every one of those was the page
+# describing itself instead of showing itself.
+#
+# The excerpt is not printed. It is PAINTED ON HOVER, per character, by the
+# stylesheet - so the resting state is four names and nothing else, and the
+# reader has to reach for anything more.
 $rows = foreach ($c in $chars) {
-    $n++
+    $chapter = if ($c.Latest) {
+        "<span class=""chapter"">Ch. $($c.ChapterNo) &mdash; $(Get-Esc $c.Latest)</span>"
+    } else { '' }
     @"
   <li class="file is-$($c.Slug)">
     <a href="$($c.Slug).html">
-      <span class="idx">$('{0:00}' -f $n)</span>
-      <span class="name">$(Get-Esc $c.Name)<span class="doctitle">$(Get-Esc $c.DocTitle)</span></span>
-      <span class="lead">$(Get-Esc $c.Lead)<span class="stat">$('{0:N0}' -f $c.Words) words</span></span>
+      <span class="name">$(Get-Esc $c.Name)$chapter<span class="doctitle">$(Get-Esc $c.DocTitle)</span></span>
+      <span class="when"><time datetime="$($c.Changed)">$($c.Changed)</time></span>
+      <span class="excerpt" aria-hidden="true"><i>$(Get-Esc $c.Excerpt)</i></span>
     </a>
   </li>
 "@
@@ -324,16 +379,13 @@ $indexBody = @"
 <span class="ghost" aria-hidden="true">V</span>
 <main class="hub" id="doc">
   <h1 class="wordmark"><span data-t="$(Get-Esc $Title)">$(Get-Esc $Title)</span></h1>
-  <p class="standing">$(Get-Esc $Standing)</p>
-  <p class="count">$($chars.Count) files &middot; built $stamp</p>
   <ol class="files">
 $($rows -join "`n")
   </ol>
-  <footer>Held locally. Nothing here is loaded from anywhere else.</footer>
 </main>
 "@
 Write-Page -File 'index.html' -PageTitle $Title -Theme 'index' -BodyClass 'page-index' -Crumb '' `
-           -Body $indexBody -Extra '<input id="filter" type="search" placeholder="filter" aria-label="filter files">'
+           -Body $indexBody
 
 Write-Host ''
 Write-Host "site written to $((Resolve-Path -LiteralPath $Out).Path)" -ForegroundColor Green
