@@ -19,3 +19,4 @@ problem-report*.md
 
 # Per-machine agent settings. Not part of the family, and they name local paths.
 .claude/
+.inventory.json

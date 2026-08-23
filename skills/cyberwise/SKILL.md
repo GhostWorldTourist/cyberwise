@@ -384,6 +384,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
 | `New-HotkeySheet.ps1` | `cyberwise-hotkeys` | build a self-contained hotkey cheatsheet from the bindings actually present in a Cyberpunk install. |
+| `Get-ModInventory.ps1` | `cyberwise-modbase` | every mod actually deployed, what layers it touches, and its Nexus id where one can be derived. |
 | `ModPreference.ps1` | `cyberwise-recommends` | what this user has already said about being recommended things. |
 | `Test-Capabilities.ps1` | `cyberwise-recommends` | what this install cannot do, and what is missing to do it. |
 | `Compare-Collection.ps1` | `cyberwise-reports` | what a curated Nexus collection has that you do not. |
@@ -400,6 +401,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Expand-Save.ps1` | `cyberwise-saves` | decompress a Cyberpunk 2077 sav.dat into a flat blob. |
 | `ConvertFrom-Markdown.ps1` | `cyberwise-sitebuilder` | the small Markdown subset these documents use. |
 | `New-CharacterSite.ps1` | `cyberwise-sitebuilder` | a website from a folder of character documents. |
+| `Test-Wiki.ps1` | `cyberwise-wiki` | does this bundle conform to OKF 0.2, and does it respect the distribution boundary? |
 <!-- TOOL-INDEX:END -->
 
 ## Which skill covers it
@@ -420,6 +422,8 @@ not cost you anything when the question is about textures.
 | `cyberwise-backstory` | building a character - V's history, voice, roleplay decisions, a dossier |
 | `cyberwise-sitebuilder` | publish character documents, or anything else here, as a shareable website |
 | `cyberwise-feedback` | Cyberwise itself is wrong, a tool errors, or the user wants to reach the author |
+| `cyberwise-wiki` | writing down anything a later session would look up; a skill file has grown a section that is really reference material |
+| `cyberwise-modbase` | what does this mod do; auditing a large load order; running a documentation pass over the install |
 
 Two references stay here rather than in one of those, because they bear on all of
 them: `references/environment.md` (manager behaviour, the settings store,
