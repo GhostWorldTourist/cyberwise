@@ -20,6 +20,7 @@ ways each layer fails **without saying anything at all**.
 ## ArchiveXL
 
 - [Deleting a world node with ArchiveXL - the type must come from the sector, and one bad entry voids the whole file](/authoring/archivexl-node-deletions) - `debugName` lies about `$type`, and a companion `.xl` edits another mod's sector without repacking it
+- [A mod adds journal entries, phone messages and quests by declaring resources in its `.xl`](/authoring/mod-declared-journal-and-quest-resources) - `journal:`, `quest: phases:` and the per-locale text, and how to name the mod behind a phone thread
 
 ## CET and Lua
 
@@ -34,4 +35,5 @@ ways each layer fails **without saying anything at all**.
 ## Text and detection
 
 - [Finding a piece of text the player saw in game](/authoring/finding-in-game-text) - the per-locale `onscreens` file, what it does not contain, and what a LocKey actually is
+- [A player-visible string cannot be found by grepping the archives that contain it](/authoring/localization-strings-live-inside-archives) - contents are compressed and structure is not: extract with the CLI, then read printable runs out of a CR2W resource
 - [Detecting a player action by matching its interaction text is matching on something another mod owns](/authoring/detecting-a-player-action-from-an-interaction) - three silent failure modes of choice-hub detection

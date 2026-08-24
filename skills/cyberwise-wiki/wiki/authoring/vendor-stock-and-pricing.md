@@ -93,6 +93,7 @@ tracing the price computation.
 
 ## Related
 
+- [What a vendor will buy is decided by tag filters, and one record can be every vendor of a kind](/engine/vendor-buy-filters-and-shared-records) - the buying half of the same record
 - [Never guess a TweakDB record ID - the game writes the real list](/authoring/finding-the-real-record-id)
 - [A TweakXL record is resolved last-wins, and that is the lever for everything else](/authoring/tweakxl-records-are-last-wins)
 - [A mod that enumerates records will hand the player abstract templates](/patterns/record-enumeration-leaks-templates)

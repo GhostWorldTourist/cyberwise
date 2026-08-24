@@ -8,3 +8,5 @@ appear here only as examples.
 - [Reading live game objects from CET Lua without losing the row that mattered](/engine/cet-lua-runtime) - LuaJIT limits, per-field `pcall`, and the out-param return slot that moves between builds
 - [There are two load-order systems, and a conflict scan only sees one of them](/engine/two-load-order-domains) - loose archives and REDmod are ordered by different lists, and nothing ranks across them
 - [The game's own option registry outranks any mod's account of an engine setting](/engine/option-registry-is-the-authority) - what `UserSettings.json` settles that no mod file can
+- [What a vendor will buy is decided by tag filters, and one record can be every vendor of a kind](/engine/vendor-buy-filters-and-shared-records) - the four tag arrays, and why one edit is inert on one record and city-wide on the next
+- [Looted gear arriving broken is two TweakDB flats, and the words on screen may belong to a different mod](/engine/looted-items-can-arrive-broken) - the chance, the relabelling, and a settings toggle inert because of its own code
