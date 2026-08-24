@@ -48,7 +48,29 @@ param(
     # UseConsumable_Button and CombatGadget_Button. Those read as base-game
     # rows and were therefore invisible on a modded install's own cheatsheet,
     # with no way to switch them on. Reported by the user, 2026-08-24.
-    [switch] $IncludeBaseGame
+    [switch] $IncludeBaseGame,
+
+    # ---- the programmable-mouse layer -------------------------------------
+    #
+    # ON by default whenever an iCUE profile exists, and that asymmetry with
+    # -IncludeBaseGame is deliberate. The ~99 vanilla rows are generic - the
+    # same list every install has - so they are noise until asked for. A mouse
+    # profile is the opposite: it is a description of how THIS user actually
+    # plays, hand-built by them, and it exists on maybe one machine in twenty.
+    # Nothing about it is boilerplate, so nothing about it should need a flag.
+    #
+    # -NoMouseProfile is the escape hatch for a sheet meant for somebody else.
+    [switch] $NoMouseProfile,
+
+    # Which profile, by the name shown in iCUE. Left empty, the one with the
+    # most key remaps is read and the sheet SAYS which - the filenames are
+    # opaque GUIDs, so a user with several profiles has no other way to tell
+    # where the rows came from.
+    [string] $MouseProfile,
+
+    # Where iCUE keeps its profiles, for a machine that puts them somewhere
+    # else - and for proving the graceful path against an empty folder.
+    [string] $MouseProfileRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,6 +104,135 @@ foreach ($e in $n.extra) {
     }
 }
 
+# ======================================================= the mouse-key join ==
+#
+# A PROGRAMMABLE MOUSE IS A LAYER OVER THE FIVE STORES, NOT A SIXTH STORE.
+#
+# The device performs no game action. It sends a KEYSTROKE, and the game or a
+# mod then interprets that keystroke exactly as if it had come from the
+# keyboard. So the profile cannot be rendered beside the harvested bindings as
+# another list of controls - it has to be JOINED to them:
+#
+#     physical button  ->  keystroke sent  ->  what that keystroke is bound to
+#
+# Printing only the first two is printing the label the user typed into iCUE
+# months ago, which is a memory, not evidence. The third column is the whole
+# value of the section, and it is the only thing that can report the failure
+# that matters: a button whose keystroke is bound to NOTHING on disk. That
+# button does nothing in game, it looks identical to a working one in iCUE, and
+# there is no other way to find out.
+#
+# Two key vocabularies have to be reconciled to make the join land. iCUE names a
+# key after every glyph on it (`PeriodAndBiggerThan`), Get-Hotkeys prints mod
+# bindings prettified (`.`) and base-game rows as raw IK names minus the prefix
+# (`Period`, `MiddleMouse`). Comparing any two of those directly finds nothing
+# and reports every button dead - so everything is folded to one token first.
+$keyCanon = @{
+    'period'='.'; 'comma'=','; 'lbracket'='['; 'bracketleft'='['
+    'rbracket'=']'; 'bracketright'=']'; 'minus'='-'; 'equals'='='
+    'tilde'='`'; 'graveaccentandtilde'='`'; 'semicolon'=';'; 'singlequote'="'"
+    'slash'='/'; 'backslash'='\'
+    'middlemouse'='mouse-mid'; 'middleclick'='mouse-mid'; 'mouse3'='mouse-mid'
+    'leftmouse'='mouse-l'; 'leftclick'='mouse-l'
+    'rightmouse'='mouse-r'; 'rightclick'='mouse-r'
+    'mouse4'='mouse-4'; 'mouse5'='mouse-5'
+    'keypadplus'='num+'; 'numpad+'='num+'; 'num+'='num+'
+    'capslock'='caps'; 'escape'='esc'
+}
+function Get-KeyCanon {
+    param([string] $s)
+    if (-not $s) { return '' }
+    $t = ($s -replace '[\s_]', '').ToLower()
+    if ($keyCanon.ContainsKey($t)) { return $keyCanon[$t] }
+    return $t
+}
+
+# Sort the pad the way it is laid out under the thumb, not the way cereal
+# happened to serialise it: G1..G12 numerically, then the named buttons, then
+# actions assigned to no button at all.
+function Get-ButtonRank {
+    param([string] $b)
+    if ($b -match '^G(\d+)$') { return [int]$matches[1] }
+    if ($b) { return 900 }
+    return 999
+}
+
+$mouseRows   = @()
+$mouseName   = ''
+$mouseDev    = ''
+$mouseOther  = @()
+$mouseLinked = $false
+$mouseAllCount = 0
+if (-not $NoMouseProfile) {
+    $mpArgs = @{}
+    if ($MouseProfileRoot) { $mpArgs.Root = $MouseProfileRoot }
+    if ($MouseProfile)     { $mpArgs.ProfileName = $MouseProfile }
+
+    # Warnings are collected rather than emitted. "No iCUE profiles found" is
+    # the NORMAL case - most people own no Corsair device - and a warning on a
+    # perfectly good run trains people to ignore warnings. It is reported below
+    # as one plain line, and only becomes loud if a profile was asked for by
+    # name and did not turn up, which is a real mistake.
+    $mpWarn = @()
+    $mouseAll = @(& (Join-Path $PSScriptRoot 'Get-MouseProfile.ps1') @mpArgs -WarningVariable mpWarn -WarningAction SilentlyContinue)
+
+    if ($mouseAll.Count) {
+        # Several profiles and no -MouseProfile. Rank them, best evidence first:
+        #
+        #   1. iCUE says the profile auto-activates for Cyberpunk2077.exe. That
+        #      is not a guess - the user linked it to the game themselves, and
+        #      it is the profile that will actually be loaded while they play.
+        #   2. failing that, whichever holds the most key remaps.
+        #
+        # It is still a choice made on the user's behalf, which is why the sheet
+        # prints the profile's NAME and how many others exist. The filenames are
+        # GUIDs; someone with a Cyberpunk profile and a spreadsheet profile has
+        # no other way to tell which one produced these rows.
+        $byProfile = $mouseAll | Group-Object Profile | Sort-Object `
+            @{e={ if ($_.Group[0].Linked -match '(?i)Cyberpunk2077\.exe') { 1 } else { 0 } }; d=$true},
+            @{e={ @($_.Group | Where-Object Kind -eq 'key remap').Count }; d=$true},
+            Name
+        $chosen     = $byProfile[0]
+        $mouseLinked = [bool]($chosen.Group[0].Linked -match '(?i)Cyberpunk2077\.exe')
+        $mouseName  = $chosen.Name
+        $mouseDev  = (@($chosen.Group | Where-Object Device | ForEach-Object { $_.Device } | Select-Object -Unique) -join ', ')
+
+        foreach ($m in ($chosen.Group | Sort-Object @{e={Get-ButtonRank $_.Button}}, Order)) {
+            # Only key remaps can be joined. A macro or a DPI switch emits no
+            # keystroke, so nothing in the five stores could ever describe it -
+            # they are held back and named separately rather than shown with an
+            # empty, accusatory "bound to nothing".
+            if ($m.Kind -ne 'key remap') { $mouseOther += $m; continue }
+            $canon = Get-KeyCanon $m.Key
+            $hits  = @($binds | Where-Object { (Get-KeyCanon $_.Key) -eq $canon })
+            $mouseRows += [pscustomobject]@{
+                Button   = $m.Button
+                Label    = $m.Action        # what the USER called it in iCUE
+                Key      = $m.Key
+                Hits     = $hits
+                Assigned = [bool]$m.Button
+            }
+        }
+
+        $mouseAllCount = $byProfile.Count
+        $extra = $byProfile.Count - 1
+        Write-Host ("iCUE: read profile '$mouseName'" +
+                    $(if ($mouseLinked) { ' (iCUE auto-activates it for Cyberpunk2077.exe)' }) +
+                    " - $(@($mouseRows).Count) key remap(s) on $mouseDev" +
+                    $(if ($extra -gt 0) { " ($extra other profile$(if ($extra -gt 1){'s'}) on this machine)" })) -ForegroundColor Cyan
+
+        $dead = @($mouseRows | Where-Object { $_.Assigned -and -not $_.Hits.Count })
+        if ($dead.Count) {
+            Write-Host ("      $($dead.Count) button(s) send a key nothing on disk is bound to: " +
+                        (($dead | ForEach-Object { "$($_.Button) sends '$($_.Key)'" }) -join ', ')) -ForegroundColor DarkYellow
+        }
+    } else {
+        # Say it plainly and carry on. This is not a failure of anything.
+        Write-Host "iCUE: no mouse profiles found - the mouse section is omitted" -ForegroundColor DarkGray
+        if ($MouseProfile -and $mpWarn) { $mpWarn | ForEach-Object { Write-Warning $_ } }
+    }
+}
+
 # Which categories exist, in the order a player would want them.
 $order  = 'Combat','Driving','Stealth & Loot','World','Tools'
 $accent = @{ 'Combat'='red'; 'Driving'='cyan'; 'Stealth & Loot'='green'
@@ -101,12 +252,29 @@ function w { param([string]$s) [void]$sb.AppendLine($s) }
 # these a second time - "Next consumable / ]" as a mouse cell and again as an
 # Advanced Control row - so instead the button rides along on the row it
 # duplicates, as a badge next to the keycap.
+#
+# Keyed by the canonical key token, not the printed one, so a badge lands on a
+# base-game row too - those carry raw IK names (`MiddleMouse`) while the mouse
+# profile speaks glyphs (`Middle Mouse`), and the two never match literally.
 $mouseFor = @{}
-foreach ($m in $n.mouse) { if (-not $mouseFor.ContainsKey($m.sends)) { $mouseFor[$m.sends] = $m.button } }
+foreach ($m in $n.mouse) {
+    $c = Get-KeyCanon $m.sends
+    if (-not $mouseFor.ContainsKey($c)) { $mouseFor[$c] = "M$($m.button)" }
+}
+foreach ($m in $mouseRows) {
+    if (-not $m.Assigned) { continue }
+    $c = Get-KeyCanon $m.Key
+    if (-not $mouseFor.ContainsKey($c)) { $mouseFor[$c] = $m.Button }
+}
+$mouseTitle = if ($mouseDev) { $mouseDev } elseif ($n.device) { [string]$n.device } else { 'programmable mouse' }
 
 # ---- mouse panel ----
 $mouseHtml = ''
-if ($n.mouse -and $ShowMousePad) {
+# The notes-driven pad is the fallback for a vendor whose profiles cannot be
+# read. When a real iCUE profile WAS read, it supersedes this entirely - showing
+# both would put every thumb button on the sheet twice, once from disk and once
+# from a hand-written file that may already disagree with it.
+if ($n.mouse -and $ShowMousePad -and -not $mouseRows.Count) {
     $cells = foreach ($m in $n.mouse) {
         # Resolve what this key actually does from the harvested data, so a
         # rebind in game shows up here without editing the notes file.
@@ -145,8 +313,9 @@ $catHtml = foreach ($c in $order) {
     if (-not $set) { continue }
     $rows = foreach ($b in $set) {
         $keys = ($b.Key -split ' / ' | ForEach-Object { "<kbd class=""k"">$(esc $_)</kbd>" }) -join '<i>/</i>'
-        $mb   = if ($mouseFor.ContainsKey($b.Key)) {
-            "<b class=""ms"" title=""$(esc $n.device) thumb button"">M$($mouseFor[$b.Key])</b>"
+        $mbc  = Get-KeyCanon $b.Key
+        $mb   = if ($mouseFor.ContainsKey($mbc)) {
+            "<b class=""ms"" title=""$(esc $mouseTitle) button"">$(esc $mouseFor[$mbc])</b>"
         } else { '' }
         $mark = if ($b.Source -eq 'your setting') { '' } else { '<span class="def" title="mod default - not rebound by you">&#9679;</span>' }
         @"
@@ -166,6 +335,78 @@ $catHtml = foreach ($c in $order) {
   <section class="panel$(if ($big) { ' big' })">
     <h2><span class="dot $($accent[$c])"></span>$(esc $c)</h2>
     <div class="rows">$($rows -join '')</div>
+  </section>
+"@
+}
+
+# ---- mouse-profile panel (the join) ----
+#
+# Three columns, in the order the causation runs: the button you press, the key
+# it sends, what the game does with that key. Read left to right it is a
+# sentence; read as a table it is checkable.
+$mpHtml = ''
+if ($mouseRows.Count) {
+    $deadRows = @($mouseRows | Where-Object { $_.Assigned -and -not $_.Hits.Count })
+    $items = foreach ($m in $mouseRows) {
+        # An action left on no button is not a control. It sits in the profile
+        # doing nothing, and is listed only so the user is not left wondering
+        # where a label they remember creating went.
+        $cls = @()
+        if (-not $m.Assigned)   { $cls += 'unassigned' }
+        elseif (-not $m.Hits.Count) { $cls += 'dead' }
+        $btn = if ($m.Assigned) { esc $m.Button } else { '&mdash;' }
+
+        $does = if ($m.Hits.Count) {
+            (($m.Hits | Sort-Object Mod, Action | ForEach-Object {
+                "<span class=""pd"">$(esc $_.Action)<em>$(esc $_.Mod)</em></span>"
+            }) -join '')
+        } elseif ($m.Assigned) {
+            '<span class="pd pnone">nothing on disk binds this key<em>this button does nothing in game</em></span>'
+        } else {
+            '<span class="pd pnone">on no button, and nothing binds the key either<em>inert both ways</em></span>'
+        }
+        @"
+      <div class="prow$(if ($cls) { ' ' + ($cls -join ' ') })">
+        <span class="pbtn">$btn</span>
+        <kbd class="k">$(esc $m.Key)</kbd>
+        <span class="pdoes">$does</span>
+        <span class="plbl">$(esc $m.Label)</span>
+      </div>
+"@
+    }
+
+    # Lead with the finding, per the house rule. A dead button is invisible in
+    # iCUE - it looks exactly like a working one - so if there is one, it is the
+    # most useful sentence on the page.
+    $deadLine = if ($deadRows.Count) {
+        '<p class="foot warn"><b>' + $deadRows.Count + ' button' + $(if ($deadRows.Count -gt 1) { 's send keys' } else { ' sends a key' }) +
+        ' nothing on this install is bound to</b> - ' +
+        (($deadRows | ForEach-Object { "$(esc $_.Button) sends <kbd class=""k"">$(esc $_.Key)</kbd>" }) -join ', ') +
+        '. Rebind the mod to the key the mouse sends, or the mouse to the key the mod listens for.</p>'
+    } else {
+        '<p class="foot ok">Every assigned button lands on something the game or a mod is listening for.</p>'
+    }
+
+    $otherLine = if ($mouseOther.Count) {
+        '<p class="foot">' + $mouseOther.Count + ' more action' + $(if ($mouseOther.Count -gt 1) { 's' }) +
+        ' in this profile send no keystroke at all (macros, DPI, launchers), so nothing on disk can describe them: ' +
+        (($mouseOther | ForEach-Object { esc $_.Action }) -join ' &middot; ') + '.</p>'
+    } else { '' }
+
+    $mpHtml = @"
+  <section class="panel wide mp">
+    <h2><span class="dot yellow"></span>Mouse buttons<b>iCUE profile &ldquo;$(esc $mouseName)&rdquo;$(if ($mouseDev) { " &middot; " + (esc $mouseDev) })$(
+      # WHICH profile these rows came from, on the sheet itself. The filenames
+      # are GUIDs, so a user with several profiles cannot otherwise tell - and
+      # naming it is what makes the difference between "iCUE says" and "the
+      # Cyberpunk profile says", which are not the same claim.
+      if ($mouseLinked) { ' &middot; auto-activates for Cyberpunk2077.exe' }
+      elseif ($mouseAllCount -gt 1) { " &middot; $mouseAllCount profiles here, none linked to the game - this one has the most remaps" }
+    )</b></h2>
+    $deadLine
+    <p class="foot">The mouse never performs a game action - it sends a <b>keystroke</b>, and the game or a mod decides what that means. So each row is the join: the button, the key it sends, and what is bound to that key on this install right now. The small grey line is your own label for the button in iCUE, which is the one thing here that can go stale.</p>
+    <div class="pgrid">$($items -join '')</div>
+    $otherLine
   </section>
 "@
 }
@@ -234,6 +475,21 @@ $subline = "READ FROM DISK $stamp"
 
 if ($Md) {
     $mb = [Text.StringBuilder]::new()
+
+    # A pipe in a key name or a mod title ends the cell early and the rest of the
+    # row lands in the wrong column.
+    $cell = { param($x) ([string]$x) -replace '\|', '\|' }
+    # The backtick key is the one that breaks its own code span: `` ` `` inside
+    # single backticks renders as an empty span and swallows the key. Doubling
+    # the fence and padding is the only form every renderer agrees on, and it
+    # matters here because ` is a real, commonly bound Cyberpunk key.
+    $bt   = [string][char]96
+    $code = {
+        param($x)
+        $s = & $cell $x
+        if ($s.Contains($bt)) { "$bt$bt $s $bt$bt" } else { "$bt$s$bt" }
+    }
+
     [void]$mb.AppendLine('# Cyberpunk 2077 - hotkeys')
     [void]$mb.AppendLine()
     [void]$mb.AppendLine("Read from disk $stamp. An asterisk means the mod's own default, not a key you chose.")
@@ -246,11 +502,29 @@ if ($Md) {
         [void]$mb.AppendLine('| Key | Action | Mod |')
         [void]$mb.AppendLine('| --- | --- | --- |')
         foreach ($b in $set) {
-            # A pipe in a key name or a mod title ends the cell early and the
-            # rest of the row lands in the wrong column.
-            $cell = { param($x) ([string]$x) -replace '\|', '\|' }
             $dot  = if ($b.Source -eq 'your setting') { '' } else { ' *' }
-            [void]$mb.AppendLine("| ``$(& $cell $b.Key)`` | $(& $cell $b.Action) | $(& $cell $b.Mod)$dot |")
+            [void]$mb.AppendLine("| $(& $code $b.Key) | $(& $cell $b.Action) | $(& $cell $b.Mod)$dot |")
+        }
+        [void]$mb.AppendLine()
+    }
+    if ($mouseRows.Count) {
+        [void]$mb.AppendLine("## Mouse buttons - iCUE profile ""$mouseName""$(if ($mouseDev) { " ($mouseDev)" })")
+        [void]$mb.AppendLine()
+        [void]$mb.AppendLine('The mouse sends a keystroke; the game decides what it means. Button, key sent, what is bound to it.')
+        [void]$mb.AppendLine()
+        # Three columns, matching every other table in this file. The iCUE label
+        # is folded into the button cell rather than given a fourth column: it is
+        # the least trustworthy value here, and a paste-target file does not have
+        # the width to spend on it.
+        [void]$mb.AppendLine('| Button | Sends | What that key does |')
+        [void]$mb.AppendLine('| --- | --- | --- |')
+        foreach ($m in $mouseRows) {
+            $does = if ($m.Hits.Count) {
+                (($m.Hits | Sort-Object Mod, Action | ForEach-Object { "$(& $cell $_.Action) ($(& $cell $_.Mod))" }) -join '; ')
+            } elseif ($m.Assigned) { '**nothing on disk binds this key**' }
+            else { 'on no button; nothing binds the key either' }
+            $btn = if ($m.Assigned) { "$(& $cell $m.Button) - $(& $cell $m.Label)" } else { "- $(& $cell $m.Label)" }
+            [void]$mb.AppendLine("| $btn | $(& $code $m.Key) | $does |")
         }
         [void]$mb.AppendLine()
     }
@@ -432,6 +706,48 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
 .steps{display:block;margin-top:5px;font-size:calc(var(--fs)*.58);color:var(--dim);font-family:var(--mono)}
 .steps b{font-weight:400;color:#a8a8bd} .steps i{font-style:normal;color:#4c4c60;padding:0 5px}
 
+/* ---- mouse profile: the button -> key -> binding join ---- */
+/* Wider tracks than the other grids on the sheet, and deliberately so: the
+   third column can hold several bindings (one key can be claimed by the base
+   game AND two mods), and at 380px those wrapped to four lines each, which set
+   the height of every cell in the row. */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:10px}
+/* Two stacked paragraphs of explanation cost more vertical space than they are
+   worth on a sheet that is meant to fit one screen. */
+.pgrid+.foot,.foot+.foot{margin-top:-2px}
+/* Three cells across the top row, the iCUE label spanning underneath. The
+   button and the keycap are fixed-width so every row's third column starts at
+   the same x - the whole point is scanning down "what does it actually do". */
+.prow{display:grid;grid-template-columns:auto auto 1fr;gap:10px;align-items:baseline;
+  background:#15151f;border:1px solid #2b2b40;border-left:3px solid var(--yellow);padding:7px 12px}
+/* This panel is the last thing added to a sheet that already fitted one screen,
+   so it pays for itself in millimetres: tighter prose margins here rather than
+   a smaller --fs everywhere, which would shrink the keys people actually read. */
+.panel.mp{padding-bottom:11px;margin-top:11px}
+.panel.mp .foot{margin:7px 0 6px}
+.pbtn{font-family:var(--mono);font-size:calc(var(--fs)*.62);font-weight:700;color:var(--yellow);
+  background:rgba(252,238,10,.1);border:1px solid rgba(252,238,10,.45);border-radius:3px;
+  padding:3px 8px;min-width:3.1em;text-align:center;white-space:nowrap}
+.pdoes{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pd{font-size:calc(var(--fs)*.7);line-height:1.25;overflow-wrap:anywhere}
+.pd em{display:block;font-style:normal;font-family:var(--mono);font-size:calc(var(--fs)*.47);
+  color:#6a6a80;letter-spacing:.03em;margin-top:2px}
+/* The user's own name for the button, from iCUE. Deliberately the quietest
+   thing in the row: it is a note they typed, not something read from the game,
+   and it is the only cell on this sheet that can be out of date. */
+.plbl{grid-column:1/-1;font-family:var(--mono);font-size:calc(var(--fs)*.45);color:#5a5a70;
+  letter-spacing:.08em;text-transform:uppercase;line-height:1;margin-top:2px}
+/* A dead button looks identical to a working one in iCUE. On the sheet it must
+   not. */
+.prow.dead{border-left-color:var(--red)}
+.prow.dead kbd.k{color:var(--red);border-color:#4a1024}
+.prow.unassigned{border-left-color:#3a3a52;opacity:.62}
+.pnone{color:var(--red)}
+.prow.unassigned .pnone{color:var(--dim)}
+.foot.warn{color:#ffb3c4} .foot.warn b{color:var(--red)}
+.foot.ok b,.foot.ok{color:var(--green)}
+.foot kbd.k{padding:2px 7px;font-size:calc(var(--fs)*.62)}
+
 /* ---- collisions ---- */
 .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px}
 .crow{display:flex;gap:12px;align-items:flex-start;background:#15151f;border:1px solid #2b2b40;padding:11px 13px}
@@ -479,11 +795,13 @@ $mouseHtml
 $($catHtml -join '')
 </div>
 
+$mpHtml
 $gestHtml
 $colHtml
 
 <footer>
   <span>Keys read from r6\input\*.xml &middot; r6\cache\inputUserMappings.xml &middot; red4ext\plugins\mod_settings\user.ini &middot; cyber_engine_tweaks\bindings.json &middot; cyber_engine_tweaks\mods\*\*.json</span>
+  $(if ($mouseName) { "<span>Mouse buttons read from %APPDATA%\Corsair\CUE5\profiles &middot; profile &ldquo;$(esc $mouseName)&rdquo;</span>" })
   <span>&#9679; mod default you have not rebound</span>
   <span>Generated $stamp // CYBERWISE</span>
 </footer>

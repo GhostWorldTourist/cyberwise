@@ -833,7 +833,13 @@ if ($hkErr) {
 $sheetTool = Join-Path $Root 'skills\cyberwise-hotkeys\tools\New-HotkeySheet.ps1'
 $hkMd   = Join-Path $sandbox 'hotkeys.md'
 $hkHtml = Join-Path $sandbox 'hotkeys.html'
-$sheetOut = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $hkHtml -Md $hkMd }
+# -MouseProfileRoot at an EMPTY folder, deliberately. The sheet reads iCUE
+# profiles by default, and without this the suite would read whatever Corsair
+# profiles happen to be on the machine running it - a test that passes or fails
+# depending on the tester's mouse is not a test.
+$cueEmpty = Join-Path $sandbox 'cue-empty'
+New-Item -ItemType Directory -Path $cueEmpty -Force | Out-Null
+$sheetOut = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $hkHtml -Md $hkMd -MouseProfileRoot $cueEmpty }
 $hkMdText = Get-Content -LiteralPath $hkMd -Raw
 
 $hkMdBad = @(
@@ -849,6 +855,201 @@ $hkMdBad = @(
 )
 if ($hkMdBad) { Bad 'hotkeys: the markdown sheet is a well-formed table of the same bindings' (($hkMdBad | Select-Object -Unique) -join "`n") }
 else          { Ok  'hotkeys: the markdown sheet is a well-formed table of the same bindings' }
+
+# ------------------------------------------------- the programmable-mouse layer
+#
+# A mouse profile is a LAYER over the five stores, not a sixth store: the device
+# sends a keystroke and the game interprets it. So the thing under test is not
+# "can it read the XML" - it is whether the JOIN lands, because the join is the
+# only thing that can report a button whose keystroke is bound to nothing. Such
+# a button looks identical to a working one in iCUE and does nothing in game.
+#
+# The fixture reproduces the shape iCUE 5 actually writes: cereal's XML with
+# <valueN> slots, an action split into <first> (label + keyName) and <second>
+# (physical button + event), and the device name as a <key> sibling.
+
+$cueRoot = Join-Path $sandbox 'cue'
+New-Item -ItemType Directory -Path $cueRoot -Force | Out-Null
+
+function New-CueAction {
+    param([int]$N, [string]$Label, [string]$KeyName, [string]$Button)
+    @"
+            <value$N>
+              <first>
+                <ptr_wrapper>
+                  <data>
+                    <base><name>$Label</name></base>
+                    <keyName>$KeyName</keyName>
+                  </data>
+                </ptr_wrapper>
+              </first>
+              <second>
+                <key>$Button</key>
+                <layer>StandardLayer</layer>
+                <event>Click</event>
+              </second>
+            </value$N>
+"@
+}
+
+# LIVE      -> a key a fixture mod really binds (F7, the user's own rebind)
+# DEAD      -> a key nothing on this install binds. The finding.
+# VERBATIM  -> a keyName the translation table has never seen. It must pass
+#              through unchanged rather than being guessed at from the pattern.
+# UNASSIGNED-> an action left on no button at all.
+$cueActions = @(
+    (New-CueAction 0 'Do The Thing'  'F7'                   'MouseG1')
+    (New-CueAction 1 'Lean Right'    'PeriodAndBiggerThan'  'MouseG2')
+    (New-CueAction 2 'Nothing Here'  'KeypadPlus'           'MouseG3')
+    (New-CueAction 3 'Odd Key'       'SomeKeyIcueInvented'  'MouseG4')
+    (New-CueAction 4 'Orphan'        'BracketLeft'          '')
+) -join ''
+
+Set-Content -LiteralPath (Join-Path $cueRoot '{aaaaaaaa-0000-0000-0000-000000000001}.cueprofiledata') @"
+<?xml version="1.0" encoding="UTF-8"?>
+<cereal>
+  <profile>
+    <name>FixtureGame</name>
+    <id>{aaaaaaaa-0000-0000-0000-000000000001}</id>
+    <linkedProgramsPaths size="dynamic">
+      <value0>X:/fixture/bin/x64/Cyberpunk2077.exe</value0>
+    </linkedProgramsPaths>
+    <properties size="dynamic">
+      <value0>
+        <key>Mouse</key>
+        <value>
+          <properties size="dynamic">
+            <value0>
+              <key>FIXTURE MOUSE</key>
+              <value>
+                <ptr_wrapper>
+                  <data>
+                    <actions size="dynamic">
+$cueActions
+                    </actions>
+                  </data>
+                </ptr_wrapper>
+              </value>
+            </value0>
+          </properties>
+        </value>
+      </value0>
+    </properties>
+  </profile>
+</cereal>
+"@
+
+# A second profile with MORE remaps but NO link to the game. The linked one must
+# still win - "most remaps" is the fallback, not the rule, and getting that
+# backwards silently reports somebody's spreadsheet macros as their game keys.
+Set-Content -LiteralPath (Join-Path $cueRoot '{aaaaaaaa-0000-0000-0000-000000000002}.cueprofiledata') @"
+<?xml version="1.0" encoding="UTF-8"?>
+<cereal>
+  <profile>
+    <name>SpreadsheetProfile</name>
+    <id>{aaaaaaaa-0000-0000-0000-000000000002}</id>
+    <linkedProgramsPaths size="dynamic"/>
+    <properties size="dynamic">
+      <value0>
+        <key>Mouse</key>
+        <value>
+          <properties size="dynamic">
+            <value0>
+              <key>FIXTURE MOUSE</key>
+              <value>
+                <ptr_wrapper>
+                  <data>
+                    <actions size="dynamic">
+$((0..5 | ForEach-Object { New-CueAction $_ "Macro $_" 'A' "MouseG$($_ + 1)" }) -join '')
+                    </actions>
+                  </data>
+                </ptr_wrapper>
+              </value>
+            </value0>
+          </properties>
+        </value>
+      </value0>
+    </properties>
+  </profile>
+</cereal>
+"@
+
+$cueTool = Join-Path $Root 'skills\cyberwise-hotkeys\tools\Get-MouseProfile.ps1'
+$cue = $null; $cueErr = $null
+try { $cue = @(& $cueTool -Root $cueRoot -ProfileName 'FixtureGame' 3>$null) } catch { $cueErr = $_.Exception.Message }
+
+if ($cueErr) {
+    Bad 'mouse: an iCUE profile is read into button / key / label rows' "the tool threw: $cueErr"
+} else {
+    $cueBad = @(
+        if ($cue.Count -ne 5) { "expected 5 actions, got $($cue.Count)" }
+        $g2 = $cue | Where-Object { $_.Action -eq 'Lean Right' } | Select-Object -First 1
+        if (-not $g2)                 { 'the Lean Right action was not found at all' }
+        elseif ($g2.Button -ne 'G2')  { "MouseG2 was reported as '$($g2.Button)', not G2" }
+        # The whole reason a translation table exists: nobody reads
+        # `PeriodAndBiggerThan` as a key, and it can never match a store.
+        elseif ($g2.Key -ne '.')      { "PeriodAndBiggerThan was rendered '$($g2.Key)', not '.'" }
+        $odd = $cue | Where-Object { $_.Action -eq 'Odd Key' } | Select-Object -First 1
+        if ($odd -and $odd.Key -ne 'SomeKeyIcueInvented') {
+            "an unknown keyName was rewritten to '$($odd.Key)' - it must pass through verbatim, never be guessed"
+        }
+        $orph = $cue | Where-Object { $_.Action -eq 'Orphan' } | Select-Object -First 1
+        if (-not $orph)        { 'an action assigned to no button was dropped - "on no button" is a finding, not noise' }
+        elseif ($orph.Button)  { "an unassigned action was given the button '$($orph.Button)'" }
+    )
+    if ($cueBad) { Bad 'mouse: an iCUE profile is read into button / key / label rows' (($cueBad | Where-Object { $_ }) -join "`n") }
+    else         { Ok  'mouse: an iCUE profile is read into button / key / label rows' }
+}
+
+# MOST PEOPLE OWN NO CORSAIR DEVICE. Every one of these must be a warning and an
+# empty result, never an error - a hotkey sheet that refuses to build because the
+# user has the wrong brand of mouse is a worse tool than one that never mentioned
+# mice at all.
+$cueMissing = Join-Path $sandbox 'cue-absent'
+$cueJunk    = Join-Path $sandbox 'cue-junk'
+New-Item -ItemType Directory -Path $cueJunk -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $cueJunk '{bbbbbbbb-0000-0000-0000-000000000001}.cueprofiledata') 'not xml <<<' -NoNewline
+
+$degrade = @()
+foreach ($case in @(
+        @{ Path = $cueMissing;  Why = 'a folder that does not exist' }
+        @{ Path = $cueEmpty;    Why = 'a folder with no profiles in it' }
+        @{ Path = $cueJunk;     Why = 'a profile that is not readable XML' })) {
+    try {
+        $r = @(& $cueTool -Root $case.Path 3>$null)
+        if ($r.Count) { $degrade += "$($case.Why): returned $($r.Count) row(s) instead of none" }
+    } catch {
+        $degrade += "$($case.Why): THREW '$($_.Exception.Message)' instead of reporting no profiles"
+    }
+}
+if ($degrade) { Bad 'mouse: no Corsair device degrades to a clean empty result' ($degrade -join "`n") }
+else          { Ok  'mouse: no Corsair device degrades to a clean empty result' }
+
+# The join, which is the entire point. Same fixture install as above: F7 is the
+# user's own rebind and must resolve; Numpad + is bound by nothing and must be
+# called out as a dead button rather than quietly rendered as if it worked.
+$hkMouseMd   = Join-Path $sandbox 'hotkeys-mouse.md'
+$hkMouseHtml = Join-Path $sandbox 'hotkeys-mouse.html'
+$joinOut = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $hkMouseHtml -Md $hkMouseMd -MouseProfileRoot $cueRoot }
+$joinMd  = Get-Content -LiteralPath $hkMouseMd -Raw
+$joinHtml = Get-Content -LiteralPath $hkMouseHtml -Raw
+
+$joinBad = @(
+    if ($joinMd -notmatch '(?m)^## Mouse buttons') { 'the mouse section is missing from the sheet entirely' }
+    # The linked profile must win over the one with more remaps.
+    if ($joinMd -match 'SpreadsheetProfile')       { 'the profile NOT linked to the game was chosen' }
+    if ($joinMd -notmatch 'FixtureGame')           { 'the sheet does not name which profile the rows came from' }
+    # G1 sends F7; F7 is the user's rebind of the fixture mod. If this row does
+    # not carry the mod's action, the join is not happening and every row on the
+    # panel is just the label the user typed into iCUE.
+    if ($joinMd -notmatch '(?m)^\| G1[^|]*\|[^|]*F7[^|]*\|\s*\S') { 'G1 -> F7 did not resolve to the binding F7 actually has' }
+    # And the finding: a button sending a key nothing binds.
+    if ($joinMd -notmatch '(?m)^\| G3.*nothing on disk binds this key') { 'a button sending an unbound key was not reported as dead' }
+    if ($joinOut -notmatch 'nothing on disk is bound to') { 'the dead button was not mentioned at generation time' }
+    if ($joinHtml -notmatch 'class="prow dead"')          { 'the dead button is not marked in the HTML' }
+)
+if ($joinBad) { Bad 'mouse: the button -> key -> binding join resolves, and names dead buttons' ($joinBad -join "`n") }
+else          { Ok  'mouse: the button -> key -> binding join resolves, and names dead buttons' }
 
 # ============================================================== readiness ====
 #

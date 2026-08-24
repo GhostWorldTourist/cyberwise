@@ -383,6 +383,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
+| `Get-MouseProfile.ps1` | `cyberwise-hotkeys` | read the key remaps a Corsair iCUE profile puts on a programmable mouse, so they can be joined to what the game does with them. |
 | `New-HotkeySheet.ps1` | `cyberwise-hotkeys` | build a self-contained hotkey cheatsheet from the bindings actually present in a Cyberpunk install. |
 | `Get-ModInventory.ps1` | `cyberwise-modbase` | every mod actually deployed, what layers it touches, and its Nexus id where one can be derived. |
 | `New-ModStubs.ps1` | `cyberwise-modbase` | one OKF article per deployed mod, built from the install. |
