@@ -76,6 +76,11 @@ good for. A quick sense of the range:
 If they have no idea, suggest the one that fits what they told you in rule 3, and
 say why in half a sentence.
 
+The full catalogue - what each shape is structurally good at, its unlock
+question, its skeleton and how it characteristically fails - is one article in
+the base wiki (`cyberwise-wiki`): `/formats/character-document-formats`.
+`references/formats.md` keeps how to *offer* one in an interview.
+
 ## Use the lifepath, it is free scaffolding
 
 Every V starts Corpo, Streetkid or Nomad, and each comes with a prologue full of
@@ -108,9 +113,12 @@ they are broke".
 | file | covers |
 |---|---|
 | `references/interview.md` | lifepath hooks, the question bank, canon anchors and how to hold them lightly |
-| `references/formats.md` | the format catalogue - what each is good for, and a skeleton for each |
+| `references/formats.md` | how to offer a format, and a pointer to the catalogue |
+
+The catalogue itself is a base-wiki article:
+`/formats/character-document-formats`.
 
 If they are building the character to drive a mod - an AI companion, a roleplay
-framework, a decision guide - the play dossier format in `references/formats.md`
-is the one that gets used. For what is actually installed on their game, the
+framework, a decision guide - the play dossier is the one that gets used, and the
+only one of the formats a machine can actually consume. For what is actually installed on their game, the
 `cyberwise-reports` manifest tool can list it.

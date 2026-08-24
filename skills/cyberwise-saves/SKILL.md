@@ -28,9 +28,18 @@ appearance dumps or preset decodes anywhere shareable, and never into a repo.
 
 ## What is in here
 
-`references/saves-and-appearance.md` covers the save container (magic bytes,
-the compressed chunk table, the offset trap that makes naive seeking fail), where
-the appearance section lives, and the ACU preset format.
+`references/saves-and-appearance.md` is the order of work: read the metadata
+first, use the tools rather than hand-decoding, and treat everything you find as
+personal data.
+
+**The formats themselves are in the base wiki** (`cyberwise-wiki`), because a
+byte layout is knowledge rather than instruction:
+
+| article | covers |
+|---|---|
+| `/formats/cyberpunk-save-container` | `CSAV`/`CLZF` header, the chunk table, LZ4 **blocks**, the node table read backwards from `ENOD`, the packed-VLQ node count, and the offset trap |
+| `/formats/appearance-in-a-save` | the appearance node, its `0x80\|len` string grammar, the blocks that disagree, face morph IDs |
+| `/formats/acu-preset` | the `LocKey#<hash>:<index>` line format and how the hash map is recovered |
 
 Two things worth knowing before you start:
 
@@ -70,4 +79,8 @@ Write output to a temp path, never into a repo - see above.
 
 | file | covers |
 |---|---|
-| `references/saves-and-appearance.md` | save decompression, appearance data, ACU preset format |
+| `references/saves-and-appearance.md` | the order of work, and pointers to the format articles |
+
+The layouts live in the base wiki at `/formats/cyberpunk-save-container`,
+`/formats/appearance-in-a-save` and `/formats/acu-preset`. Read those before
+writing any parser.

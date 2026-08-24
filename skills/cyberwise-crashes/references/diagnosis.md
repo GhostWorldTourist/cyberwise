@@ -42,26 +42,9 @@ with the skill. This file keeps only what changes what you *do*.
 Full method and how it scales: `bisecting.md`, and
 `/diagnosis/sizing-a-bisect-to-the-list`.
 
-## ArchiveXL `nodeDeletions`, the two rules
+## ArchiveXL `nodeDeletions`
 
-Both learned by breaking a working file:
-
-1. **`type` must be the node's real `$type` from the sector.** Mesh props are often
-   `worldMeshNode`, **not** `worldStaticMeshNode` - their `debugName` reads
-   "[Static Mesh] ..." which is actively misleading. Generate the type from the
-   sector data; never type it by hand.
-2. **One bad entry voids the entire sector patch.** Every deletion in the file
-   reverts, and the log says "No patches have been applied". A single wrong type
-   therefore presents as "the whole mod stopped working".
-
-Always re-read the ArchiveXL log after editing a sector patch.
-
-**It works on another mod's sector, not just a vanilla one.** `nodeDeletions` is
-documented against vanilla sector paths, but pointing it at a path a *mod* added
-works too - confirmed in game by deleting props from a modded interior.
-
-That is worth knowing for what it saves: removing objects from someone else's mod
-needs **no repacking of their archive at all**. Ship a companion `.xl` that sorts
-after theirs, and the edit survives every update of the mod it modifies, because
-their files are never touched. Editing their archive instead is undone by the
-next update and has to be redone by hand each time.
+Authoring knowledge rather than diagnosis, and it now lives in the base wiki at
+`/authoring/archivexl-node-deletions` - the `debugName` that lies about `$type`,
+why one bad entry reverts every deletion in the file, and using a companion `.xl`
+to remove props from another mod's sector without repacking their archive.

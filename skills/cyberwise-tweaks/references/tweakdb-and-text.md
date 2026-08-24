@@ -1,87 +1,54 @@
-# TweakDB edits and finding game text
+# TweakDB edits and finding game text - where the knowledge now lives
 
 > **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
 > **Re-check after a patch:** HIGH DRIFT. Record IDs, vendor stock structure and price component names all move between patches. Re-verify every ID against the current string table; never carry one forward on faith.
 
-## Never guess a record ID
+**The full account is in the base wiki** (`wiki/` in the Cyberwise repo):
 
-TweakXL writes a string table under `r6\cache\modded\` - a `.str` file whose exact
-name carries an expansion suffix on a Phantom Liberty install (`tweakdb_ep1.str`).
-It is a plain string table containing every TweakDB record and flat name - hundreds
-of thousands of entries. Extract printable ASCII runs and you have a searchable ID
-list. It only exists once TweakXL has run, so if it is not there, check that TweakXL
-is installed and the game has been launched at least once since.
+| article | covers |
+|---|---|
+| `/authoring/tweakxl-records-are-last-wins` | resolution is per **record**, not per file - the `zzz_` override that beats another author's record without a conflict rule and survives their updates, the retire condition that stops two mods silently fighting over one value, and `$base` over a hand-written `$type` |
+| `/authoring/a-yaml-error-disables-the-whole-file` | `yaml-cpp` rejects the document, so one 3-space line kills **every** record in the file; the `error at line N, column M: illegal map value` string, and why the symptom is a mod that appears installed and does nothing |
+| `/authoring/finding-the-real-record-id` | the string table TweakXL writes under `r6\cache\modded\` (and its `_ep1` suffix), why CDPR's inconsistent naming defeats every guess, and how to confirm a record resolved |
+| `/authoring/vendor-stock-and-pricing` | inline versus shared stock records and the 61-against-166 undercount, `generationPrereqs` tier gates, `quantity` being `array:TweakDBID`, inventories persisting in the save, `.buyPrice` as an array of components, and the `Price.*` records nothing reads |
+| `/authoring/finding-in-game-text` | the per-locale `onscreens_final.json`, what it does **not** contain, entries with no `secondaryKey`, and what a `LocKey` actually is |
+| `/authoring/detecting-a-player-action-from-an-interaction` | why behaviour keyed to a LocKey breaks silently when another mod owns the text |
+| `/authoring/archivexl-node-deletions` | the neighbouring `.xl` layer - node types, whole-file blast radius, and editing another mod's sector without repacking it |
 
-This matters because **CDPR's naming is genuinely inconsistent**:
-`Items.ContagionLvl2Program` but `Items.OverheatProgramLvl2`. A guessed ID produces
-a mod that loads clean, logs no error, and silently does nothing. Verify every ID
-against the dump before shipping a yaml.
+What stays here is only what changes what you **do**.
 
-## Vendor stock
+## Extract the ID list before writing a line of YAML
 
-- Stock lives in `Vendors.<vendor_id>.itemStock`, an array mixing per-vendor inline
-  records (`Vendors.<id>_inlineN`) and shared named records. **Counting inline names
-  undercounts badly** - one vendor had 61 inline names against 166 actual entries.
-- Each entry carries `generationPrereqs`, typically a player-level tier gate. At
-  low tiers only tier-1 slots roll, which is why early-game netrunner vendors stock
-  almost nothing.
-- **`quantity` is `array:TweakDBID`**, not a scalar. Writing `quantity: 1` makes
-  TweakXL reject the whole record. Omit it and inherit from `$base`.
-- Use `$base: Vendors.<a real inline stock slot>` when authoring, so you inherit
-  the correct record type instead of hardcoding an RTTI type name you cannot verify.
+The string table under `r6\cache\modded\` is the authority, it exists only once
+TweakXL has run, and its filename carries an expansion suffix on a Phantom
+Liberty install. Verify **every** ID against it before shipping. A guessed ID
+produces a mod that loads clean, logs nothing, and does nothing - which is
+indistinguishable from a dozen other failures, so it is the last thing anyone
+suspects.
 
-**Do not fabricate stock entries.** Inventing a new stock record produced a vendor
-listing with no display name, and three plausible explanations for that were each
-disproved before the real cause was found: the entry itself was the problem.
+## Prefer a `zzz_` record override to editing their file
 
-The reliable pattern for "let me buy X earlier" is to **clear
-`generationPrereqs: []` on the vendor's own existing slots**. Those keep CDPR's
-authored name, price, quality and quantity, so nothing can be malformed.
+TweakXL is the only mod layer with partial-override granularity. When the fix is
+a record, ship a folder that sorts last and redeclares just that record: their
+files stay untouched, no conflict rule is needed, and the fix survives their
+updates. Write the **retire condition** into the file, and register the upstream
+hash so a sweep tells you when they change it.
 
-**Inventories are rolled once and persisted in the save.** A TweakDB change will
-not appear until the vendor restocks - skip roughly 24 in-game hours.
+## Read the TweakXL log after every change
 
-## Pricing
+`red4ext\plugins\TweakXL\TweakXL-<date>.log`. Your file named, with nothing
+beneath it, is the check. An `error at line N` under it kills the whole file, and
+that is the first hypothesis for any tweak that "does nothing" - before load
+order, before conflicts, before the record ID.
 
-Cyberware price is not a scalar on the item. `.buyPrice` is an **array of `Price.*`
-component records** combined at runtime, and `Price.ItemQualityMultiplier` is a
-curve lookup, not a value.
+Then confirm positively from the CET console:
 
-- Quickhacks price from `Price.BaseHackPrice` x `ItemQualityMultiplier` x a
-  per-type multiplier.
-- **`Price.CommonQuickhack` and its siblings exist as records but nothing reads
-  them.** Editing them changes nothing - a long-standing source of "my price mod
-  does nothing".
-- **Attached parts are billed with the item.** A cyberdeck shipping pre-installed
-  quickhacks in its `slotPartList` costs several times the price of an identical
-  bare deck. When diagnosing a price difference, diff the two records' **field
-  lists** first; a field present on one and absent on the other is usually the whole
-  answer.
+```lua
+print(TweakDB:GetFlat("<YourRecord>.<field>"))
+```
 
-## Verifying a tweak applied
+## Search the right language's text archive
 
-1. `red4ext\plugins\TweakXL\TweakXL-<date>.log` - look for your file being read
-   with no errors beneath it.
-2. Read the flat back at runtime from the CET console (see `cet-lua.md`).
-
-## Finding game text
-
-Extract `base\localization\<locale>\onscreens\onscreens_final.json` from that
-locale's text archive and serialize it - `en-us` inside `lang_en_text.archive` for
-English, and one such pair per installed language. It contains **UI strings, shards,
-emails, journal entries and computer text** - tens of thousands of entries. If the
-user quoted text from the game in another language, search that language's archive,
-not the English one.
-
-Two traps:
-
-- **It does not contain spoken dialogue or news broadcasts.** Those live in subtitle
-  resources. Saying "that text is not in the game" after searching only `onscreens`
-  is wrong, and easy to do.
-- **Some entries have an empty `secondaryKey`.** Computer inbox mail in particular
-  is keyed by `primaryKey` only, so any search that filters on key *names* will miss
-  it entirely. Search the `femaleVariant` values, not just the keys.
-
-Entry structure is `femaleVariant`, `maleVariant`, `primaryKey`, `secondaryKey`.
-The file is large enough that a streaming line-by-line read beats loading the whole
-thing into a JSON parser (in PowerShell, beats `ConvertFrom-Json` by a wide margin).
+If the user quoted game text, search the archive for the locale **they** were
+playing in. And do not conclude "that text is not in the game" from `onscreens`
+alone - spoken dialogue and news broadcasts are not in there.

@@ -2,6 +2,60 @@
 
 ## 2026-08-24
 
+*(late - the reference migration, and what it turned up)*
+
+**The bundle roughly tripled today, and almost none of it was new research.** It
+came out of skill reference files that had quietly stopped being instructions.
+Something like 2,600 lines were sitting in files a skill re-reads *every session*
+in order to answer a question somebody asks about once a year - the cost paid
+constantly, the value collected almost never. That is the whole argument for
+this bundle, stated as a bill.
+
+The rule applied throughout is the one the skill states: **a skill file is read
+to decide what to do; a reference explaining how something is laid out is read to
+understand it.** Knowledge moved here, procedure stayed there, and the reference
+files that were mostly explanation collapsed - `bisecting.md` 286 → 88 lines,
+`crashes.md` 162 → 70, `input-bindings.md` 222 → 77. What is left in them is the
+part that really is instruction: an invocation, a path, an order of operations.
+Nothing was deleted before its new home existed.
+
+Five areas are new - `/authoring`, `/conflicts`, `/diagnosis`, `/formats` and
+`/input` - and between them they now carry most of the bundle. The count is the
+least interesting thing about the day.
+
+**What matters is the shape of what turned out to be worth writing down.** The
+articles that earn their place are the ones recording a *wrong inference* beside
+the right answer. An empty binding store looks exactly like the wrong binding
+store, so "almost everything here is zero, this must not be where bindings live"
+is a conclusion a careful person reaches and it is false. A capacity read
+through an API that saturates comes back as a believable number in the right
+units. A mod's shipped defaults read exactly like a choice a human made, and
+attributing one to a real person had to be retracted. In all three the
+conclusion on its own is nearly useless: a reader given only the answer walks
+the wrong road again from the top, because the wrong road is the one that looks
+sensible. So the articles carry both, and say what was ruled out.
+
+**Several of these arrived as corrections from the user**, which is exactly why
+they are worth the most. A finding that contradicts what a session already
+believed is the one kind that could not have been reached by thinking harder -
+and it is the kind most likely to be lost, because it lands mid-conversation,
+gets acted on, and then disappears with the transcript unless somebody writes it
+down here.
+
+**Conformance and quality were separated deliberately, and the separation is
+load-bearing.** `Test-Wiki.ps1 -Lint` now reports stubs still outstanding,
+articles marked `stable` whose bodies are too short to have read anything, links
+to articles nobody has written, and indexes that have drifted from the files
+beside them - and **none of it touches the exit code**. Two reasons, both
+mattering. The spec forbids rejecting a bundle for a missing optional field, an
+unknown type, an extra key or a broken link, so failing on any of that would
+make the validator itself non-conforming. And a bundle in the middle of a
+documentation pass is *supposed* to be full of drafts and unwritten links; a
+check that fails for that is useless exactly when the work is happening. Lint
+makes the shape of the gap visible without turning "unfinished" into "broken".
+Among its warnings `index-drift` is the one to act on first: every other gap is
+one you can see, and that one is a gap that lies.
+
 *(evening)*
 
 **[a-capacity-read-from-the-wrong-api](/process/a-capacity-read-from-the-wrong-api),
