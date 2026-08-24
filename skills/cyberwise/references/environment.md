@@ -177,14 +177,14 @@ Causes, plugin-DLL gating, and how to tell a real absence from a false one:
 
 ## Triaging TweakXL errors
 
-A large load order routinely logs dozens of TweakXL errors that are upstream author
-bugs with no crash risk. Do not treat the count as a health metric or try to drive
-it to zero. (On a small load order the reverse holds: a handful of mods producing a
-page of errors is worth actually reading, because there is nothing else to blame.)
+**The count is not a health metric** - see
+[a data-layer log is noisy by design](/diagnosis/reading-a-noisy-tweak-log) in
+the base wiki for what the noise is made of, why the failing set changes between
+launches with no mod change, and the one question that separates a broken
+feature from a benign line.
 
-One genuinely confusing pattern: **which records fail can vary between launches**,
-because another mod is reshaping the same records and the outcome is order-dependent.
-A varying error list is not nondeterminism in the game; it is load-order interaction.
+What that leaves as procedure: do not drive the count to zero, and check an
+error's timestamp against your own file moves before chasing it.
 
 ## Compile-testing redscript without launching the game
 
