@@ -64,5 +64,5 @@ keep branching is describing a game that does not exist.
 
 ## Scope
 
-Read off the streetkit and nomad intro sequences. A lifepath-expanding mod moves
+Read off the streetkid and nomad intro sequences. A lifepath-expanding mod moves
 these anchors; ask before assuming a player's account is wrong.

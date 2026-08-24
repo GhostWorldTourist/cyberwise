@@ -46,6 +46,19 @@ a normal machine. The extender logs error 126, the plugin never loads, its
 scripts never compile, and the mod is completely inert with no other symptom.
 Check the extender's log for load failures before believing a plugin is active.
 
+That error's own wording - **"the specified module could not be found"** - is
+what sends people hunting for a dependency mod they already have. It names the
+*imported* module rather than the plugin, and a debug-suffixed CRT is a more
+common answer than a missing framework. **Read the failing DLL's import table
+before believing the message**: a hit on the `D`-suffixed runtime names
+(`VCRUNTIME140D.dll`, `ucrtbased.dll`, `MSVCP140D.dll`) means the author shipped
+a Debug build, and the fix is a corrected release rather than anything on this
+install. No hit means the missing import is worth resolving on its own terms.
+
+What that failure does to a compile error list - a mod named in the popup whose
+scripts the compiler never saw - is in
+[reading a redscript failure](/engine/reading-a-redscript-failure).
+
 ## Find the live bundle from the log, not from the config
 
 One line is authoritative:

@@ -47,19 +47,44 @@ The line runs between a pattern and a product:
 
 ### What is already in the base bundle
 
-Read the bundle's own `index.md` for the current list; these are its areas and
-what each is for.
+Read the bundle's own `index.md` for the current list — it is generated from the
+files, so it does not drift. These are the areas and what each is for.
 
 | area | holds |
 |---|---|
 | `/patterns` | facts about the data model that surface as mod conflicts |
 | `/engine` | how the game and its script layers behave, independent of any mod |
+| `/gameplay` | stats, cyberware and progression mechanics, read out of the shipped scripts |
+| `/canon` | what the game establishes, what it deliberately leaves open, and the craft of writing into it |
+| `/conflicts` | why one file wins over another, and how to tell an archive that lost from one never in the running |
+| `/diagnosis` | which evidence exists for which fault, and how to search a large load order without wasting launches |
+| `/authoring` | writing records and scripts the game will actually load, and the silent ways they fail |
+| `/input` | where bindings really live, and why no single store answers "what is this key bound to" |
+| `/rendering` | the post-processing pipeline, shader interaction, and the capture path |
+| `/formats` | how to read what the game and its tools write |
 | `/install` | what each way of assembling an install makes untrue about the files on disk |
-| `/process` | how to do the work so the result survives review - partitioning a documentation pass, verifying derived identifiers, saying what you did not check |
+| `/process` | how to do the work so the result survives review |
 
-`/process` is the odd one: it is not knowledge about the game but about the ways
-work *about* the game goes wrong. It is here because a lesson that lives only in
-a conversation has to be learned again by every fresh session.
+Two of those are unusual and worth explaining.
+
+**`/process` is not knowledge about the game** but about the ways work *about*
+the game goes wrong — a negative that is only as wide as the layer searched, an
+empty result that proves nothing because the command never ran, a validator that
+checks structure and cannot check truth. It is here because a lesson that lives
+only in a conversation has to be learned again by every fresh session.
+
+**`/canon` is about playing rather than fixing**, and it exists mostly to record
+what the game does NOT settle. The length of the first timeskip, the date corpo
+V is fired, how V and Jackie met — each is routinely stated as fact and none is
+anchored in the game. An article that says "derived, not documented" is doing
+more work than one that repeats the number.
+
+**The most valuable articles record a wrong answer beside the right one.** A
+defaults file that was not the defaults; an empty binding store that looked
+exactly like the wrong store; a capacity read from an API that saturates at 4 GB.
+A reader who gets only the conclusion walks the wrong road again — so when you
+write one of these up, keep the theory that failed and say why it was
+believable.
 
 ### What a user bundle contains
 
