@@ -74,7 +74,27 @@ function Get-NexusId([string] $source) {
     if ([string]::IsNullOrWhiteSpace($source)) { return @($null, 'none') }
 
     # Name-<id>-<version parts>-<10-digit unix stamp>
-    if ($source -match '-(\d{2,7})-[0-9][0-9a-zA-Z\-\.]*-(\d{10})$') {
+    #
+    # THREE DIGITS MINIMUM, and that floor is load-bearing. The match is
+    # leftmost-first, so any '-<digits>-' inside the mod's OWN NAME is tried
+    # before the real id. Two live examples on the reference install:
+    #
+    #   Oranje3 Militech Legatus SPD-10-23289-1-0-2-<stamp>   derived 10, not 23289
+    #   AMM Facial Expressions Overhaul 3-7-25-20108-1-1-<stamp>  derived 25, not 20108
+    #
+    # Both are silent failures: 10 and 25 are real Nexus pages, so the wrong id
+    # resolves to a real mod and every later lookup is confidently about somebody
+    # else's work. Requiring three digits skips a model number or a version
+    # fragment in the name while matching every real id on this install.
+    #
+    # Anchoring right instead (a greedy `^.*` prefix) was tried and is WRONG: it
+    # walks past the id onto the version, turning ArchiveXL-4198-1-26-1-<stamp>
+    # into 26. Measured: it broke 24 of 810 names. The floor breaks none.
+    #
+    # The trade-off: a genuine two-digit mod id no longer matches here. It falls
+    # through to the loose pattern below and is labelled as such, so a reader can
+    # see the claim is weaker rather than being told a confident wrong answer.
+    if ($source -match '-(\d{3,7})-[0-9][0-9a-zA-Z\-\.]*-(\d{10})$') {
         return @([int]$Matches[1], 'dash-stamp')
     }
     # Name <id> <version> <ISO date> - the collection/installer convention

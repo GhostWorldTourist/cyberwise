@@ -431,6 +431,14 @@ them: `references/environment.md` (manager behaviour, the settings store,
 compile-testing) and `references/script-cache.md` (what is actually in the
 compiled script bundle, and the log traps around it).
 
+**Both are now mostly pointers.** The knowledge they used to carry lives in the
+**base wiki** - `wiki/` in the Cyberwise repo, described by `cyberwise-wiki` -
+because a skill file is instructions and a wiki article is knowledge, and those
+rot at different rates. The reference files keep the parts that change what you
+*do*, and name the article for the rest. Its `/process` area is worth reading
+before running a documentation pass over a whole load order; `/patterns` before
+attributing any setting to a user.
+
 **These are additive.** A hotkey sheet is also an HTML deliverable, so that job
 wants `cyberwise-hotkeys` *and* `cyberwise-reports`. Load both.
 

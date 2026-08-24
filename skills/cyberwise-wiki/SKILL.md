@@ -45,6 +45,22 @@ The line runs between a pattern and a product:
   settings mean this, and here is what its author wrote about it." That is the
   author's work restated.
 
+### What is already in the base bundle
+
+Read the bundle's own `index.md` for the current list; these are its areas and
+what each is for.
+
+| area | holds |
+|---|---|
+| `/patterns` | facts about the data model that surface as mod conflicts |
+| `/engine` | how the game and its script layers behave, independent of any mod |
+| `/install` | what each way of assembling an install makes untrue about the files on disk |
+| `/process` | how to do the work so the result survives review - partitioning a documentation pass, verifying derived identifiers, saying what you did not check |
+
+`/process` is the odd one: it is not knowledge about the game but about the ways
+work *about* the game goes wrong. It is here because a lesson that lives only in
+a conversation has to be learned again by every fresh session.
+
 ## The article format
 
 OKF 0.2: a directory of markdown files with YAML frontmatter, no schema

@@ -62,3 +62,12 @@ resulting note is confident and wrong.
 
 The same shape appears whenever configuration has more than one possible home.
 Ask *which store this mod writes to* before asking *what the value is*.
+
+## And once you have the right store, ask who wrote the value
+
+Reading the correct file settles what the value **is**. It does not settle who
+chose it. Mods populate their own settings at runtime - a first-run discovery
+pass, a version migration, a framework persisting a control with no declared
+default - so a value in a live store may never have been chosen by a person, and
+a key missing from the defaults file is not evidence that one was. See
+[A mod's shipped defaults are not proof a human chose anything](/patterns/defaults-can-be-written-by-code).

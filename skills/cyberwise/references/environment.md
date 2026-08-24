@@ -8,260 +8,87 @@ that root in different places, users move it, and it is not always on C:. Get th
 real root once - from the manager, from the launcher, or by asking - and never
 assume a drive letter.
 
+## Where the knowledge went
+
+Most of what used to be on this page was reference rather than instruction, and
+it now lives in the **base wiki** (`wiki/` in the Cyberwise repo; see
+`cyberwise-wiki`). This file keeps what changes what you *do*.
+
+| you need | read |
+|---|---|
+| what Vortex / MO2 / Wabbajack / manual each make untrue on disk, link counts, staging names, in-game-written files, resolving an internal name to a findable mod, timestamps | `/install/how-the-install-is-assembled` |
+| override vs in-place patch, the granularity table, which copy to edit per manager, adding to a mod without touching it | `/install/overriding-another-authors-mod` |
+| two downloads that are not alternatives, byte size as the identity tell, why shared records are not duplication | `/install/two-builds-of-one-filename` |
+| loose archives vs REDmod, why a conflict scan only sees one domain | `/engine/two-load-order-domains` |
+| the compiled script bundle, false absences, the all-or-nothing compile gate | `/engine/compiled-script-bundle` |
+| `UserSettings.json` as the authority on any engine option | `/engine/option-registry-is-the-authority` |
+| which settings store a mod writes to | `/patterns/live-state-is-not-defaults` |
+| whether a value in that store was chosen by a human at all | `/patterns/defaults-can-be-written-by-code` |
+
 ## Read the user's real settings, not a mod's defaults
 
-If the Mod Settings framework is installed, `red4ext\plugins\mod_settings\user.ini`
-holds the user's overrides as `[Module.Class]` sections with `key = value`. On a
-heavily modded install it runs to thousands of entries; on a small one it may be
-short or missing. **A missing key means "never overridden", not "not configurable"** -
-the shipped default is then what applies.
-
-**Check it first for any "what is X set to" or "which key does Y" question.**
-Quoting a shipped default has caused real errors - one mod's XML declared a hotkey
-of `IK_O` while the user's actual binding in `user.ini` was `IK_Pause`.
-
-Not every mod uses Mod Settings. Others keep configuration in a CET mod's own
-`.json`, in a `.reds` constant, or in a menu of their own. There is no single
-settings store; work out which one the mod in question uses before quoting a value.
-
-### The game's own options are a separate store, and they are the authority
+**Check the live store first for any "what is X set to" or "which key does Y"
+question.** Quoting a shipped default has caused real errors - one mod's XML
+declared a hotkey of `IK_O` while the user's actual binding in `user.ini` was
+`IK_Pause`.
 
 ```
-%LOCALAPPDATA%\CD Projekt Red\Cyberpunk 2077\UserSettings.json
+red4ext\plugins\mod_settings\user.ini      # mods that opt into the shared framework
+bin\x64\plugins\cyber_engine_tweaks\mods\<name>\*.json   # CET mods, filename chosen by the author
 ```
 
-Every option the engine exposes is declared here - graphics, gameplay, hidden
-entries with no menu control - with its group, its type, its permitted `values`,
-its `default_index` and the user's current one. That declaration is the game
-speaking about its own option, so it settles questions no mod file can: whether
-an option exists on this patch, what it can be set to, and whether a mod that
-writes it is writing something real.
+`user.ini` holds `[Module.Class]` sections with `key = value`, and on a heavily
+modded install runs to thousands of entries. **A missing key means "never
+overridden", not "not configurable"** - the shipped default then applies.
 
-Read it before accepting any mod's account of what an engine option is. Mods that
-drive graphics settings ship their own names, comments and tooltips for these
-options, and those are the author's shorthand, not the engine's definition. A
-label naming a feature does not mean the option only acts while that feature is
-on - gating is a property of the engine, and only this file and the game's
-behaviour can tell you about it.
+Three follow-on rules, each with its full case in the wiki:
 
-This is also where "that setting does nothing" goes wrong. A control can reach
-the game through at least four separate layers - the mod's own config files, the
-option registry above, a second control in the same mod writing into the same
-subsystem, and a native RED4ext plugin doing it in compiled code where no text
-search will ever find it. Finding nothing in the first says nothing about the
-other three, so a negative from one layer is worth stating as exactly that.
+- **A mod with no `@runtimeProperty` annotations will never appear in
+  `user.ini`**, and its silence there is a false negative, not evidence.
+- **A value being present does not mean a person chose it.** Mods seed their own
+  settings during init and persist them. Before writing "the user set X", read
+  the init, discovery, apply and migrate paths - `/patterns/defaults-can-be-written-by-code`.
+- **The game's own option registry outranks any mod's label** for anything the
+  engine exposes - `/engine/option-registry-is-the-authority`.
 
-When the mod's author contradicts the reading, that is not proof either - authors
-describe old versions and misremember their own controls - but it is the
-strongest available signal that a label was trusted or a layer was never opened.
-Defending a reading you cannot support and folding to a claim you have not
-checked cost the same turn, and neither one establishes who was right.
+And the layer rule that governs all of it: **a negative is only as wide as the
+layer you searched.** A control can act through the mod's own config, the option
+registry, a second control in the same mod, or a native plugin in compiled code.
+Report "nothing in `<layer>`", never "nothing".
 
 ## Establish how the install is assembled FIRST
 
-Almost every technique in this skill reads the game directory. Whether that
-directory tells you the truth depends entirely on how mods got there, and there are
-three very different answers. **Determine which one you are looking at before
-trusting anything on disk.**
-
-### Detecting the mode
-
 | look for | means |
 |---|---|
-| `__folder_managed_by_vortex` marker files; a staging root full of `<Display Name>-<NexusID>-<version>-<timestamp>` folders; deployed files with **link count 2** | Vortex |
-| `ModOrganizer.ini`; mods under MO2's own `mods\` tree; a game directory that looks suspiciously bare while the game is closed | MO2 |
+| `__folder_managed_by_vortex` markers; staging folders named `<Display Name>-<NexusID>-<version>-<timestamp>`; deployed files with **link count 2** | Vortex |
+| `ModOrganizer.ini`; mods under MO2's own `mods\` tree; a game directory that looks bare while the game is closed | MO2 |
+| MO2 mods named `[NoDelete] ...`; a `.wabbajack` file | a Wabbajack list (an MO2 install underneath) |
 | files simply present, no markers, no staging root, no deployment step | manual |
 
-Vortex's staging root defaults to `%APPDATA%\Vortex\<game>\mods`, but it is
-relocatable and frequently relocated - hardlink deployment requires it to sit on
-the same volume as the game. MO2's `mods\` tree likewise lives wherever the
-instance was created. **Ask for the path; do not assume one.**
+Staging roots are relocatable and frequently relocated. **Ask for the path; do
+not assume one.** The modes are not exclusive, so "the manager doesn't list it"
+is never evidence a file is not loaded.
 
-These modes are also not exclusive. A managed install routinely carries
-hand-dropped files alongside the managed ones, plus files mods write at runtime, so
-"the manager doesn't list it" is not evidence a file isn't loaded.
+Three consequences that change what you do, before reading the full article:
 
-When in doubt, ask. It is one question and it changes the entire approach.
+- **On MO2, "the file isn't there" proves nothing** - USVFS means mod files may
+  never be physically present, and Root Builder discards anything copied into the
+  game directory when the game closes. Run inspections **through MO2**.
+- **On a Wabbajack list, anything you add must be named `[NoDelete] ...`**, or
+  the next list update deletes it silently. Number them
+  (`[NoDelete] [0000]`) because they re-sort alphabetically.
+- **On Vortex, write through the hardlink.** A tool that deletes and recreates a
+  file desynchronises staging from deployment.
 
-### Manual install
-
-The simplest case and the one everything here assumes by default: files are
-physically in the game directory and what you see is what the game loads. It is
-not a beginners-only setup - large hand-built load orders exist, and the techniques
-here scale to them.
-
-Caveats: there is no staging copy, so **any hand-edit you make is the only copy** -
-back it up before editing. And there is no manifest, so nothing can tell you which
-mod a given file came from: a mod's files are merged into the game's own directory
-tree, so grouping-by-folder only works where the mod happened to ship a folder of
-its own. Filename and that folder are all you have.
-
-Because there is no manifest, an uninstall is a manual file-by-file removal, and
-leftovers from a half-removed mod are a routine cause of "I already uninstalled
-that". Keep the downloaded archives - their file lists are the only record of what
-each mod put where.
-
-### Vortex
-
-- **Deployment is by hardlink** *on the default deployment method*. Editing a
-  deployed file then also edits the staging copy. Useful for patching, but a mod
-  reinstall reverts hand-patches. Vortex can also be set to symlink or move
-  deployment; under those the next two bullets do not hold, so **check the game's
-  deployment method before relying on either**.
-- **Write through the link.** Tools that replace a file by delete-and-recreate break
-  the hardlink and desynchronise staging. Prefer in-place writes.
-- **Link count tells you the origin.** Under hardlink deployment, a deployed file
-  with link count 2 is manager-managed. Link count 1 means it was created in-game or
-  installed manually - which is why a purge does not remove it (it is not in the
-  deployment manifest). This is the fastest way to explain a file the manager
-  denies owning.
-- **Staging folder names lie about versions.** Updates happen *in place*, keeping
-  the original folder name while replacing files. Never infer a version from the
-  folder name; check the RED4ext log for plugins, or compare against the download
-  archive.
-- **Never diff the mod directory mid-deploy.** Doing so reports transient states as
-  additions and removals. Confirm no operation is running first.
-
-### MO2 - the important one, because the filesystem lies
-
-MO2 and Cyberpunk are **not natively compatible**; using MO2 without extra setup
-produces CET and RED4ext errors. Working installs rely on the **Root Builder**
-plugin, and that changes what you can see:
-
-- **Root Builder copies its folders into the game directory at launch and removes
-  them again when the game closes.** So inspecting the game directory while the game
-  is shut down can show you almost nothing, and what it does show may be stale.
-- **USVFS virtualisation means mod files may never be physically present** in the
-  game directory at all - the merged view exists only for processes inside MO2's
-  virtual filesystem. A script run from outside sees the bare game.
-- CET **1.27+** is required for USVFS compatibility; 1.26 and earlier do not work.
-  A confusing CET failure on an MO2 install is worth checking against this first.
-- REDmod deploys automatically before launch, so REDmod state is also a
-  launch-time artifact rather than something sitting on disk.
-
-## REDmod or archive? Two precedence systems, not one
-
-Many mods ship both a "default" and a "REDmod" build of identical content. The
-choice is not cosmetic, and it is not about which is newer or more official.
-
-| | default / loose | REDmod |
-|---|---|---|
-| lands in | `archive\pc\mod\` | `mods\<name>\archives\` |
-| ordered by | `modlist.txt`, explicit and editable | REDmod deploy order |
-| deploy step | none | required after every change |
-| visible to a `modlist.txt` conflict scan | yes | **no** |
-
-**Default is the right answer unless the mod needs REDmod.** The list of things
-that genuinely need it is short: **custom audio** - new `.wav` sounds are only
-supported through REDmod - mods shipping REDmod-only scripts or tweaks, and mods
-that offer no other build. Everything else gains nothing and costs visibility.
-
-**The cost is diagnostic, and it is the part people miss.** Two mods contesting a
-file are only comparable when one list orders both of them. `modlist.txt` orders
-the loose archives; REDmod deploy orders the others. So a REDmod can win or lose
-a file without appearing in a load-order report at all, and "no conflicts" then
-means "no conflicts *among the ones I looked at*".
-
-`Repair-LoadOrder.ps1` scans both now and reports files claimed in both domains
-separately - **without ranking them**, because nothing here establishes which
-domain wins. On one install that surfaced 63 files contested between a REDmod
-framework and loose retexture archives, on a load order that had been reported
-clean for months. Test in game or remove one copy; do not guess a winner.
-
-The usual cause of a cross-domain contest is **the same mod installed both
-ways** - someone tries the REDmod build, then the default one, and both remain.
-
-**Practical consequences.** On an MO2 install:
-
-- "The file isn't there" is not evidence the mod isn't installed.
-- Conflict and load-order scanning must be done against **MO2's own mod list and
-  its virtual ordering**, not against `archive\pc\mod` on disk.
-- Ask the user to check MO2's UI, or to run your inspection **through MO2** so it
-  inherits the VFS, rather than from a plain shell.
-- Hand-editing a deployed file is pointless if Root Builder will discard it on exit.
-  Edit the file in MO2's mod folder instead.
-
-If you are unsure whether a given install virtualises, the quick test is: with the
-game closed, does `archive\pc\mod` contain the archives the user says are enabled?
-If not, you are outside the VFS and must change approach.
-
-## Wabbajack modlists - a fourth mode, and the one that deletes your work
-
-A **Wabbajack** list (Project Ultrapunk is the prominent Cyberpunk 2077 one) is
-not a fourth mod manager - it is an automated installer that builds a curated
-**MO2** install. So everything in the MO2 section applies, plus one rule that
-overrides most of this page:
-
-> **Updating the list DELETES every mod that is not part of the new version.**
-
-That includes every fix, override and patch mod you added. It is not a bug and
-there is no undo; it is how the list guarantees a reproducible install.
-
-### The affordance: `[NoDelete]`
-
-Mods whose **name begins with `[NoDelete]`** survive the update. Anything you add
-to a Wabbajack list must be named that way, or the next list update removes it
-silently and the problem it fixed comes back with no explanation.
-
-```
-[NoDelete] My Borg4a Fix
-[NoDelete] Config Files
-```
-
-**Two consequences that are easy to miss:**
-
-- **`[NoDelete]` mods re-sort alphabetically after an update**, so your carefully
-  chosen priority is lost even though the mods survived. The convention is to
-  number them - `[NoDelete] [0000]`, `[NoDelete] [0001]` - so the order is part
-  of the name. Ultrapunk points at a "NoDelete Tagger and Indexer" plugin that
-  automates the numbering.
-- **Load order changing silently is a load-order bug**, so re-check conflicts
-  after any list update, exactly as you would after installing a mod.
-
-### What this changes about fixing another author's mod
-
-Everything above about overrides still holds, with one addition that comes first:
-**name the override mod `[NoDelete] ...`**. An untagged override is not a durable
-fix on a Wabbajack list - it is a fix with a lifespan of one update.
-
-Register it with `ModPatchWatch.ps1` as well. The sweep tells you when the
-upstream file changed; the tag is what stops your fix being deleted before you
-get the chance to look.
-
-### Detecting one
-
-Look for MO2 mods whose names start with `[NoDelete]`, a `.wabbajack` file, or an
-MO2 install living inside the list's own folder rather than a user-chosen one.
-**Ask if unsure** - it changes what advice is safe.
-
-### Say the support boundary out loud
-
-These lists are curated wholes, and their authors generally state that problems
-caused by added mods are the user's own responsibility. A user who adds mods on
-your advice has stepped outside the list's support, and they should know that
-before they do it, not when they go asking its maintainers for help.
-
-Ultrapunk also requires **a clean Cyberpunk 2077 install with no leftover mod
-files** before installing - relevant when a user is moving to a list from a
-hand-built load order, because leftovers in the game directory are exactly the
-kind of thing no manager owns.
-
-**`[NoDelete]` is Wabbajack itself, not one list's convention.** It works on any
-Wabbajack modlist, for any game - so this applies wherever a user's install came
-from a Wabbajack list, not only the Cyberpunk ones. The numbering habit
-(`[NoDelete] [0000]`) and the tagger plugins are community practice layered on
-top of it.
-
-*Wabbajack behaviour is general. The Ultrapunk specifics - its clean-install
-requirement and its support boundary - were read from that list's guide in August
-2026; other lists state their own.*
+Full account: `/install/how-the-install-is-assembled`.
 
 ## Where this family keeps its records
 
 ```
 %USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\
-    patches.json            every patch and override, with the upstream hash it was made against
+    patches.json              every patch and override, with the upstream hash it was made against
     upstream\<name>.upstream  a copy of the author's file as it was when you patched it
+    wiki\                     the per-user knowledge bundle, which NEVER ships
 ```
 
 Beside the game's own data, in a namespace folder of ours - the same shape mod
@@ -282,66 +109,29 @@ Write JSON, keep it small, and make each record say *why* as well as *what*: a
 future reader has to judge whether a patch is still wanted, not merely that it
 exists.
 
-## A manager only owns what it deployed
+## Ship a fix as a mod, not as files in the game folder
 
-Files written **directly into the game directory** are invisible to the manager
-that is supposed to be running the install. A purge, a redeploy, or an update of
-the mod they belong to silently reverts or orphans them, and the deployed state
-drifts from staging with nothing reporting it.
-
-This bites hardest when it appears to work. On one install a working version of a
-hand-built mod existed **only** as loose files in `r6\tweaks`, while staging still
-held the superseded version - so the next deploy quietly restored the old one and
-the "fixed" mod stopped being fixed, for reasons nothing explained.
-
-**Package a mod as a zip and let the user install it through their manager**
-rather than writing into the game folder. Then the manager owns it, an uninstall
-is clean, and the version they have is the version it believes they have.
+Files written directly into the game directory are invisible to the manager, and
+a purge, redeploy or mod update silently reverts or orphans them. **Package a mod
+as a zip and let the user install it through their manager.**
 
 Two deliberate exceptions, both worth naming out loud when you take them:
 
-- **Fixing a bug in another mod's own file** - see below, because *where* you put
-  that fix depends entirely on the manager.
+- **Fixing a bug in another mod's own file** - see below.
 - **Diagnostic tooling and backups the user has agreed to.** Keep them in clearly
   named folders that cannot be mistaken for mod content, and say they are there.
 
 ## Fixing a bug in someone else's mod
 
-Authors ship broken YAML, wrong signatures and typos, and sometimes the fix
-genuinely is an edit to their file. **Prefer an override to an edit**, and where
-you cannot, know exactly which copy you are editing - it is different on every
-manager, and the wrong answer fails silently.
+The decision - override their file or patch it in place - is in
+`/install/overriding-another-authors-mod`, along with the granularity table and
+which copy to edit on each manager. The short form: **prefer an override**,
+prefer overriding a *record* over a *file* where the format allows it, and give
+the override the **same relative path** so load order decides.
 
-### First: can you avoid touching their file at all?
-
-For a **game** class, write a normal mod that hooks it and none of this applies.
-For a class another **mod** declares, you cannot - see
-`cyberwise-tweaks/references/redscript.md`. Establish which you are dealing with
-before designing anything, or you will spend an evening on a hook that was never
-going to compile.
-
-### Then choose by how much of their file you are replacing
-
-**First check whether the format lets you override PART of their file**, because
-that changes the answer completely:
-
-| format | granularity | consequence |
-|---|---|---|
-| **TweakXL YAML** | per **record**, last loaded wins | Ship a file setting only the broken record. Everything else of theirs stays live, including changes they make later. Staleness barely applies - **this is the good case.** |
-| **`.archive`** | per **file inside it** | Override one texture without touching the rest. Also fine. |
-| **redscript `.reds`** | whole file only | Replacing it means every future fix its author ships loses to your copy. |
-| **CET Lua** | whole file only | Same. |
-
-Where you can override a *record* rather than a *file*, take it - a `zzz_`-named
-tweak folder loads last and wins without a manager conflict rule and without
-touching the original at all. Where the format only replaces whole files, the
-trade-off below applies.
-
-### Register it, then the silent failure stops being silent
-
-The objection to overriding a whole file is that their next update loses to your
-copy **without anything saying so**. That danger comes entirely from not
-noticing, so remove the not-noticing:
+What has to happen here, every time, is the registration. The one real danger of
+an override is that the author's next update loses to your copy with nothing
+saying so, and that danger is entirely a not-noticing problem:
 
 ```powershell
 . tools\ModPatchWatch.ps1
@@ -358,73 +148,6 @@ your override file is not actually there.
 unregistered override is exactly the thing that quietly reimposes old behaviour
 for months. A registered one is a line of output after an update.
 
-With the sweep in place, an override is the better choice almost everywhere: it
-survives the update *and* you find out that it did. Reserve the in-place patch
-for cases where you would rather the fix be destroyed than be stale.
-
-For whole-file cases, the remaining question is: **would you notice if their
-update silently lost to your copy?** With registration, the answer is yes.
-
-| | override mod | re-appliable patch |
-|---|---|---|
-| their update | your copy keeps winning, **silently** | wipes your fix, **visibly** |
-| stale risk | high, and grows with file size | none - you always re-patch the new file |
-| effort per update | none, until it is wrong | one command, if you scripted it |
-| good for | small, self-contained files - a YAML typo, one record | whole system files, anything you replace wholesale |
-
-**A small data file: override.** One record or one obviously-wrong value, in a
-file you would re-read in seconds. Low stale risk, and the manager owns it.
-
-**A whole system file: patch it and script the re-apply.** Replacing five hundred
-lines to change three means every future fix its author ships loses to your copy,
-and nothing tells you. Being wiped by an update is *better* than that, because
-being wiped is obvious - the bug comes back and you know why. Write a re-apply
-script that brace-matches rather than string-matches fixed lines, so it still
-works after the author shuffles surrounding code, make it idempotent, and give it
-a revert.
-
-That "silently shipping stale code" failure is not theoretical: on one install a
-hand-edit kept winning long after the author released a proper fix that did
-strictly more, and nothing reported it.
-
-### The override, if you take it
-
-Give the corrected file the **same relative path** and let load order decide.
-The original is never touched, the fix is visible in the manager instead of
-hidden inside someone else's mod, and removing it is one toggle.
-
-- **MO2** - a new mod folder containing only the patched file, ordered to win.
-- **Vortex** - package it as a small mod and add a conflict rule so yours wins.
-- **Manual** - there is no manager to arbitrate, so this is not available; you
-  are editing in place, and the copy you keep is the only undo.
-
-**Same path, replacing their file - not an additional one.** A new `.reds` under
-a different name does not override anything; it *adds* a second definition, and
-redscript fails the whole compilation on the duplicate. The point is to win the
-same file, not to add a file.
-
-**And the catch, which matters more than the convenience:** an override is not
-reverted by their update, and that is not purely good. **A reverted patch shows
-the original bug, which is visible. A stale override silently reimposes old
-behaviour on new code**, which is not. One install carried a hand-edit long after
-the author shipped a real fix that did strictly more - the override kept winning,
-so the proper fix never took effect and nothing said so.
-
-So whichever route you take: **re-check after the mod updates**, and record what
-the patch was for, so the question "is this still needed?" is answerable.
-
-### If you must edit their file, edit the right copy
-
-| manager | where the file you edit lives |
-|---|---|
-| **MO2** | `mods\<mod name>\...` - the one and only copy. The game directory is a projection that does not exist with the game closed, and anything Root Builder copied in is discarded at exit. |
-| **Vortex** | staging **and** deployment are the same file under hardlink deployment - but editing can break the link and leave two independent copies, so write to both and verify. |
-| **Manual** | the game directory, because there is nowhere else. Nothing will revert it and nothing records it. |
-
-**On MO2 the "edit both copies" advice is not merely unnecessary, it is a trap** -
-following it means editing inside the game folder, where the change is discarded
-at exit. The user sees no effect and no error.
-
 Whatever you edit, snapshot it first with the front door's `ModFileBackup.ps1`.
 
 ## The mod's own settings UI writes on exit
@@ -440,158 +163,17 @@ intent against saved values is genuinely useful; a blind write to the config fil
 is a change the user did not see, may lose anyway, and cannot easily undo. Offer
 to write it only if they ask for that.
 
-## Files created in-game are not backed up by the manager
-
-Presets, saved configurations and script libraries written by mods at runtime are
-created after deployment, so no manager has a copy of them.
-
-- **Vortex:** they exist only in the deployed game folder. They survive a purge
-  (not being in the deployment manifest) but are lost on a mod reinstall or a
-  manual clean.
-- **MO2:** writes made from inside the VFS are normally redirected into the
-  **Overwrite** folder rather than into the mod that prompted them, so they exist
-  but belong to no mod. Look there before concluding a preset was lost.
-- **Manual:** they sit alongside the mod's own files and are indistinguishable
-  from them, so a "delete the mod folder" uninstall takes them with it.
-
-Either way: back these up somewhere outside the game directory if they represent
-real work.
-
-## Resolving an internal name back to a findable mod
-
-Never leave the user holding an identifier they cannot search for. Internal names
-are chosen by authors for their own convenience and frequently share nothing with
-the mod's public name.
-
-### How to look it up
-
-| manager | method |
-|---|---|
-| Vortex | the staging folder name encodes it: `<Display Name>-<NexusID>-<version>-<timestamp>` |
-| MO2 | the `mods\` subfolder name is the name shown in the UI (set at install, so user-edited) |
-| manual | **no mapping exists.** The folder name is all there is - say so rather than guessing |
-
-The Vortex pattern holds for mods installed from Nexus. Anything added from a
-local archive, or dragged in by hand, can carry any folder name at all - so treat
-a name that does not match the pattern as "unknown provenance", not as a parse
-failure.
-
-For a file rather than a folder, find which staging folder (or MO2 mod folder)
-contains that filename. That single step answers "which mod is this from" far more
-reliably than reasoning about the name. With no manager there is no such index, and
-the honest answer is that the file cannot be traced from disk alone.
-
-### Why it is worth doing even when you think you know
-
-**A file's name may have nothing to do with the mod shipping it.** An archive called
-`_33removeunderwearforarchivexl.archive` turned out to be bundled inside a **dress
-mod** - the author shipped it as a dependency so the dress would sit correctly.
-Searching the manager for "underwear" found nothing, and the user could not locate
-it until the containing mod was identified by tracing the file back to staging.
-
-**The folder name carries more than the name.** A staging folder reading
-`01 - BODY - PALE-15426-1-1-<timestamp>` tells you the display name is
-"01 - BODY - PALE", the Nexus ID is 15426, and - from the `01` prefix - that this is
-one numbered part of a **modular** mod. When a user's problem turned out to be a
-missing leg texture, that `01` was the clue that other parts existed and one of them
-might supply it.
-
-**Version matters and the folder lies about it** - see the Vortex note above.
-Report the version from the RED4ext log or the download archive, not the folder.
-
-### File timestamps do not tell you when a mod was installed
-
-Managers preserve the timestamps inside the mod archive, so a deployed file's mtime
-is the **mod author's build date**, not the install date. "Find everything newer
-than last Tuesday" will therefore miss most of a fresh deploy and is not a reliable
-way to answer "what changed".
-
-What is reliable: diff the archive list against a known-good `modlist.txt`, or read
-the manager's own install dates (Vortex staging folder names carry an install
-timestamp as their trailing number; MO2 shows an install date per mod). With no
-manager, the list diff is the only option, which is a good reason to keep a copy
-of the last known-good one.
-
-The exception that misleads further: logs and caches under `red4ext\plugins\*` *do*
-update on every run, so a timestamp sweep will surface those and make it look like
-framework plugins were updated when only their logs moved. Check the DLL's own date
-before concluding a framework changed.
-
-### What to give the user
-
-Display name, Nexus ID, and where it deployed. That is enough to find it in a
-manager, find it on Nexus, and check its file list for parts they may not have.
-
 ## Redscript compilation is all-or-nothing
 
-**If redscript fails to compile, every single `.reds` mod is silently off.** Not
-degraded - off. There is **no in-game indication whatsoever**: no error, no
-warning, no missing-feature message. A whole category of mods appears installed
-and enabled while doing nothing, and nothing anywhere says so.
+**If redscript fails to compile, every single `.reds` mod is silently off.** No
+error, no warning, no missing-feature message. Check `r6\logs\redscript_*.log`
+for `Compilation complete` and a plausible source reference count - this belongs
+among the first things verified on any install where "a script mod isn't
+working". On a virtualising install the log lands wherever that manager redirects
+runtime writes (MO2: Overwrite) rather than where you expect.
 
-Because only the log reports it, an install can sit in that state indefinitely -
-it is discovered when somebody looks, not when it happens. On one install the
-break was introduced by a mod change and found the next time the log was read.
-
-Check `r6\logs\redscript_*.log` for `Compilation complete` and a plausible source
-reference count. This should be among the first things verified on any install where
-"a script mod isn't working". The log is written by the game at runtime, so on a
-virtualising install look for it wherever that manager redirects runtime writes
-(MO2: Overwrite) rather than concluding it was never produced.
-
-Causes seen, none of them obvious:
-
-- **Duplicate class definitions** - the same mod installed twice under different
-  names (two downloads from one Nexus page, byte-identical `.reds` files).
-- **A missing module dependency** - one mod importing a module that ships in a
-  separate "core" download, producing dozens of errors from one absent mod.
-- **A stale hand-patch** - a hand-edit made to work around an old incompatibility,
-  still in place after the author shipped a real fix that did more.
-
-Also: **a plugin's script directory only compiles if the plugin's DLL loads.** A
-plugin shipped accidentally as a *Debug* build imports `MSVCP140D.dll`,
-`ucrtbased.dll` and `VCRUNTIME140D.dll`, which are not present on a normal machine.
-RED4ext logs error 126 and the plugin never loads - so its scripts never compile and
-the mod is completely inert with no other symptom. Check `red4ext.log` for load
-failures before believing a plugin is active.
-
-## Two downloads from one mod page may not be alternatives
-
-Do not assume that files labelled like variants are mutually exclusive. Compare
-their **contents and file counts** first.
-
-A real case: one download was the full package (23 files - a script plus 20 tweak
-files and an archive), while the "alternative" was 2 files (a manifest and a
-*different build* of the same script). Disabling the first to use the second
-silently dropped 20 tweaks and an archive that nothing else supplied. The correct
-setup was to install **both** and decide explicitly which copy of the shared script
-survived - a conflict rule in Vortex, mod priority in MO2, or, installing by hand,
-keeping only the intended copy of the contested file.
-
-**Record the file SIZE of the copy that should win.** When two builds of the same
-filename contend, size is usually the only way to tell which one is deployed -
-they have the same name, the same path, and often the same timestamp. Note the
-byte count once, and a redeploy that silently flips the winner becomes a
-one-command check instead of an invisible behaviour change:
-
-```powershell
-(Get-Item "$GameRoot\<contested file>").Length
-```
-
-This matters most for the files nothing warns you about: a script that changes
-behaviour reports no error when the other build wins, it just behaves differently.
-
-When two builds of the same filename exist, **file size is the identity tell**.
-Record the byte counts; if the number flips after a redeploy, behaviour changed
-silently.
-
-## Do not infer duplication from shared records
-
-Several mods writing to the same TweakDB records are not necessarily duplicates.
-A set of vehicle-handling mods all wrote to the same vehicle records while touching
-**disjoint property sets** - TweakXL merges that fine and all of them were needed.
-Compare the *properties* each mod writes, not the records it targets, before
-recommending anyone uninstall one.
+Causes, plugin-DLL gating, and how to tell a real absence from a false one:
+`/engine/compiled-script-bundle` and `references/script-cache.md`.
 
 ## Triaging TweakXL errors
 
@@ -626,7 +208,8 @@ installed varies per install.
 
 Caution: `scc.exe` writes into `r6\logs` and rotates at 5 files, destroying older
 `redscript_*.log` history. Back that folder up first if it matters. It also pops a
-GUI dialog on failure, so do not run it unattended.
+GUI dialog on failure, so do not run it unattended. And it **overwrites the record
+of the last real launch** - see `references/script-cache.md`.
 
 **On a virtualising install this must be run through the manager.** Started from a
 plain shell, it compiles a game directory the mods are not in, and reports a clean
@@ -651,12 +234,6 @@ Also worth knowing:
 - Preserve line endings when rewriting game config files. Many are CRLF; writing LF
   can matter.
 
-## Adding to another author's mod without touching it
-
-Put your files under **your own depot prefix**, referencing their meshes and
-materials by path or hash, and register any new entries through the appropriate
-extension point rather than editing their files.
-
-Their mod then updates freely and yours only depends on it staying installed.
-Overriding their paths directly also works, but goes stale on every update and is
-invisible to the user until something looks wrong.
+These are facts about this family's own tooling rather than about Cyberpunk,
+which is why they stayed here rather than moving to a wiki that ships as game
+knowledge.
