@@ -69,35 +69,37 @@ Two related traps in the same area:
 Game.AddToInventory("Items.NanoWires", 1)
 ```
 
-Note that **base cyberware records are not necessarily Tier 1** -
-`Items.NanoWires` spawns a Tier 3 monowire. The record name carries no tier
-information and reading one into it is how people end up surprised.
-
-**Modify a player stat:**
+**Modify a player stat** through the same call a stat-editing mod's own slider
+uses, against the real stat type:
 
 ```lua
 StrikeExecutor_ModifyStat.new():ModStatPuppet(
     Game.GetPlayer(), gamedataStatType.CarryCapacity, 1000.0, Game.GetPlayer())
 ```
 
-The widely posted `Game.ModStatPlayer("CarryCapacity", "1000")` **is not a CET
-global** and will fail. `ModStatPlayer` exists only as a helper method inside
-certain mods, which is how it ends up in guides written by people for whom it
-worked. **Verify a call exists before recommending it.**
+Two things about that second one generalise past this call, and both have their
+own articles rather than being restated here:
+
+- The record id you pass carries no tier information -
+  [a base record is not a base-tier item](/gameplay/a-base-record-is-not-a-base-tier-item).
+- A widely posted alternative for the same job **is not a CET global at all**,
+  and exists only as a helper method inside certain mods - which is exactly how
+  it ends up in guides written by people for whom it worked. See
+  [checking a gameplay claim against the shipped scripts](/gameplay/checking-a-gameplay-claim-against-the-shipped-scripts).
+  **Verify a call exists before recommending it.**
 
 ## Cyberware cannot be equipped or unequipped from the console
 
-Since 2.0 that is ripperdoc-gated. Both of the following are syntactically
-valid, reference real identifiers, and **silently do nothing**:
+Since 2.0 that is ripperdoc-gated, and the console has no route around it. Two
+syntactically valid calls referencing real identifiers both do nothing at all -
+see [cyberware is ripperdoc-gated](/gameplay/cyberware-is-ripperdoc-gated) for
+the calls and why each fails silently.
 
-```lua
--- does not work
-UnequipRequest with areaType = gamedataEquipmentArea.ArmsCW
-Game.GetTransactionSystem():RemoveItemFromSlot(player,
-    TweakDBID.new("AttachmentSlots.ArmsCyberwareGeneralSlot"), true)
-```
-
-Send the user to a ripperdoc; there is no console route.
+The point that belongs *here*, because it is about writing console code rather
+than about the gate: **an identifier existing is not the same as the operation
+being permitted.** Verifying a name against the shipped scripts tells you the
+symbol is real. It tells you nothing about whether the engine will honour the
+request, and a rejected request in this API does not raise.
 
 Note also that the **slot** is `AttachmentSlots.ArmsCyberwareGeneralSlot` while
 `ArmsCW` is a `gamedataEquipmentArea` enum member. Different identifiers for
