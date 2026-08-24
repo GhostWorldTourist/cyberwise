@@ -1051,6 +1051,169 @@ $joinBad = @(
 if ($joinBad) { Bad 'mouse: the button -> key -> binding join resolves, and names dead buttons' ($joinBad -join "`n") }
 else          { Ok  'mouse: the button -> key -> binding join resolves, and names dead buttons' }
 
+# ------------------------------------------------------ one key, one identity
+#
+# FOUR VOCABULARIES NAME THE SAME KEY, and every store uses a different one:
+# `IK_Period` in the engine's xml, `Period` on a base-game row, `.` on a mod
+# row, `PeriodAndBiggerThan` in iCUE. Comparing the strings answers a question
+# about spelling while appearing to answer one about keys.
+#
+# That is not cosmetic. `-CheckKey` is THE GATE - "is this key safe to bind?" -
+# and a string comparison made it wrong in both directions at once: `-CheckKey .`
+# saw no base-game claim, `-CheckKey Period` saw no mod claim, and the two
+# contradicted each other while each looked authoritative. A gate that reports a
+# taken key as free is worse than no gate, because somebody then binds over
+# quickload and cannot tell the tool responded from the game doing its own thing.
+#
+# So the identity function is tested directly, and then through the gate, in both
+# vocabularies, against claims that really live in different stores.
+
+. (Join-Path $Root 'skills\cyberwise-hotkeys\tools\KeyIdentity.ps1')
+
+# Every line ends in a comma on purpose. A pair on a line of its own, with no
+# comma joining it to the list, is its own statement - PowerShell enumerates it
+# into the outer array and the pair arrives as two loose strings, which then
+# "fail" as a comparison of 'N' against 'u'. The pair-shape guard below catches
+# that immediately rather than at the point of confusion.
+$kiSame = @(
+    @('.',            'Period'),               @('.',           'IK_Period'),
+    @('Period',       'PeriodAndBiggerThan'),  @('IK_Period',   'PeriodAndBiggerThan'),
+    @('MiddleMouse',  'Middle Click'),         @('Middle Click','Mouse3'),
+    @('MiddleMouse',  'Middle Mouse'),         @('IK_MiddleMouse', 'Middle Click'),
+    @('GraveAccent',  '`'),                    @('`',           'GraveAccentAndTilde'),
+    @('IK_Tilde',     'GraveAccent'),          @('Tilde',       'GraveAccentAndTilde'),
+    @('LBracket',     '['),                    @('[',           'BracketLeft'),
+    @('RBracket',     ']'),                    @(']',           'BracketRight'),
+    @('Minus',        '-'),                    @('-',           'MinusAndUnderscore'),
+    @('Equals',       '='),                    @('=',           'EqualsAndPlus'),
+    @('Numpad5',      'Num 5'),                @('Num 5',       'Keypad5'),
+    @('KeypadPlus',   'Num +'),                @('Num +',       'Numpad+'),
+    @('NumpadMinus',  'Num -'),                @('Caps Lock',   'CapsLock'),
+    @('Escape',       'Esc'),                  @('LControl',    'L Ctrl')
+)
+# The other half of the contract, and the reason a translation table is
+# dangerous: folding must never merge two keys that are genuinely different.
+$kiDiff = @(
+    @('.', ','),            @('[', ']'),        @('Minus', 'Equals'),
+    @('Num 5', '5'),        @('Num +', '+'),
+    @('LShift', 'RShift'),  @('Mouse4', 'Mouse5'),
+    @('MiddleMouse', 'LeftMouse'),              @('Pad_A_CROSS', 'A'),
+    @('PeriodAndBiggerThan', 'CommaAndLessThan')
+)
+$kiBad = @(
+    # If a pair ever arrives flattened, say so instead of comparing letters.
+    foreach ($p in ($kiSame + $kiDiff)) {
+        if (@($p).Count -ne 2) { "a key pair in this test is not a pair: '$($p -join "', '")'" }
+    }
+    foreach ($p in $kiSame) {
+        $a = Get-KeyIdentity $p[0]; $b = Get-KeyIdentity $p[1]
+        if ($a -ne $b) { "'$($p[0])' and '$($p[1])' are the same key, but folded to '$a' and '$b'" }
+    }
+    foreach ($p in $kiDiff) {
+        $a = Get-KeyIdentity $p[0]; $b = Get-KeyIdentity $p[1]
+        if ($a -eq $b) { "'$($p[0])' and '$($p[1])' are DIFFERENT keys, but both folded to '$a'" }
+    }
+    # A name the table has never seen must survive as itself. Dropping it, or
+    # guessing at it from its spelling, reintroduces the whole bug: the key then
+    # claims nothing and reads as free.
+    if (-not (Get-KeyIdentity 'SomeKeyIcueInvented')) { 'an unknown key name folded to nothing at all' }
+    if ((Get-KeyIdentity 'SomeKeyIcueInvented') -ne (Get-KeyIdentity 'somekeyicueinvented')) {
+        'an unknown key name is not even equal to itself in another case'
+    }
+    if ((Get-KeyIdentity 'SomeKeyIcueInvented') -eq (Get-KeyIdentity 'AnotherInventedKey')) {
+        'two different unknown key names collided'
+    }
+    if ((Get-KeyIdentity '') -ne '' -or (Get-KeyIdentity $null) -ne '') { 'an empty key did not fold to empty' }
+    # One row can claim several keys: two <button> entries render as `F1 / 1`,
+    # and a gate that reads that as one exotic key finds neither of them.
+    $set = @(Get-KeyIdentitySet 'F1 / 1')
+    if ($set -notcontains 'f1' -or $set -notcontains '1') {
+        "'F1 / 1' claims both keys, but the set was: $($set -join ', ')"
+    }
+)
+if ($kiBad) { Bad 'hotkeys: key identity is vocabulary-agnostic, and does not merge different keys' (($kiBad | Where-Object { $_ }) -join "`n") }
+else        { Ok  'hotkeys: key identity is vocabulary-agnostic, and does not merge different keys' }
+
+# --- and now through the gate, which is where it actually mattered -----------
+#
+# The fixture puts the two claims on a key in DIFFERENT STORES and in different
+# vocabularies: the base game claims IK_Period and IK_MiddleMouse (harvested as
+# `Period` / `MiddleMouse`), while a CET mod claims the same two keys and is
+# harvested prettified (`.` / `Middle Click`). Every spelling of the question
+# must find every claimant, and all spellings must agree.
+
+$gate = New-FixtureGame -Name 'hotkeys-gate' -Archives @() -NoModlist
+New-Item -ItemType Directory -Path (Join-Path $gate 'r6\config') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $gate 'bin\x64\plugins\cyber_engine_tweaks\mods\InteractiveAccessories') -Force | Out-Null
+
+Set-Content -LiteralPath (Join-Path $gate 'r6\config\inputUserMappings.xml') @'
+<?xml version="1.0" encoding="UTF-8"?>
+<bindings>
+  <mapping name="LeanRight_Button" type="Button">
+    <button id="IK_Period" overridableUI="leanRight"/>
+  </mapping>
+  <mapping name="CombatGadget_Button" type="Button">
+    <button id="IK_MiddleMouse" overridableUI="combatGadget"/>
+  </mapping>
+</bindings>
+'@
+
+# A CET hotkey, stored as a packed VK code. 190 is OEM_PERIOD, so this row is
+# harvested as '.' - the same key the base game called `Period`.
+$vkDot = [long]190 -shl 48
+Set-Content -LiteralPath (Join-Path $gate 'bin\x64\plugins\cyber_engine_tweaks\bindings.json') @"
+{ "AdvancedControl": { "lean_right": "$vkDot" } }
+"@
+
+# And the fifth store - a CET mod keeping its own config, in IK_ names, which
+# come out prettified as 'Middle Click'.
+Set-Content -LiteralPath (Join-Path $gate 'bin\x64\plugins\cyber_engine_tweaks\mods\InteractiveAccessories\config.json') @'
+{ "ToggleKey": "IK_MiddleMouse" }
+'@
+
+function Get-GateAnswer {
+    param([string] $Spelling)
+    $o = Get-AllOutput { & $hkTool -GameRoot $gate -CheckKey $Spelling }
+    # The claimant lines are '  <mod>  <action>'; the line under each is the
+    # store, indented further. Compare claimants, not the whole report, because
+    # the report deliberately names the spelling each store used.
+    $claims = @($o -split "`r?`n" | Where-Object { $_ -match '^\s{2}\S' } | ForEach-Object { $_.Trim() } | Sort-Object)
+    return [pscustomobject]@{ Out = $o; Code = $LASTEXITCODE; Claims = ($claims -join ' ; ') }
+}
+
+$gateBad = @()
+foreach ($group in @(
+        @{ Spellings = @('.', 'Period', 'IK_Period', 'PeriodAndBiggerThan')
+           Must      = @('Cyberpunk 2077', 'Advanced Control') }
+        @{ Spellings = @('MiddleMouse', 'Middle Click', 'IK_MiddleMouse', 'Mouse3')
+           Must      = @('Cyberpunk 2077', 'Interactive Accessories') })) {
+    $answers = @($group.Spellings | ForEach-Object { $a = Get-GateAnswer $_; $a | Add-Member Spelling $_ -PassThru })
+    foreach ($a in $answers) {
+        if ($a.Code -eq 0) { $gateBad += "-CheckKey '$($a.Spelling)' reported a CLAIMED key as free" ; continue }
+        foreach ($m in $group.Must) {
+            if ($a.Out -notmatch [regex]::Escape($m)) {
+                $gateBad += "-CheckKey '$($a.Spelling)' missed the claim held by $m"
+            }
+        }
+    }
+    # The failure that made this worth fixing was not "one answer is wrong" but
+    # "the two answers disagree", which leaves no way to tell which to believe.
+    $distinct = @($answers | ForEach-Object { $_.Claims } | Select-Object -Unique)
+    if ($distinct.Count -gt 1) {
+        $gateBad += ("the spellings $($group.Spellings -join ' / ') do not agree with each other: " +
+                     (($answers | ForEach-Object { "'$($_.Spelling)' -> [$($_.Claims)]" }) -join ' vs '))
+    }
+}
+# And the negative through the gate: a key nothing claims must still come back
+# free, in either vocabulary. A fold that swallowed every punctuation key into
+# one token would pass every test above and fail this one.
+foreach ($free in ',', 'CommaAndLessThan', 'Comma') {
+    $a = Get-GateAnswer $free
+    if ($a.Code -ne 0) { $gateBad += "-CheckKey '$free' claims the key is taken - '.' and ',' have been merged" }
+}
+if ($gateBad) { Bad 'hotkeys: the gate finds every claimant whichever vocabulary asks' (($gateBad | Select-Object -Unique) -join "`n") }
+else          { Ok  'hotkeys: the gate finds every claimant whichever vocabulary asks' }
+
 # ============================================================== readiness ====
 #
 # The value of this tool is one distinction: problems LAUNCHING FIXES versus

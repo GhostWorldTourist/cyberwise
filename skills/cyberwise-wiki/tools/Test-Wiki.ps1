@@ -24,6 +24,15 @@
 param(
     [Parameter(Mandatory)] [string] $Bundle,
     [switch] $Base,
+
+    # Quality warnings, reported SEPARATELY from conformance and never affecting
+    # the exit code on their own. OKF is explicit that a consumer must not reject
+    # a bundle for a missing optional field, an unknown type or a broken link, so
+    # none of that can be a conformance failure. It is still worth knowing: a
+    # bundle nobody lints slowly fills with articles that parse and say nothing.
+    # Two different questions, two different answers, one tool.
+    [switch] $Lint,
+
     [switch] $Json
 )
 
@@ -37,6 +46,10 @@ if (-not (Test-Path -LiteralPath $Bundle)) { throw "no such bundle: $Bundle" }
 $Bundle = (Resolve-Path -LiteralPath $Bundle).ProviderPath.TrimEnd('\', '/')
 
 $problems = New-Object System.Collections.Generic.List[object]
+$warnings = New-Object System.Collections.Generic.List[object]
+function Add-Warning([string] $file, [string] $rule, [string] $detail) {
+    $warnings.Add([pscustomobject]@{ File = $file; Rule = $rule; Detail = $detail })
+}
 function Add-Problem([string] $file, [string] $rule, [string] $detail) {
     $problems.Add([pscustomobject]@{ File = $file; Rule = $rule; Detail = $detail })
 }
@@ -192,6 +205,88 @@ foreach ($f in $files) {
     }
 }
 
+# --- lint: quality, not conformance -------------------------------------------
+#
+# Every check here is a WARNING and none of it can fail the bundle. The spec
+# forbids rejecting on any of it, and a bundle mid-documentation is SUPPOSED to
+# be full of drafts and unwritten links. The point is to make the shape of the
+# gap visible, not to police it.
+if ($Lint) {
+    $titles = @{}
+    $ids    = New-Object System.Collections.Generic.HashSet[string]
+    foreach ($f in $files) {
+        $r = ($f.FullName.Substring($Bundle.Length).TrimStart('\', '/')) -replace '\\', '/'
+        [void]$ids.Add(($r -replace '\.md$', ''))
+    }
+
+    foreach ($f in $files) {
+        $rel  = ($f.FullName.Substring($Bundle.Length).TrimStart('\', '/')) -replace '\\', '/'
+        $name = $f.Name.ToLower()
+        if ($name -eq 'index.md' -or $name -eq 'log.md') { continue }
+
+        $text = Get-Content -LiteralPath $f.FullName -Raw -ErrorAction SilentlyContinue
+        if ($null -eq $text) { $text = '' }
+        $fm    = Read-Frontmatter $text
+        $body  = ($text -replace '(?s)^---.*?\r?\n---\r?\n', '')
+        $words = @($body -split '\s+' | Where-Object { $_ -ne '' }).Count
+
+        # A stub is honest. A bundle of nothing but stubs is not documented.
+        if ($body -match '\*\*Stub\.\*\*') {
+            Add-Warning $rel 'stub' 'still a stub - records what is true from disk, describes no behaviour'
+        }
+        # The failure that matters: an article asserting confidence while saying
+        # nothing. A short draft is fine. A short STABLE article is a claim.
+        elseif ($fm -and ([string]$fm['status']) -eq 'stable' -and $words -lt 60) {
+            Add-Warning $rel 'thin-stable' ("status is stable but the body is " + $words + " words - stable means somebody read the artefact")
+        }
+
+        # description is what a reader and a search both see first.
+        if ($fm -and -not $fm.ContainsKey('description')) {
+            Add-Warning $rel 'no-description' 'no description - the one line a reader sees before opening it'
+        }
+
+        # Verification language against a status that disclaims it. One of the
+        # two is wrong, and either way the reader is misled.
+        if ($fm -and ([string]$fm['status']) -eq 'draft' -and $body -match '(?i)(verified in play|confirmed in game|proven in play)') {
+            Add-Warning $rel 'draft-claims-verified' 'body claims verification while status is draft - promote it or soften the claim'
+        }
+
+        # Unwritten links are NOT faults - they are how you mark work worth
+        # doing - but the count is a to-do list.
+        foreach ($m in [regex]::Matches($body, '\[\[([^\]]+)\]\]')) {
+            $target = $m.Groups[1].Value.Trim().TrimStart('/')
+            if (-not $ids.Contains($target)) {
+                Add-Warning $rel 'unwritten-link' ('[[' + $m.Groups[1].Value + ']] has no article yet')
+            }
+        }
+
+        if ($fm -and $fm.ContainsKey('title')) {
+            $t = [string]$fm['title']
+            if ($titles.ContainsKey($t)) { Add-Warning $rel 'duplicate-title' ('same title as ' + $titles[$t]) }
+            else { $titles[$t] = $rel }
+        }
+    }
+
+    # An index that does not mention its own siblings is how a coverage claim
+    # drifts away from the files - the failure that quietly ends trust in a
+    # documentation effort. Skipped for very large directories, where an
+    # exhaustive listing is not the point.
+    foreach ($idx in ($files | Where-Object { $_.Name -ieq 'index.md' })) {
+        $dir  = $idx.Directory
+        $rel  = ($idx.FullName.Substring($Bundle.Length).TrimStart('\', '/')) -replace '\\', '/'
+        $text = Get-Content -LiteralPath $idx.FullName -Raw -ErrorAction SilentlyContinue
+        if ($null -eq $text) { $text = '' }
+        $siblings = @(Get-ChildItem -LiteralPath $dir.FullName -Filter *.md -File |
+                      Where-Object { $_.Name -ne 'index.md' -and $_.Name -ne 'log.md' })
+        if ($siblings.Count -gt 0 -and $siblings.Count -le 40) {
+            $missing = @($siblings | Where-Object { $text -notmatch [regex]::Escape($_.BaseName) })
+            if ($missing.Count -gt 0) {
+                Add-Warning $rel 'index-drift' ('does not mention ' + $missing.Count + ' of ' + $siblings.Count + ' article(s) beside it')
+            }
+        }
+    }
+}
+
 # --- report -------------------------------------------------------------------
 if ($Json) {
     [pscustomobject]@{
@@ -200,6 +295,7 @@ if ($Json) {
         Concepts = $concepts
         Conforms = ($problems.Count -eq 0)
         Problems = @($problems)
+        Warnings = @($warnings)
     } | ConvertTo-Json -Depth 5
     exit ([int]($problems.Count -gt 0))
 }
@@ -209,8 +305,23 @@ if ($Base) { $scope = ', base rules enforced' }
 Write-Host ('wiki: ' + $Bundle)
 Write-Host ('  ' + $files.Count + ' file(s), ' + $concepts + ' concept(s)' + $scope) -ForegroundColor DarkGray
 
+function Show-Warnings {
+    if (-not $Lint) { return }
+    if ($warnings.Count -eq 0) { Write-Host '  lint: nothing to report' -ForegroundColor Green; return }
+    Write-Host ''
+    Write-Host '  lint - quality, not conformance. None of this fails the bundle.' -ForegroundColor Yellow
+    foreach ($g in ($warnings | Group-Object Rule | Sort-Object Count -Descending)) {
+        Write-Host ('    {0,-22} {1}' -f $g.Name, $g.Count) -ForegroundColor DarkYellow
+        foreach ($w in ($g.Group | Select-Object -First 4)) {
+            Write-Host ('        {0}' -f $w.File) -ForegroundColor DarkGray
+        }
+        if ($g.Count -gt 4) { Write-Host ('        ... and ' + ($g.Count - 4) + ' more') -ForegroundColor DarkGray }
+    }
+}
+
 if ($problems.Count -eq 0) {
     Write-Host '  conforms to OKF 0.2' -ForegroundColor Green
+    Show-Warnings
     exit 0
 }
 foreach ($p in $problems) {
@@ -218,4 +329,5 @@ foreach ($p in $problems) {
     Write-Host ('        ' + $p.Rule + ': ' + $p.Detail) -ForegroundColor DarkGray
 }
 Write-Host ('  ' + $problems.Count + ' problem(s)') -ForegroundColor Red
+Show-Warnings
 exit 1

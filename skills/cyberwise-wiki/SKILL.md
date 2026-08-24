@@ -86,6 +86,55 @@ starts as a stub and gets *deepened by hand*, so `New-ModStubs.ps1` skips one
 that already exists and needs `-Force` to flatten it. Same bundle, opposite
 rules, because one file has an author and the other has a measurement.
 
+## The lifecycle, on a fresh install
+
+The base bundle arrives with the skills, so game knowledge is there from the
+first minute. The user bundle does not exist until somebody makes it, and until
+it does **every session re-derives the same facts** - which mods are deployed,
+what the hardware is, what was already worked out here. That is the cost this
+whole thing exists to remove, so building it is the first job, not a later one.
+
+```powershell
+tools\Initialize-UserWiki.ps1 -GameRoot '<path>'
+```
+
+That creates `index.md` and `log.md`, generates `machine.md`, and writes one
+honest stub per **deployed** mod. It is idempotent: run it again after adding
+mods and it fills in what is new without flattening anything deepened by hand.
+It refuses to write into the shipping bundle, checked two ways - by path, and by
+reading the target's own `index.md` for a marker - because a path check alone
+misses a copy of the base bundle sitting somewhere else.
+
+Then deepen, in the order `cyberwise-modbase` gives: frameworks, settings-bearing
+mods, anything already implicated in a finding, anything hooking a shared system,
+everything else. **Stopping at stubs is a legitimate resting point** - a stub
+that says where a mod lives and what it deploys is worth having, and a stub that
+guesses what a mod does is worse than nothing, because it reads exactly like an
+article somebody verified.
+
+## Conformance and quality are different questions
+
+`Test-Wiki.ps1` answers both, and keeps them apart:
+
+- **Conformance** (`-Base` optional) decides the exit code. It checks the small
+  mandatory core plus the distribution boundary. It is deliberately forgiving,
+  because the spec says a consumer **must not** reject a bundle for a missing
+  optional field, an unknown type, an extra key or a broken link.
+- **Lint** (`-Lint`) reports quality and never affects the exit code. Stubs
+  still outstanding, an article marked `stable` whose body is too short to have
+  read anything, a missing `description`, a body claiming verification while its
+  status disclaims it, links to articles nobody has written, duplicate titles,
+  and an index that has drifted from the files beside it.
+
+The split matters. A bundle mid-documentation is *supposed* to be full of drafts
+and unwritten links; failing it for that would make the validator useless
+exactly when the work is happening. But a bundle nobody lints slowly fills with
+articles that parse and say nothing, and by then the drift is invisible.
+
+**`index-drift` is the one to act on first.** An index that overstates coverage
+is how a documentation effort quietly stops being trusted - everything else on
+the list is a gap you can see, and that one is a gap that lies.
+
 ## The article format
 
 OKF 0.2: a directory of markdown files with YAML frontmatter, no schema
@@ -127,7 +176,8 @@ Four things worth getting right because they are silent when wrong:
 
 | tool | what it does |
 |---|---|
-| `tools/Test-Wiki.ps1` | OKF 0.2 conformance, plus `-Base` to enforce that nothing user-only has leaked into the shipping bundle |
+| `tools/Initialize-UserWiki.ps1` | create this user's bundle from nothing - frame, machine profile, one stub per deployed mod. Idempotent; refuses to touch the shipping bundle |
+| `tools/Test-Wiki.ps1` | OKF 0.2 conformance, `-Base` to enforce that nothing user-only has leaked into the shipping bundle, `-Lint` for quality warnings that never fail the build |
 
 The base bundle lives inside this skill, at `skills/cyberwise-wiki/wiki/`, and
 that is deliberate. Skills install as whole-directory symlinks, so a bundle
@@ -139,7 +189,8 @@ installed copy - every pointer resolved only in a repo checkout.
 Run the base check before any commit that touches the bundle:
 
 ```powershell
-tools\Test-Wiki.ps1 -Bundle .\wiki -Base   # from skills\cyberwise-wiki\
+tools\Test-Wiki.ps1 -Bundle .\wiki -Base          # from skills\cyberwise-wiki\
+tools\Test-Wiki.ps1 -Bundle .\wiki -Base -Lint    # and the quality report
 ```
 
 ## Writing an article that is worth having

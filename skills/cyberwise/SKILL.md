@@ -384,6 +384,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
 | `Get-MouseProfile.ps1` | `cyberwise-hotkeys` | read the key remaps a Corsair iCUE profile puts on a programmable mouse, so they can be joined to what the game does with them. |
+| `KeyIdentity.ps1` | `cyberwise-hotkeys` | one key, one identity, whatever vocabulary named it. |
 | `New-HotkeySheet.ps1` | `cyberwise-hotkeys` | build a self-contained hotkey cheatsheet from the bindings actually present in a Cyberpunk install. |
 | `Get-ModInventory.ps1` | `cyberwise-modbase` | every mod actually deployed, what layers it touches, and its Nexus id where one can be derived. |
 | `New-ModStubs.ps1` | `cyberwise-modbase` | one OKF article per deployed mod, built from the install. |
@@ -433,12 +434,30 @@ compile-testing) and `references/script-cache.md` (what is actually in the
 compiled script bundle, and the log traps around it).
 
 **Both are now mostly pointers.** The knowledge they used to carry lives in the
-**base wiki** - `wiki/` in the Cyberwise repo, described by `cyberwise-wiki` -
+**base wiki** - `wiki/` INSIDE the `cyberwise-wiki` skill, so it installs with
+the skills and is readable from an installed copy, not only a checkout -
 because a skill file is instructions and a wiki article is knowledge, and those
 rot at different rates. The reference files keep the parts that change what you
 *do*, and name the article for the rest. Its `/process` area is worth reading
 before running a documentation pass over a whole load order; `/patterns` before
 attributing any setting to a user.
+
+### Read the wiki before re-deriving anything
+
+Two bundles, and both are worth a look before starting work:
+
+- the **base wiki** ships with these skills and holds game, engine and format
+  knowledge plus cross-mod patterns. `/process` before running any documentation
+  pass; `/patterns` before attributing a setting to a user.
+- the **user bundle**, beside the game's own records, holds this install: its
+  machine profile and one article per deployed mod. **If it does not exist yet,
+  create it** - `cyberwise-wiki/tools/Initialize-UserWiki.ps1 -GameRoot '<path>'`
+  - because until it does, every session pays again for facts somebody already
+  established here.
+
+A question like "what does this mod do", "why is this key bound to that", or
+"what is this machine capable of" should start with a grep of those bundles. The
+whole point is that the second time costs a lookup instead of an afternoon.
 
 **These are additive.** A hotkey sheet is also an HTML deliverable, so that job
 wants `cyberwise-hotkeys` *and* `cyberwise-reports`. Load both.

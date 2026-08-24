@@ -122,30 +122,19 @@ foreach ($e in $n.extra) {
 # button does nothing in game, it looks identical to a working one in iCUE, and
 # there is no other way to find out.
 #
-# Two key vocabularies have to be reconciled to make the join land. iCUE names a
-# key after every glyph on it (`PeriodAndBiggerThan`), Get-Hotkeys prints mod
-# bindings prettified (`.`) and base-game rows as raw IK names minus the prefix
-# (`Period`, `MiddleMouse`). Comparing any two of those directly finds nothing
-# and reports every button dead - so everything is folded to one token first.
-$keyCanon = @{
-    'period'='.'; 'comma'=','; 'lbracket'='['; 'bracketleft'='['
-    'rbracket'=']'; 'bracketright'=']'; 'minus'='-'; 'equals'='='
-    'tilde'='`'; 'graveaccentandtilde'='`'; 'semicolon'=';'; 'singlequote'="'"
-    'slash'='/'; 'backslash'='\'
-    'middlemouse'='mouse-mid'; 'middleclick'='mouse-mid'; 'mouse3'='mouse-mid'
-    'leftmouse'='mouse-l'; 'leftclick'='mouse-l'
-    'rightmouse'='mouse-r'; 'rightclick'='mouse-r'
-    'mouse4'='mouse-4'; 'mouse5'='mouse-5'
-    'keypadplus'='num+'; 'numpad+'='num+'; 'num+'='num+'
-    'capslock'='caps'; 'escape'='esc'
-}
-function Get-KeyCanon {
-    param([string] $s)
-    if (-not $s) { return '' }
-    $t = ($s -replace '[\s_]', '').ToLower()
-    if ($keyCanon.ContainsKey($t)) { return $keyCanon[$t] }
-    return $t
-}
+# Several key vocabularies have to be reconciled to make the join land. iCUE
+# names a key after every glyph on it (`PeriodAndBiggerThan`), Get-Hotkeys prints
+# mod bindings prettified (`.`) and base-game rows as raw IK names minus the
+# prefix (`Period`, `MiddleMouse`). Comparing any two of those directly finds
+# nothing and reports every button dead - so everything is folded to one token.
+#
+# That folding is NOT done here. It used to be, and the same problem exists in
+# Get-Hotkeys' own -CheckKey gate, which had no table at all and so silently
+# missed every claimant recorded in the other vocabulary. One table in two
+# places is the bug that produces: it is correct the day it is copied and drifts
+# apart afterwards, with each copy internally consistent. There is now one
+# identity function and both tools fold through it.
+. (Join-Path $PSScriptRoot 'KeyIdentity.ps1')
 
 # Sort the pad the way it is laid out under the thumb, not the way cereal
 # happened to serialise it: G1..G12 numerically, then the named buttons, then
@@ -203,8 +192,8 @@ if (-not $NoMouseProfile) {
             # they are held back and named separately rather than shown with an
             # empty, accusatory "bound to nothing".
             if ($m.Kind -ne 'key remap') { $mouseOther += $m; continue }
-            $canon = Get-KeyCanon $m.Key
-            $hits  = @($binds | Where-Object { (Get-KeyCanon $_.Key) -eq $canon })
+            $canon = Get-KeyIdentity $m.Key
+            $hits  = @($binds | Where-Object { (Get-KeyIdentity $_.Key) -eq $canon })
             $mouseRows += [pscustomobject]@{
                 Button   = $m.Button
                 Label    = $m.Action        # what the USER called it in iCUE
@@ -258,12 +247,12 @@ function w { param([string]$s) [void]$sb.AppendLine($s) }
 # profile speaks glyphs (`Middle Mouse`), and the two never match literally.
 $mouseFor = @{}
 foreach ($m in $n.mouse) {
-    $c = Get-KeyCanon $m.sends
+    $c = Get-KeyIdentity $m.sends
     if (-not $mouseFor.ContainsKey($c)) { $mouseFor[$c] = "M$($m.button)" }
 }
 foreach ($m in $mouseRows) {
     if (-not $m.Assigned) { continue }
-    $c = Get-KeyCanon $m.Key
+    $c = Get-KeyIdentity $m.Key
     if (-not $mouseFor.ContainsKey($c)) { $mouseFor[$c] = $m.Button }
 }
 $mouseTitle = if ($mouseDev) { $mouseDev } elseif ($n.device) { [string]$n.device } else { 'programmable mouse' }
@@ -313,7 +302,7 @@ $catHtml = foreach ($c in $order) {
     if (-not $set) { continue }
     $rows = foreach ($b in $set) {
         $keys = ($b.Key -split ' / ' | ForEach-Object { "<kbd class=""k"">$(esc $_)</kbd>" }) -join '<i>/</i>'
-        $mbc  = Get-KeyCanon $b.Key
+        $mbc  = Get-KeyIdentity $b.Key
         $mb   = if ($mouseFor.ContainsKey($mbc)) {
             "<b class=""ms"" title=""$(esc $mouseTitle) button"">$(esc $mouseFor[$mbc])</b>"
         } else { '' }

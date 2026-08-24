@@ -65,6 +65,10 @@ param(
 
     # Answer one question: is this key safe to bind? Exits 1 if anything already
     # claims it. THIS IS THE GATE - see the comment on Get-BaseGameKeys.
+    #
+    # Any spelling of the key is accepted and they all agree: `.`, `Period` and
+    # `IK_Period` are one key here, because the stores disagree about how to
+    # write it and the user should not have to guess which one to ask about.
     [string] $CheckKey,
 
     # Inventory the PHYSICAL inputs instead of the bindings. Read the comment on
@@ -274,6 +278,14 @@ if (-not (Test-Path -LiteralPath ([IO.Path]::Combine($GameRoot, 'bin\x64\Cyberpu
 Write-Verbose "game root: $GameRoot"
 
 # =========================================================== key name tables ==
+#
+# Two different jobs, and conflating them is what broke the gate. These tables
+# are for DISPLAY - they turn `IK_Period` into `.` because that is what a person
+# reads. Comparison is a separate question with a separate answer, and it lives
+# in KeyIdentity.ps1, shared with the sheet: this file emits `Period` for a
+# base-game row and `.` for a mod row, and only a shared identity function can
+# tell you those are one key.
+. (Join-Path $PSScriptRoot 'KeyIdentity.ps1')
 
 $ikPretty = @{
     'IK_SingleQuote'="'"; 'IK_Semicolon'=';'; 'IK_Comma'=','; 'IK_Period'='.'
@@ -693,14 +705,30 @@ if ($IncludeBaseGame -or $CheckKey) {
 #
 # One question, one answer, and a non-zero exit when the key is taken - so a
 # script or an agent cannot proceed past it by not reading the output.
+#
+# THE MATCH IS ON IDENTITY, NOT ON THE STRING. Every store spells the same key
+# differently - `Period` from the base game, `.` from a mod, `Middle Click` here
+# and `MiddleMouse` there - so a string comparison answers a question about
+# spelling while claiming to answer one about keys. It found half the claimants
+# and reported the other half's key as free: `-CheckKey .` missed every
+# base-game claim, `-CheckKey Period` missed every mod claim, and the two
+# disagreed with each other. Both now resolve through Get-KeyIdentity and agree.
+#
+# Get-KeyIdentitySet, not Get-KeyIdentity, because one row can claim several
+# keys: a mapping with two buttons is rendered `F1 / 1` and holds BOTH.
 if ($CheckKey) {
-    $want = $CheckKey -replace '^IK_', ''
-    $claims = @($final | Where-Object { $_.Key -and $_.Key -ieq $want })
+    $want   = $CheckKey -replace '^(?i)IK_', ''
+    $wantId = Get-KeyIdentity $CheckKey
+    $claims = @($final | Where-Object { $_.Key -and (Get-KeyIdentitySet $_.Key) -contains $wantId })
     if ($claims.Count) {
         Write-Host "$want is ALREADY CLAIMED:" -ForegroundColor Red
         foreach ($c in $claims) {
             Write-Host ("  {0,-22} {1}" -f $c.Mod, $c.Action) -ForegroundColor Yellow
-            Write-Host ("  {0,-22} {1}" -f '', "($($c.System))") -ForegroundColor DarkGray
+            # Name the spelling the store used when it differs from the one that
+            # was asked about - otherwise a base-game claim on `MiddleMouse`
+            # answering a question about `Middle Click` looks like a mistake.
+            $how = if ($c.Key -ieq $want) { "($($c.System))" } else { "($($c.System), recorded as '$($c.Key)')" }
+            Write-Host ("  {0,-22} {1}" -f '', $how) -ForegroundColor DarkGray
         }
         Write-Host 'Pick another key. A test key that also does something in game makes the result unreadable.' -ForegroundColor DarkGray
         exit 1

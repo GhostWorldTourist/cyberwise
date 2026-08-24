@@ -240,8 +240,29 @@ them in or out before concluding an archive is responsible.
 
 | file | covers |
 |---|---|
-| `references/load-order.md` | verifying override direction, precedence rules, inert detection, the `#` parsing trap |
-| `references/archives.md` | RDAR index format, FNV1a-64 path hashing, hash dictionaries and their gaps |
+| `references/load-order.md` | what to run and in what order: checking which ordering model applies, the scan, the snapshot rule |
+| `references/archives.md` | the hash-resolution and WolvenKit CLI invocations |
+
+**Both are now mostly pointers.** The knowledge they used to carry lives in the
+**base wiki** - `wiki/` in the Cyberwise repo, described by `cyberwise-wiki` -
+under `/conflicts`, because a skill file is instructions and a wiki article is
+knowledge, and those rot at different rates.
+
+| article | covers |
+|---|---|
+| `/conflicts/earlier-wins-and-nothing-in-the-game-writes-the-list` | the two ordering models, and a test that can actually discriminate between them |
+| `/conflicts/every-new-archive-starts-last` | the append trap, variant swaps breaking exact-name rules silently, and the checkbox that deletes `modlist.txt` |
+| `/conflicts/modlist-has-no-comment-syntax` | the `#` parsing trap, its 60 fabricated faults, and the sanity checks |
+| `/conflicts/an-entry-and-a-file-can-disagree` | stale entries versus unlisted archives, and which of the two to fix |
+| `/conflicts/an-archive-that-contributes-nothing` | detecting inert archives, the benign cases, and why an inert archive is not an inert mod |
+| `/conflicts/what-reordering-can-and-cannot-fix` | lost fight, coverage gap, mutually exclusive claims |
+| `/conflicts/a-precedence-change-creates-casualties` | why to diff the inert list after any reorder |
+| `/conflicts/visual-bugs-that-are-not-conflicts` | appearance overrides, coverage gaps, patch layers over another mod's namespace |
+| `/conflicts/rdar-index-is-plain-data` | RDAR index format, FNV1a-64 hashing, and the two numeric traps |
+| `/conflicts/resolving-a-hash-to-a-path` | dictionary coverage, and why a miss is a finding rather than a gap |
+| `/conflicts/editing-serialized-red4-json` | what survives a WolvenKit JSON round-trip and what does not |
+| `/conflicts/scaling-a-placed-prop` | the four edits resizing a prop actually takes |
+| `/conflicts/index` | all of the above, grouped |
 
 To inventory what is actually installed before diagnosing, `cyberwise-reports`
 carries the manifest tool.
