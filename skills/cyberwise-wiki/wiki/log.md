@@ -1,5 +1,42 @@
 # Log
 
+## 2026-08-24 (overnight — the archive sweep)
+
+**The bundle went from 21 articles to about 130, and the second half did not
+come from the reference files at all.** It came from mining a year of archived
+sessions for findings that existed only in transcripts. That produced four areas
+nothing had ever covered: how the render and capture pipeline composes, what the
+game establishes as canon versus what fans assert, gameplay mechanics read out of
+the shipped scripts, and method — how work *about* an install goes wrong.
+
+**The pattern across every one of them is that somebody was wrong first.** A
+defaults file that turned out not to hold the defaults, because the mod writes
+its own defaults table at boot. An empty binding store that looked exactly like
+a wrong store, so the search went looking for the file instead of the data. A
+capacity read from an API that saturates, returning a plausible number nothing
+about which looked wrong. A wiki date traced to a single developer tweet saying
+the studio deliberately never specified it. Each of those is written with the
+failed theory intact and a note on why it was believable, because a reader who
+takes only the conclusion walks the wrong road again.
+
+**Several arrived as corrections from the person who plays the game**, and those
+are the expensive ones: clothing has carried no meaningful stats since 2.0; a
+character-lighting shader's axes are not the conventional ones, which invalidated
+an entire prior session of placement advice; a corpo V really does start rich.
+
+Two things were deliberately kept OUT despite being hard-won. The family's own
+shell and scripting traps — facts about tooling, not about the work. And a large
+body of one user's invented setting material that reads exactly like canon:
+named AIs, a project, directors, a first name attached to a character the game
+only ever surnames. The canon area carries a "what is deliberately not here"
+section saying so.
+
+Also this session: a bootstrap tool so a fresh install can build its own user
+bundle, and `-Lint` on the validator — kept strictly apart from conformance,
+because the spec forbids failing a bundle for drafts or unwritten links, and a
+bundle mid-documentation is supposed to look unfinished.
+
+
 ## 2026-08-24
 
 *(late - the reference migration, and what it turned up)*
