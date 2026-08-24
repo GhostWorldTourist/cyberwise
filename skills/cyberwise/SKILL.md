@@ -395,7 +395,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `New-ModCredits.ps1` | `cyberwise-reports` | the people whose work is in your game, as end credits. |
 | `New-ModDossier.ps1` | `cyberwise-reports` | everything this install knows about ONE mod. |
 | `New-ModManifest.ps1` | `cyberwise-reports` | Generate a readable manifest of an installed Cyberpunk 2077 mod list. |
-| `New-SystemProfile.ps1` | `cyberwise-reports` | a deterministic profile of a modded Cyberpunk 2077 install, in Discord-pasteable markdown and as an HTML report. |
+| `New-SystemProfile.ps1` | `cyberwise-reports` | a deterministic profile of a modded Cyberpunk 2077 install, as Discord-pasteable markdown, an HTML report, and an OKF wiki article. |
 | `NexusCredential.ps1` | `cyberwise-reports` | keep a Nexus API key in Windows Credential Manager instead of in a script, a config file, or a chat log. |
 | `Show-ViewportProbe.ps1` | `cyberwise-reports` | ask the user's actual browser window how big it is. |
 | `Decode-Preset.ps1` | `cyberwise-saves` | turn AppearanceChangeUnlocker .preset files into readable appearance fields. |

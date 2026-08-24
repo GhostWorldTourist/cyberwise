@@ -2,6 +2,35 @@
 
 ## 2026-08-24
 
+*(evening)*
+
+**[a-capacity-read-from-the-wrong-api](/process/a-capacity-read-from-the-wrong-api),
+written because the same machine produced two different wrong VRAM figures
+within an hour and neither looked wrong.** `AdapterRAM` is a uint32 and
+saturates at 4 GB, so every card above that answers "4 GB"; the registry QWORD
+that fixes it is an enumeration, and index 0 was the integrated adapter, so the
+careful second attempt answered "2 GB". One of those reached a crash diagnosis
+before anyone cross-checked.
+
+The article is in `/process` rather than `/engine` on purpose. The mechanism is
+a Windows API detail and would date; the lesson is about how work goes wrong,
+and it does not. A capacity read through an interface that cannot represent the
+answer returns a **believable** number - right units, right order of magnitude,
+no error and no null - and that is the whole problem: every other bad input
+announces itself, and this one propagates into a report, then a diagnosis, then
+advice about a machine nobody measured. The two tells are written down because
+both are cheap: a value sitting on a power-of-two ceiling is saturation, and a
+value matching a *different* device in the machine is a wrong index.
+
+**The machine profile is now a generated artefact rather than a one-off.**
+`New-SystemProfile.ps1 -Wiki` writes a `Machine Profile` article into the USER
+bundle, so a fresh session reads what this hardware is instead of rediscovering
+it - or worse, assuming it. It carries the VRAM warning above and a "what this
+rules in and out" section derived from the actual numbers, because the useful
+output is not "32 GB of VRAM", it is "VRAM exhaustion is not the first thing to
+suspect here, and on weaker hardware that reverses". The tool refuses to write
+it into this bundle: a machine profile is one person's hardware and never ships.
+
 *(later the same day)*
 
 **Process knowledge now lives here too, because a lesson that exists only in a

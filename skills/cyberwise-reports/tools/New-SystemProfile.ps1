@@ -1,8 +1,29 @@
 # New-SystemProfile.ps1 -- a deterministic profile of a modded Cyberpunk 2077
-# install, in Discord-pasteable markdown and as an HTML report.
+# install, as Discord-pasteable markdown, an HTML report, and an OKF wiki article.
 #
 #     .\New-SystemProfile.ps1                      # auto-detect, write both
 #     .\New-SystemProfile.ps1 -GameRoot 'D:\...' -Md prof.md -Html prof.html
+#     .\New-SystemProfile.ps1 -GameRoot 'D:\...' -Wiki    # + the wiki article
+#
+# ---------------------------------------------------------------------------
+# The wiki article (-Wiki), and why it is allowed to clobber
+# ---------------------------------------------------------------------------
+#
+# -Wiki writes an OKF 0.2 article - `machine.md` - into the USER bundle beside
+# the game's own records. Every user should have one: without it, each fresh
+# session rediscovers the hardware from scratch, and the sessions that do not
+# bother reason about a machine they have never measured.
+#
+# It is USER-ONLY and the tool refuses to write it into the shipping base wiki.
+# Nothing here is knowledge about the game; it is a description of one person's
+# machine, and it carries their paths unredacted because it never leaves it.
+#
+# **Re-running OVERWRITES the article, and that is correct.** The no-clobber
+# rule that protects a hand-deepened mod article (New-ModStubs.ps1 skips what
+# already exists) does not apply to a file whose every line is derived from the
+# machine: a merged machine profile would be half measurement and half memory,
+# with nothing marking which half. The article says so in its own header, so a
+# later session does not "protect" a stale profile out of the wrong instinct.
 #
 # ---------------------------------------------------------------------------
 # Scope: only stats that change a diagnosis
@@ -46,6 +67,12 @@ param(
     [string] $Html = "$env:USERPROFILE\Downloads\cp2077-system-profile.html",
     [switch] $NoHtml,
 
+    # Also write the OKF machine-profile article into the user's wiki bundle.
+    # -WikiPath on its own implies -Wiki, so nobody points the path somewhere
+    # deliberate and then gets nothing because they forgot the switch.
+    [switch] $Wiki,
+    [string] $WikiPath = (Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\wiki\machine.md'),
+
     # Every type size in the HTML derives from one base, so this moves the whole
     # report together. Size it for the window it will be read in - see
     # Show-ViewportProbe.ps1 and references/report-design.md.
@@ -58,6 +85,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['*:ErrorAction'] = 'SilentlyContinue'
+
+if ($PSBoundParameters.ContainsKey('WikiPath')) { $Wiki = $true }
 
 # ================================================================== helpers ==
 
@@ -172,6 +201,21 @@ $gpuName   = if ($gpu) { $gpu.Name } else { 'unknown' }
 $vram      = if ($gpu) { $gpu.VRam } else { 0L }
 $gpuDriver = (Get-CimInstance Win32_VideoController | Where-Object { $_.Name -eq $gpuName } | Select-Object -First 1).DriverVersion
 if (-not $gpuDriver) { $gpuDriver = '?' }
+
+# NVIDIA's Windows driver version is not the version anybody says out loud. WMI
+# reports 32.0.16.1088; the driver everyone - the GeForce app, a mod page's
+# requirements, a forum thread - calls 610.88 is the LAST FIVE DIGITS of that,
+# with a decimal point three in. Reporting only the WMI form makes the profile
+# impossible to compare against the one number a user can actually check, so
+# print both and never silently substitute one for the other.
+$gpuDriverShown = $gpuDriver
+if ($gpuName -match '(?i)nvidia' -and $gpuDriver -match '^\d+\.\d+\.\d+\.\d+$') {
+    $digits = ($gpuDriver -replace '\.', '')
+    if ($digits.Length -ge 5) {
+        $tail = $digits.Substring($digits.Length - 5)
+        $gpuDriverShown = "$($tail.Substring(0,3)).$($tail.Substring(3)) ($gpuDriver)"
+    }
+}
 $ramBytes  = [long]$cs.TotalPhysicalMemory
 
 # Pagefile. A small fixed pagefile is a recurring cause of late-load crashes on
@@ -372,7 +416,7 @@ function Pad { param([string]$k, $v, [int]$w = 12) '{0} {1}' -f $k.PadRight($w),
 $machineLines = @(
     Pad 'CPU'    "$($cpu.Name.Trim()) ($($cpu.NumberOfCores)c/$($cpu.NumberOfLogicalProcessors)t)"
     Pad 'RAM'    (Cap $ramBytes)
-    Pad 'GPU'    "$gpuName - $(if ($vram) { Cap $vram } else { 'VRAM unknown' }) - driver $gpuDriver"
+    Pad 'GPU'    "$gpuName - $(if ($vram) { Cap $vram } else { 'VRAM unknown' }) - driver $gpuDriverShown"
     Pad 'OS'     "$($os.Caption -replace 'Microsoft ','') build $($os.BuildNumber)"
     Pad 'Pagefile' $(if ($pfAuto) { "system-managed ($(GB $pfBytes))" } else { "fixed $(GB $pfBytes)" })
     Pad 'Game drive' "$letter`: $media - $(GB $freeBytes) free"
@@ -556,6 +600,325 @@ footer span:last-child{margin-left:auto}
     if ($hdir -and -not (Test-Path -LiteralPath $hdir)) { New-Item -ItemType Directory -Path $hdir -Force | Out-Null }
     Set-Content -LiteralPath $Html -Value $htmlText -Encoding UTF8
     Write-Host "wrote $Html" -ForegroundColor Green
+}
+
+# ---- OKF wiki article ----
+#
+# Why this output exists at all: the numbers above answer "what is this machine"
+# for the person reading the report right now. The article answers it for the
+# NEXT session, which otherwise starts by guessing - and guessing about VRAM is
+# exactly how a wrong figure gets into a crash diagnosis.
+if ($Wiki) {
+
+    # ---- the boundary, enforced twice ------------------------------------
+    #
+    # This article is a description of one machine. It is user-only by nature
+    # and must never reach the bundle that ships. Location IS the boundary
+    # (see cyberwise-wiki), so it is checked here rather than trusted to the
+    # caller: Test-Wiki.ps1 -Base would catch a leak, but only if somebody runs
+    # it before committing, and "somebody will notice" is not a boundary.
+    #
+    # Two checks, because either alone has a hole. The path check catches the
+    # obvious mistake (-WikiPath pointed into the repo) but not a copy of the
+    # base bundle living somewhere else; the marker check reads the bundle's own
+    # index.md and catches that one wherever it sits.
+    $wikiFull = [System.IO.Path]::GetFullPath($WikiPath)
+    if ($wikiFull -match '(?i)[\\/]skills[\\/]cyberwise-wiki[\\/]') {
+        throw ("Refusing to write a machine profile into the base wiki: $wikiFull`n" +
+               'A machine profile describes one person''s hardware, so it is user-only and never ships. ' +
+               'Point -WikiPath at the user bundle beside the game''s own records.')
+    }
+    $wikiDir = Split-Path -Parent $wikiFull
+    foreach ($probe in @($wikiDir, (Split-Path -Parent $wikiDir))) {
+        if (-not $probe) { continue }
+        $idx = Join-Path $probe 'index.md'
+        if ((Test-Path -LiteralPath $idx) -and
+            ((Get-Content -LiteralPath $idx -Raw) -match '(?i)This bundle ships|base wiki')) {
+            throw ("Refusing to write a machine profile into $wikiFull - $idx declares this the SHIPPING base bundle.`n" +
+                   'A machine profile is user-only. Point -WikiPath at the user bundle beside the game''s own records.')
+        }
+    }
+
+    # ISO 8601 with an explicit offset. A bare local timestamp is the single
+    # most common OKF fault and it is silent - two articles written an ocean
+    # apart sort into a false order and nothing complains.
+    $okfStamp = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
+    $today    = (Get-Date).ToString('yyyy-MM-dd')
+    $bt       = [char]0x60      # backtick: PowerShell's escape char, so never typed raw
+
+    $vramGB = if ($vram -gt 0) { $vram / 1GB } else { 0 }
+    $ramGB  = $ramBytes / 1GB
+    $cores  = [int]$cpu.NumberOfCores
+
+    # Every other adapter in the machine, named so that a later reading of a
+    # per-adapter number can be checked against the right one. This is not
+    # trivia: index 0 of the display class key on the machine this was written
+    # for is an integrated AMD adapter, and reading it produced "2 GB".
+    # Compared by REFERENCE, not by name: two identical cards in one machine have
+    # the same name and the same VRAM, and a value comparison would silently drop
+    # the second one from the list.
+    $others = @($adapters | Where-Object { -not [object]::ReferenceEquals($_, $gpu) })
+
+    # ---- what this rules in and out --------------------------------------
+    #
+    # Derived from the measured numbers, never boilerplate. The point of the
+    # section is that a session reading it knows which suspicions are worth
+    # having ON THIS MACHINE - and the same sentence would be wrong on another.
+    $verdicts  = [System.Collections.Generic.List[string]]::new()
+    $suspects  = 0
+
+    # "against 0.0 GB of archives" on a clean install reads like a measurement
+    # failure rather than an empty mod folder. Say which it is.
+    $arcText = if ($archives.Count -eq 0) { 'no mod archives at all' } else { "$(GB $archBytes) of archives" }
+
+    if ($vram -le 0) {
+        $verdicts.Add('- **VRAM could not be measured.** Rule nothing in or out on it until you have a real figure - see the measurement warning above. A missing number is not a small number.')
+        $suspects++
+    }
+    elseif ($vramGB -ge 16) {
+        $verdicts.Add("- **VRAM exhaustion is unlikely.** $(Cap $vram) against $arcText. Not impossible - one 8K pack can still spike an individual scene - but it is not the first thing to suspect here, and it should be measured before it is blamed.")
+    }
+    elseif ($vramGB -ge 10) {
+        $verdicts.Add("- **VRAM is plausible but not the obvious answer.** $(Cap $vram) against $arcText. Comfortable at 1080p/1440p; check it early if the symptom is stutter in dense areas or textures that never sharpen.")
+    }
+    elseif ($vramGB -ge 8) {
+        $verdicts.Add("- **VRAM is a live suspect.** $(Cap $vram) against $arcText leaves little headroom once retextures stack. Suspect it before load order for stutter or muddy textures.")
+        $suspects++
+    }
+    else {
+        $verdicts.Add("- **VRAM is the FIRST suspect.** $(Cap $vram) against $arcText. High-res packs do not stream gracefully once VRAM is exhausted - stutter, textures that never sharpen, hard crashes in dense areas. Test by removing texture mods, not by reordering them.")
+        $suspects++
+    }
+
+    if ($ramGB -ge 32) {
+        $verdicts.Add("- **System RAM is not a suspect.** $(Cap $ramBytes), which a modded install does not exhaust on its own.")
+    }
+    elseif ($ramGB -ge 16) {
+        $verdicts.Add("- **System RAM is adequate but not generous.** $(Cap $ramBytes). A large list plus a texture pack can reach it; worth watching in Task Manager during a session that ends badly.")
+    }
+    else {
+        $verdicts.Add("- **System RAM is a first-rank suspect.** $(Cap $ramBytes). A heavily modded install regularly exceeds this, and the shortfall lands on the pagefile as stutter or out-of-memory crashes.")
+        $suspects++
+    }
+
+    if ($pfBytes -eq 0) {
+        $verdicts.Add('- **There is no pagefile.** Modded CP2077 commits far more than it resident-uses; fix this before diagnosing anything else, because everything downstream of it lies.')
+        $suspects++
+    }
+    elseif ($pfAuto) {
+        $verdicts.Add("- **The pagefile is not a suspect.** System-managed, currently $(GB $pfBytes), and free to grow under commit pressure.")
+    }
+    elseif ($pfBytes -lt 8GB) {
+        $verdicts.Add("- **The pagefile is a suspect.** Fixed at $(GB $pfBytes), which will not grow. Small fixed pagefiles produce crashes that look random and are not.")
+        $suspects++
+    }
+    else {
+        $verdicts.Add("- **The pagefile is probably fine.** Fixed at $(GB $pfBytes) - enough for now, but it cannot grow, so re-check it after adding a large texture pack.")
+    }
+
+    if ($media -eq 'HDD') {
+        $verdicts.Add('- **Storage IS a suspect** for texture pop-in and long hitches. The game streams assets constantly and mods add more; no load-order change fixes a mechanical drive.')
+        $suspects++
+    }
+    elseif ($media -eq 'unknown') {
+        $verdicts.Add("- **Drive type unknown** for $letter`:. If stutter is the symptom, establish it before ruling storage out.")
+    }
+    else {
+        $verdicts.Add("- **Storage is not a suspect** for stutter or load-time faults: $media with $(GB $freeBytes) free.")
+    }
+    if ($freeBytes -gt 0 -and $freeBytes -lt 20GB) {
+        $verdicts.Add("- **Free space IS a suspect.** Only $(GB $freeBytes) left on $letter`:; shader cache, logs and the pagefile all need room, and starving them produces failures that read as mod bugs.")
+        $suspects++
+    }
+
+    if ($cores -ge 8) {
+        $verdicts.Add("- **CPU is not a suspect** for frame-time faults: $cores cores / $($cpu.NumberOfLogicalProcessors) threads, well past what the game scales to.")
+    }
+    elseif ($cores -ge 6) {
+        $verdicts.Add("- **CPU is adequate.** $cores cores / $($cpu.NumberOfLogicalProcessors) threads - fine in most of the city, tighter in crowds with heavy NPC mods.")
+    }
+    else {
+        $verdicts.Add("- **CPU is a suspect** in crowds and during traversal: $cores cores / $($cpu.NumberOfLogicalProcessors) threads is below what a modded install asks for.")
+        $suspects++
+    }
+
+    if ($redscriptState -like 'FAILED*') {
+        $verdicts.Add('- **Every `.reds` mod on this install is currently OFF.** redscript failed its last compile, and it does that silently - no in-game sign at all. Nothing about an individual script mod can be diagnosed until this is green.')
+        $suspects++
+    }
+    if ($hasList -and $unlisted.Count -gt 0) {
+        $verdicts.Add("- **$($unlisted.Count) archive(s) are losing every conflict they enter,** because an archive absent from ``modlist.txt`` sorts last. Installed, enabled, and possibly contributing nothing - that is a load-order finding, not a mod bug.")
+        $suspects++
+    }
+    if ($missing.Count -gt 0) {
+        $verdicts.Add("- **$($missing.Count) ``modlist.txt`` entr(ies) name no file on disk, and that is normal.** A mod disabled on purpose keeps its slot, and at least one known mod writes its archive at runtime. Do not prune on this evidence alone.")
+    }
+
+    $verdicts.Add('')
+    if ($suspects -eq 0) {
+        $verdicts.Add('**Nothing on this machine is a resource ceiling.** A crash or a hitch here is far more likely to be a mod interaction, and bisecting the load order is a better use of a launch than tuning hardware. On weaker hardware the order of suspicion reverses - do not carry a conclusion from a different machine onto this one.')
+    }
+    else {
+        $verdicts.Add("**There are $suspects hardware or install suspect(s) above.** Clear them before bisecting a large mod list: a bisect run against a machine that is genuinely short of something will find a different mod every round and prove nothing.")
+    }
+
+    # ---- flags -----------------------------------------------------------
+    # Carried verbatim from the profiler, because the article is meant to be
+    # read instead of re-running the tool. Item lists are capped: a flag naming
+    # 600 archives buries every other line on the page, and the profiler is
+    # there for the full list.
+    $wikiCap = 10
+    $flagBlock = if ($flags.Count) {
+        (@($flags | ForEach-Object {
+            $line = "- $($_.Text)"
+            if ($_.Items.Count) {
+                $shown = @($_.Items | Select-Object -First $wikiCap)
+                $line += "`n" + (($shown | ForEach-Object { '  - ' + $bt + $_ + $bt }) -join "`n")
+                if ($_.Items.Count -gt $wikiCap) { $line += "`n  - *...and $($_.Items.Count - $wikiCap) more; re-run the profiler for the full list*" }
+            }
+            $line
+        }) -join "`n")
+    } else {
+        '- None. Nothing about the machine or the install shape is obviously wrong.'
+    }
+
+    # ---- assemble --------------------------------------------------------
+    $w = [System.Collections.Generic.List[string]]::new()
+    $add = { param([string]$s) $w.Add($s) }
+
+    & $add '---'
+    & $add 'type: Machine Profile'
+    & $add 'title: This machine and this install'
+    & $add ('description: The hardware, OS, framework versions and install shape that any crash, ' +
+            'performance or capability question has to be read against - measured on ' + $today + ', not remembered.')
+    & $add 'distribution: user-only'
+    & $add 'status: stable'
+    & $add 'tags: [hardware, install, frameworks, crashes, baseline]'
+    & $add ('generated: { by: "cyberwise-reports/New-SystemProfile.ps1", at: "' + $okfStamp + '" }')
+    & $add '---'
+    & $add ''
+    # The clobber note, in the file itself. A later session that finds this
+    # article and applies the no-clobber instinct from a hand-written article
+    # would keep a stale profile alive, which is the one failure worse than
+    # having none: a confident answer about hardware that has changed.
+    & $add ('<!-- GENERATED FILE. `New-SystemProfile.ps1 -Wiki` rewrites this article whole, ' +
+            'and that is correct - every line of it is measured, so there is nothing here to ' +
+            'preserve by hand. Do NOT apply the no-clobber rule that protects a hand-deepened ' +
+            'mod article. Edit the generator, not this file. -->')
+    & $add ''
+    & $add '# This machine and this install'
+    & $add ''
+    & $add ('**Read this before answering any question about performance, VRAM, crashes or whether')
+    & $add ("a mod can run here.** Every figure below was measured on $today by")
+    & $add ('`cyberwise-reports/tools/New-SystemProfile.ps1`, on this machine. Nothing in it is')
+    & $add ('remembered, inferred, or carried over from another install.')
+    & $add ''
+    & $add '## Hardware'
+    & $add ''
+    & $add '| | |'
+    & $add '|---|---|'
+    & $add ("| CPU | $($cpu.Name.Trim()), ${cores}c/$($cpu.NumberOfLogicalProcessors)t |")
+    & $add ("| RAM | $(Cap $ramBytes) ($('{0:N1}' -f $ramGB) GiB usable) |")
+    & $add ("| GPU | **$gpuName - $(if ($vram) { Cap $vram } else { 'VRAM UNKNOWN' })**$(if ($vram) { " ($('{0:N1}' -f $vramGB) GiB / $('{0:N0}' -f ($vram / 1MB)) MiB)" }), driver $gpuDriverShown |")
+    foreach ($o in $others) {
+        & $add ("| other adapter | $($o.Name) - $(if ($o.VRam -gt 0) { Cap $o.VRam } else { 'no VRAM reported' }) - **not** the game's adapter |")
+    }
+    & $add ("| OS | $($os.Caption -replace 'Microsoft ','') build $($os.BuildNumber) |")
+    & $add ("| Pagefile | $(if ($pfAuto) { "system-managed, $(GB $pfBytes)" } else { "fixed, $(GB $pfBytes)" }) |")
+    & $add ("| Game drive | ${letter}:, $media, $(GB $freeBytes) free |")
+    & $add ''
+    & $add ('### Do not read VRAM from `Win32_VideoController.AdapterRAM`')
+    & $add ''
+    & $add (@'
+`AdapterRAM` is a **uint32 and saturates at 4 GB**. Every card above that reports
+roughly 4294967295 there, so a 32 GB card and an 8 GB card give the same answer
+and the answer is wrong for both.
+
+`HardwareInformation.qwMemorySize` on the display class registry key is a QWORD
+and reports the truth - **but only if you enumerate every index.** Index `0` is
+not necessarily the card the game runs on; on a machine with integrated
+graphics it is routinely the integrated adapter, which answers with its own
+small figure and looks entirely plausible.
+
+Both wrong answers were produced on a real machine on 2026-08-24, and one of
+them was briefly used in a crash diagnosis before anyone checked. Two routes
+that do not lie:
+
+```powershell
+# the profiler already enumerates every adapter and pairs name with VRAM - prefer it
+New-SystemProfile.ps1 -GameRoot '<path>' -Wiki
+
+# or ask the driver directly, on NVIDIA
+nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv
+```
+
+Name and capacity must come from the **same** entry. Reading the name from
+`Win32_VideoController` and the size from the registry pairs them wrong the
+moment a machine has two adapters, and invents a GPU that does not exist.
+'@)
+    & $add ''
+    & $add '## Install'
+    & $add ''
+    & $add '| | |'
+    & $add '|---|---|'
+    & $add ("| Game | $gameVer, $store |")
+    & $add ("| Root | ``$GameRoot`` |")
+    & $add ("| Manager | $manager |")
+    & $add ("| Archives | $($archives.Count), $(GB $archBytes) |")
+    & $add ("| Load order | $(if ($hasList) { "``modlist.txt``, $($listed.Count) entries, $($unlisted.Count) unlisted, $($missing.Count) missing" } else { 'no `modlist.txt` - alphabetical fallback' }) |")
+    & $add ("| redscript | $redscriptState |")
+    & $add ("| ArchiveXL log | $(if ($xlErrors -gt 0) { "$xlErrors error(s)" } else { 'no errors' }) |")
+    & $add ''
+    & $add '## Frameworks'
+    & $add ''
+    & $add '| | |'
+    & $add '|---|---|'
+    foreach ($k in $frameworks.Keys) {
+        & $add ("| $k | $(if ($frameworks[$k]) { $frameworks[$k] } else { 'not installed' }) |")
+    }
+    & $add ''
+    & $add (@'
+These come from the plugin binaries themselves. **A staging folder name is not a
+version** - manager folder names carry whatever the uploader typed, and they have
+been observed disagreeing with the DLL for several frameworks at once.
+'@)
+    & $add ''
+    & $add '## Payload'
+    & $add ''
+    & $add (($payload.Keys | ForEach-Object { "$($payload[$_]) $_" }) -join ', ')
+    & $add ''
+    & $add '## Flags raised'
+    & $add ''
+    & $add $flagBlock
+    & $add ''
+    & $add '## What this rules in and out'
+    & $add ''
+    & $add (($verdicts -join "`n"))
+    & $add ''
+    & $add '## Refresh'
+    & $add ''
+    & $add (@'
+Re-run after a game patch, a driver update, a framework update, a GPU or RAM
+change, or any large change to the load order:
+
+```powershell
+skills\cyberwise-reports\tools\New-SystemProfile.ps1 -GameRoot '<path>' -Wiki
+```
+
+That rewrites this article in place. A stale machine profile is worse than none:
+it is a confident answer about hardware that has since changed, and nothing
+about it looks stale.
+'@)
+
+    $wikiText = ($w -join "`n") + "`n"
+    if (-not (Test-Path -LiteralPath $wikiDir)) { New-Item -ItemType Directory -Path $wikiDir -Force | Out-Null }
+    # WriteAllText with an explicit no-BOM encoder, not Set-Content. `-Encoding
+    # utf8NoBOM` does not exist in Windows PowerShell 5.1 and throws there, and
+    # `-Encoding UTF8` means *with* a BOM on 5.1 - which is exactly the kind of
+    # difference that turns "works on my machine" into a frontmatter parser
+    # tripping over three invisible bytes before `---`.
+    [System.IO.File]::WriteAllText($wikiFull, $wikiText, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "wrote $wikiFull (OKF article, user-only)" -ForegroundColor Green
 }
 
 Write-Host "$($flags.Count) flag(s) raised" -ForegroundColor $(if ($flags.Count) { 'Yellow' } else { 'Green' })

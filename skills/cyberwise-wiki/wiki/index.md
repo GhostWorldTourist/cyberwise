@@ -49,6 +49,7 @@ What each way of assembling an install makes untrue about the files on disk.
 How to do the work so the result survives review.
 
 - [Documenting a large mod list without producing a report nobody can trust](/process/running-a-documentation-pass)
+- [A capacity read from the wrong API comes back plausible, and nothing about it looks wrong](/process/a-capacity-read-from-the-wrong-api) - saturation and enumeration, and why a wrong number that looks right propagates
 - [all process articles](/process/index)
 
 *Still sitting in skill reference files and not yet migrated: appearance stored

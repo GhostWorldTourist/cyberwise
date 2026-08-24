@@ -22,8 +22,8 @@ Knowledge goes in a bundle. The skill keeps a pointer.
 
 | bundle | lives | ships | holds |
 |---|---|---|---|
-| **base** | `wiki/` in this repo | yes | game, engine and format knowledge; cross-mod interaction PATTERNS |
-| **user** | `<records>\wiki\` beside the game's own data | **never** | anything about a specific mod: its settings, how it works, its description |
+| **base** | `wiki/` INSIDE this skill | yes | game, engine and format knowledge; cross-mod interaction PATTERNS |
+| **user** | `<records>\wiki\` beside the game's own data | **never** | anything about a specific mod: its settings, how it works, its description - and the profile of the machine it all runs on |
 
 **The user bundle must never be redistributed.** Its content is derived from mod
 authors' own descriptions, config files and mod pages. Publishing a compiled
@@ -60,6 +60,31 @@ what each is for.
 `/process` is the odd one: it is not knowledge about the game but about the ways
 work *about* the game goes wrong. It is here because a lesson that lives only in
 a conversation has to be learned again by every fresh session.
+
+### What a user bundle contains
+
+Not just mods. **Every user bundle should hold these two**, and a bundle missing
+either is a bundle that makes the next session start by guessing:
+
+| path | what it is | built by |
+|---|---|---|
+| `machine.md` | this machine and this install: hardware, OS, frameworks, payload, and what the numbers rule in and out | `cyberwise-reports/tools/New-SystemProfile.ps1 -Wiki` |
+| `mods/*.md` | one article per deployed mod | `cyberwise-modbase/tools/New-ModStubs.ps1` |
+
+**Create the machine profile early - before the first diagnosis, not after the
+third.** Without it, every session either asks the user to read numbers off a
+screen or reasons about hardware it has never measured, and a wrong capacity does
+not look wrong (`/process/a-capacity-read-from-the-wrong-api`). It is user-only
+for the ordinary reason: it describes one person's machine, and the base bundle
+ships.
+
+**`machine.md` is regenerated whole; a mod article is not.** That difference is
+deliberate and worth holding onto. Every line of the machine profile is measured,
+so a merge would be half measurement and half memory with nothing marking which -
+the generator overwrites, and the file says so in its own header. A mod article
+starts as a stub and gets *deepened by hand*, so `New-ModStubs.ps1` skips one
+that already exists and needs `-Force` to flatten it. Same bundle, opposite
+rules, because one file has an author and the other has a measurement.
 
 ## The article format
 
@@ -104,10 +129,17 @@ Four things worth getting right because they are silent when wrong:
 |---|---|
 | `tools/Test-Wiki.ps1` | OKF 0.2 conformance, plus `-Base` to enforce that nothing user-only has leaked into the shipping bundle |
 
-Run the base check before any commit that touches `wiki/`:
+The base bundle lives inside this skill, at `skills/cyberwise-wiki/wiki/`, and
+that is deliberate. Skills install as whole-directory symlinks, so a bundle
+kept beside them installs itself and can never drift out of sync with the skill
+that documents it. It previously sat at the repo root, where `install.ps1`
+linked only `skills/*` and the entire bundle was therefore unreachable from an
+installed copy - every pointer resolved only in a repo checkout.
+
+Run the base check before any commit that touches the bundle:
 
 ```powershell
-tools\Test-Wiki.ps1 -Bundle .\wiki -Base
+tools\Test-Wiki.ps1 -Bundle .\wiki -Base   # from skills\cyberwise-wiki\
 ```
 
 ## Writing an article that is worth having

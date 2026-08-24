@@ -26,6 +26,39 @@ Every flag names the symptom **and** the reason, and carries the items it
 counted: a flag saying "60 archives are unlisted" is unactionable until you know
 which 60, and **seeing the list is also how a wrong flag gets caught.**
 
+### Every user should have a machine profile in their wiki
+
+```powershell
+tools\New-SystemProfile.ps1 -GameRoot '<path>' -Wiki
+```
+
+Same measurement, third output: an OKF article at
+`<records>\Cyberwise\wiki\machine.md` (`-WikiPath` moves it). **Run it once per
+user, early** - a fresh session that has never measured this machine either asks
+the user to read numbers off a screen, or reasons about hardware it invented.
+
+It is **user-only and the tool refuses to write it into the base wiki**, because
+it describes one person's hardware and nothing about the game. And it is
+**regenerated whole on every run** - the no-clobber rule that protects a
+hand-deepened mod article does not apply to a file whose every line is measured,
+and the article says so in its own header so nobody preserves a stale one out of
+the wrong instinct.
+
+Two things in it are not in the markdown report:
+
+- **What this rules in and out, derived from the actual numbers.** 32 GB of VRAM
+  makes exhaustion an unlikely suspect; 6 GB makes it the first one. The point is
+  that a later session knows which suspicions are worth having *on this machine*,
+  and does not carry a conclusion over from a different one.
+- **The VRAM measurement warning**, because both wrong answers are easy to reach
+  and neither looks wrong. `Win32_VideoController.AdapterRAM` is a uint32 and
+  saturates at 4 GB; the display-class registry `HardwareInformation.qwMemorySize`
+  is correct only if you enumerate **every** index, since index 0 may be an
+  integrated adapter. Cross-check with
+  `nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv`. The
+  general lesson is in the base wiki at
+  `/process/a-capacity-read-from-the-wrong-api`.
+
 ## Inventory the mod list
 
 ```powershell
@@ -191,7 +224,7 @@ but never ranked against loose ones, because `modlist.txt` does not order them.
 
 | tool | does |
 |---|---|
-| `tools/New-SystemProfile.ps1` | machine + install facts that change a diagnosis, flags first |
+| `tools/New-SystemProfile.ps1` | machine + install facts that change a diagnosis, flags first; `-Wiki` also writes the user's machine-profile article |
 | `tools/New-ModManifest.ps1` | inventory of an installed load order, with descriptions |
 | `tools/New-ModDossier.ps1` | one mod, every layer: what it ships and which parts are actually doing anything |
 | `tools/New-ModCredits.ps1` | the people whose work is in the game, grouped by author; adult omitted by default |
