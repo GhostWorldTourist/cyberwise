@@ -404,6 +404,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Expand-Save.ps1` | `cyberwise-saves` | decompress a Cyberpunk 2077 sav.dat into a flat blob. |
 | `ConvertFrom-Markdown.ps1` | `cyberwise-sitebuilder` | the small Markdown subset these documents use. |
 | `New-CharacterSite.ps1` | `cyberwise-sitebuilder` | a website from a folder of character documents. |
+| `Initialize-UserWiki.ps1` | `cyberwise-wiki` | create this user's knowledge bundle, from nothing. |
 | `Test-Wiki.ps1` | `cyberwise-wiki` | does this bundle conform to OKF 0.2, and does it respect the distribution boundary? |
 <!-- TOOL-INDEX:END -->
 

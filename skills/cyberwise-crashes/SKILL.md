@@ -53,6 +53,17 @@ start reasoning. "I have what I need, go ahead" costs nothing and is the
 difference between a diagnosis that fits around them and one they have to sit
 through.
 
+**0c. If the game is HUNG rather than dead, sample it before killing it.** A hung
+process is still alive and can be interrogated - responding state, thread state
+counts, CPU delta over a short interval, and which log is still growing. None of
+that survives the kill, and the engine's own watchdog ends the process after 120
+seconds anyway. Two cores pegged with every log silent for minutes is native code
+spinning, and rules out a script loop outright, because a looping script logs.
+Also check the RED4ext log for `Watchdog timeout!` before treating the crash
+report as evidence of a fault - a watchdog kill is indistinguishable from a fault
+crash in `CrashInfo.json`. Wiki:
+`/diagnosis/a-hang-and-a-crash-are-different-faults`.
+
 **1. Take the bare facts from the crash reporter.** Time, district, coordinates,
 tracked quest, `isOom`, session length. Facts, not readings. Resist the theory
 forming while you read them - the first theory becomes the frame everything else
@@ -84,6 +95,11 @@ reached 7,731, which killed the leak theory outright.
 
 **Not step 5: a suspect list.** A crash with one occurrence and no reproduction
 does not get a culprit named. It gets a watcher left running and more captures.
+
+Why each of those steps is what it is - the crash report's fields, the dedupe
+trap, the memory measurement traps - is in the wiki:
+`/diagnosis/the-games-own-crash-report` and
+`/diagnosis/memory-is-usually-a-red-herring`.
 
 ## Start by asking what changed - and now you can answer it
 
@@ -173,11 +189,12 @@ exactly one culprit; with two, every half fails and each round clears innocent a
 guilty alike. A *clean* round is the informative one - it proves every cause sits
 in the set you disabled - so once you get one, invert and add mods back in groups.
 **Name a cause only by adding it back alone to a proven-clean base.** Never by
-elimination. `references/bisecting.md`.
+elimination. `references/bisecting.md`, and
+`/diagnosis/a-failing-round-narrows-nothing` for why.
 
-When halving has named the mod but not what it is doing, `bisecting.md` also
-covers **guards** - a throwaway one-function mod that logs the value separating
-your hypotheses.
+When halving has named the mod but not what it is doing, write a **guard** - a
+throwaway one-function mod that logs the value separating your hypotheses, in CET
+rather than redscript. `/diagnosis/writing-a-guard-mod`.
 
 ## A missing log is not a silent log
 
@@ -186,7 +203,9 @@ archives-only load order legitimately has none of them, and `r6\logs\` may not
 exist. Absence means "that framework is not installed", not "that framework
 reported nothing".
 
-`references/diagnosis.md` maps symptom to the log that actually carries it.
+`references/diagnosis.md` says what to do about it;
+`/diagnosis/which-log-carries-which-symptom` maps symptom to the log that
+actually carries it, and covers why a log's last line is not the moment of death.
 
 ## Memory is usually a red herring
 
@@ -194,8 +213,10 @@ Only open a memory investigation when it is genuinely a suspect - `isOom: true`,
 or a crash that only appears deep into long sessions. Startup legitimately ramps
 GPU memory hard, so a reading taken during it proves nothing.
 
-`references/crashes.md` covers the crash report the game writes itself, why
-Windows Error Reporting never fires for it, and the measurement traps.
+`references/crashes.md` gives the order of operations;
+`/diagnosis/memory-is-usually-a-red-herring` covers the measurement traps, and
+`/diagnosis/the-games-own-crash-report` the crash report the game writes itself
+and why Windows Error Reporting never fires for it.
 
 ## Tools
 
@@ -291,11 +312,26 @@ the watcher starts at logon but nothing restarts it if it dies.
 
 ## Reference material
 
+**These three are now mostly pointers.** The knowledge they used to carry lives
+in the **base wiki** under `/diagnosis` - a skill file is instructions and a wiki
+article is knowledge, and those rot at different rates. The reference files keep
+the parts that change what you *do*.
+
 | file | covers |
 |---|---|
-| `references/diagnosis.md` | which log says what, locating a visual symptom, failure shapes |
-| `references/bisecting.md` | sizing the search to the list, layer-first passes, why automated hang detection fails |
-| `references/crashes.md` | CrashInfo.json, why WER never fires, memory measurement traps |
+| `references/diagnosis.md` | the order to read logs in, and the ArchiveXL `nodeDeletions` rules |
+| `references/bisecting.md` | asking before parking, arming and launching a round, what to do during and after |
+| `references/crashes.md` | preserve-first order of operations, and running a watcher |
+
+| wiki article | covers |
+|---|---|
+| `/diagnosis/which-log-carries-which-symptom` | which log says what, missing vs silent, failure shapes, locating a visual symptom |
+| `/diagnosis/the-games-own-crash-report` | `CrashInfo.json`, why WER never fires, deduping captures |
+| `/diagnosis/memory-is-usually-a-red-herring` | the startup ramp, what a leak claim requires, counters that lie |
+| `/diagnosis/sizing-a-bisect-to-the-list` | sizing the search, layer-first passes, parking mechanics |
+| `/diagnosis/a-failing-round-narrows-nothing` | why only a clean round is evidence |
+| `/diagnosis/writing-a-guard-mod` | instrumenting one value, in CET rather than redscript |
+| `/diagnosis/a-hang-and-a-crash-are-different-faults` | live sampling, the watchdog kill, why automated hang detection fails |
 
 To capture the machine and install facts that change a crash diagnosis - VRAM
 against texture volume, pagefile, framework versions - `cyberwise-reports` has

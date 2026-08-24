@@ -1,99 +1,49 @@
-# CET, Lua, and console commands
+# CET, Lua, and console commands - where the knowledge now lives
 
 > **Verified:** Cyberpunk 2077 patch 2.31 - August 2026
 > **Re-check after a patch:** The LuaJIT 5.1 limits are stable. The console calls and the ripperdoc gate on cyberware are game-version behaviour - re-test those before recommending them.
 
-## The sandbox is LuaJIT (Lua 5.1), not modern Lua
+The CET console is a **sandbox**: an older Lua dialect, a restricted global
+table, and a game that refuses several of the operations people most want from
+it. Almost every limit fails silently - valid syntax, real identifiers, no
+error, no effect.
 
-Every one of these has produced a confusing failure:
+**The full account is in the base wiki** (`wiki/` in the Cyberwise repo):
 
-- **No `load`** - use `loadstring`.
-- **No `_G`.** You cannot pass helpers to a loaded chunk via globals. Pass them as
-  **chunk varargs** instead: `local LOG, TRY = ...`
-- **No bitwise operators.** `>>`, `<<`, `&`, `|` are Lua 5.3 syntax and produce a
-  *compile* error that kills the entire file, not a runtime error on that line.
-- **No integer subtype**, no `math.type`.
-- **64-bit hashes arrive as FFI cdata.** `tostring()` renders them exactly;
-  `type(h) == "number"` would mean it had been lossily converted to a double.
-- **A bare `return` mid-chunk is a syntax error.** Wrap script bodies in
-  `local function main() ... end main()`.
+| article | covers |
+|---|---|
+| `/authoring/the-cet-console-is-a-sandbox` | the LuaJIT (Lua 5.1) dialect limits, the newline-stripping paste failure, `registerHotkey` only firing at load, the console cheats that work and the widely-posted ones that are not CET globals at all, the ripperdoc gate that makes cyberware equip calls no-ops, appearance entries as the way round it, quest facts living in the save, and reading a TweakDB flat back at runtime |
+| `/engine/cet-lua-runtime` | the other half of the job - reading live objects out without losing the row that mattered: per-field `pcall`, out-params in a moving return slot, and the `uiData` / `resolves` columns |
 
-## The console strips newlines from multi-line pastes
+Read the first of those before writing any console instruction. What stays here
+is only what changes what you **do**.
 
-Pasted multi-line code arrives concatenated into one line, producing errors like
-`sol: syntax error ... '=' expected near 'not'`. Anything longer than a single
-statement must be **read from a file**, not pasted.
+## Deliver a probe as a file, never as a paste
 
-If an investigation is going to need more than a couple of probes, write a throwaway
-CET mod that `loadstring`s a file from disk and run everything through it. Nothing
-like this ships with CET or with this skill - it is a dozen lines you write once -
-but it turns every subsequent probe from a one-shot paste into an edit-and-rerun
-loop.
+The console strips newlines from a multi-line paste, so anything past one
+statement has to be read from a file. That is a constraint on delivery, not a
+matter of style:
 
-Related: errors escaping before a flush leave a **0-byte output file and no clue**.
-Flush per line. CET's per-mod log (`...\mods\<name>\<name>.log`) catches errors
-thrown outside your own `pcall`.
+1. **A true one-liner** may be given to the user to paste.
+2. **Anything longer** goes in a file. Write a throwaway CET mod that
+   `loadstring`s a script from disk and run every subsequent probe through it - a
+   dozen lines you write once, and it turns each probe into an edit-and-rerun
+   loop instead of a one-shot.
+3. **Flush per line**, or an error escaping before the flush leaves a 0-byte
+   output file and no clue what happened. CET's per-mod log
+   (`...\mods\<name>\<name>.log`) catches what your own `pcall` did not.
+4. **Read `output.txt` and the log yourself.** Never ask the user for a
+   screenshot of something that was written to a file.
 
-`registerHotkey` only takes effect **while the mod is loading**. Registering
-hotkeys later, or in response to UI, silently does nothing.
+## Prefer CETMonkey to writing a new mod
 
-## Console commands: what actually works
+Before building anything, list the CETMonkey script library - see the `cyberwise`
+front door. A whole duplicate CET mod was once written to dump an inventory while
+a script that does exactly that sat installed behind a button.
 
-**Give an item**
+## Verify a call exists before recommending it
 
-```lua
-Game.AddToInventory("Items.NanoWires", 1)
-```
-
-`Game.AddToInventory` is a real CET global. Note that **base cyberware records are
-not necessarily Tier 1** - `Items.NanoWires` spawns a Tier 3 monowire.
-
-**Modify a player stat**
-
-```lua
-StrikeExecutor_ModifyStat.new():ModStatPuppet(
-    Game.GetPlayer(), gamedataStatType.CarryCapacity, 1000.0, Game.GetPlayer())
-```
-
-The widely posted `Game.ModStatPlayer("CarryCapacity", "1000")` **is not a CET
-global** and will fail. `ModStatPlayer` exists only as a helper method inside
-certain mods. Verify a call exists before recommending it.
-
-**Cyberware cannot be equipped or unequipped from the console.** Since 2.0 that is
-ripperdoc-gated. Both of these are syntactically valid, reference real identifiers,
-and silently do nothing:
-
-```lua
--- does not work
-UnequipRequest with areaType = gamedataEquipmentArea.ArmsCW
-Game.GetTransactionSystem():RemoveItemFromSlot(player,
-    TweakDBID.new("AttachmentSlots.ArmsCyberwareGeneralSlot"), true)
-```
-
-Send the user to a ripperdoc. Note also that the *slot* is
-`AttachmentSlots.ArmsCyberwareGeneralSlot` while `ArmsCW` is a
-`gamedataEquipmentArea` enum member - different identifiers, easy to confuse, and
-mixing them up fails silently.
-
-**If the goal is how the arms look rather than what they do, change the appearance
-instead of the hardware.** Arm cyberware visuals are appearance entries
-(`holstered_default_tpp`, `holstered_strong_tpp`, `holstered_nanowire_tpp`),
-independent of what is actually installed - so a look can be set from the console
-even though the cyberware itself cannot.
-
-## Quest facts
-
-Facts live in the **save**. Setting one from the console and then loading a save
-discards it. To set a fact reliably, do it from a script on game attach.
-
-Do not guess what a fact means from its name. One named `..._reset` turned out to
-be a signal that actively *suppressed* the feature it appeared to enable.
-
-## Verifying a TweakDB value at runtime
-
-```lua
-print(#TweakDB:GetFlat("Vendors.<id>.itemStock"))
-print(TweakDB:GetFlat("<YourRecord>.item"))
-```
-
-Read-only and safe; the fastest way to confirm a tweak actually applied.
+The article lists the console calls known to work and the known-bad ones. If a
+call is not on that list, confirm it against the running game before handing it
+over - a cheat that fails on sight is embarrassing, and one that silently does
+nothing costs an evening.

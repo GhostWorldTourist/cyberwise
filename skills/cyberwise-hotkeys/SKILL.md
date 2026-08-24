@@ -107,8 +107,77 @@ toggle sitting on top of two other bindings, invisible to every generated sheet.
 Read the cache alone and you get the mod author's defaults and learn nothing
 about what the user changed.
 
-Full format detail - `overridableUI` linkage, `buttonGroup` indirection, the CET
-packing, per-mod json conventions: `references/input-bindings.md`.
+**The game's own claims are a sixth file** - `r6\config\inputUserMappings.xml`.
+It is left out of a mods report by default because ~99 identical vanilla rows
+swamp it, and that is fine for presentation and a correctness bug in the gate.
+There is a sharper reason to keep it reachable: **a mod can change what a vanilla
+mapping does without registering a key of its own**, so the key somebody presses
+*because of a mod* can appear only there. Free-look leaning and consumable /
+grenade cycling ride `LeanLeft_Button`, `LeanRight_Button`,
+`UseConsumable_Button` and `CombatGadget_Button` - all vanilla, none declared by
+any mod. Hide base-game rows to cut noise and you hide exactly the rows the
+question was about.
+
+**Check the store is not empty before believing it.** A binding store can
+silently lose its contents: every one of a mod's registered hotkeys read `0` in
+CET's `bindings.json`, unnoticed until the keys stopped working, and rebinding
+restored them. The cheap signal is the **bound-to-total ratio over the whole
+file** - 2 of 169 while broken, 9 of 169 healthy. Count before filtering zeroes,
+because the filter destroys the measurement. And the natural reading of "almost
+everything is 0" - *this must not be where bindings live, look elsewhere* - is
+**wrong**: an empty store and a wrong store look identical.
+
+Full format detail is in the base wiki (`cyberwise-wiki`) under `/input`: the
+five stores, `overridableUI` linkage, `buttonGroup` indirection, ids that are not
+keys, the CET packing, per-mod json conventions, and both findings above.
+`references/input-bindings.md` indexes them and keeps the sheet-generation
+procedure.
+
+## One key, four spellings - never compare key NAMES
+
+The stores do not agree on what a key is called, and every one of them is
+authoritative for its own file:
+
+| written as | by |
+|---|---|
+| `IK_Period` | the engine, in `r6\input` and `r6\config` |
+| `Period` | `Get-Hotkeys` base-game rows - the raw id minus its prefix |
+| `.` | `Get-Hotkeys` mod rows - prettified for reading |
+| `PeriodAndBiggerThan` | iCUE, which names a key after every glyph on it |
+
+Same for `MiddleMouse` / `Middle Click` / `Mouse3`, `GraveAccent` / `` ` `` /
+`GraveAccentAndTilde`, the brackets, minus and equals, and the numpad.
+
+> **Comparing the strings answers a question about spelling while looking like it
+> answered one about keys** - and here, finding nothing is the dangerous result
+> rather than the harmless one.
+
+That is not theoretical. Until 2026-08-24 `-CheckKey` compared raw strings and
+was wrong in both directions at once: `-CheckKey .` found no base-game claim,
+`-CheckKey Period` found no mod claim, and the two contradicted each other while
+each looked authoritative. **A gate that reports a taken key as free is worse
+than no gate** - it is exactly how a test hotkey lands on quickload.
+
+**Key identity is therefore vocabulary-agnostic, and lives in ONE place:**
+`tools\KeyIdentity.ps1`, dot-sourced by both `Get-Hotkeys.ps1` and
+`New-HotkeySheet.ps1`.
+
+```powershell
+. tools\KeyIdentity.ps1
+Get-KeyIdentity 'PeriodAndBiggerThan'   # -> '.'   (compare these, never print them)
+Get-KeyIdentitySet 'F1 / 1'             # -> 'f1','1' - a row can claim two keys
+```
+
+Three rules if you add a sixth store, or a second peripheral vendor:
+
+- **Fold through `Get-KeyIdentity` - do not compare its strings**, and do not
+  start a second table. A copied table is right the day it is copied and drifts
+  silently after, with both copies internally consistent and disagreeing.
+- **The token is for equality only.** Display keeps whatever each store rendered,
+  because the pretty names are what make the sheet readable.
+- **An unknown name folds to itself**, never to nothing and never to a guess. A
+  table that swallows what it does not recognise recreates the original bug: the
+  unrecognised key claims nothing and reads as free.
 
 ## A peripheral profile is a LAYER over the five stores, not a sixth store
 
@@ -136,17 +205,11 @@ to a working one. Nothing but the join will ever say so. On the install this was
 built against, one of twelve thumb buttons was dead: it sent `=` while the mod it
 was meant to drive was listening on `'`.
 
-Two key vocabularies have to be reconciled before the join lands, and skipping
-this reports every button as dead:
-
-| source | writes the `.` key as |
-|---|---|
-| iCUE | `PeriodAndBiggerThan` - every glyph printed on the key |
-| `Get-Hotkeys` mod rows | `.` - prettified |
-| `Get-Hotkeys` base-game rows | `Period` - the raw `IK_` name minus its prefix |
-
-Fold all three to one token first. `New-HotkeySheet.ps1` does this; a hand-rolled
-comparison of any two of them finds nothing.
+The vocabularies above have to be reconciled before the join lands, and skipping
+that reports **every** button as dead - iCUE's `PeriodAndBiggerThan` matches
+neither the `.` a mod row carries nor the `Period` a base-game row does. The
+sheet folds both sides through `Get-KeyIdentity` first; a hand-rolled comparison
+of any two vocabularies finds nothing.
 
 ## Tools
 
@@ -217,4 +280,6 @@ produces rounds of "still too small".
 
 | file | covers |
 |---|---|
-| `references/input-bindings.md` | the five stores, `overridableUI` overrides, CET's packed key codes, per-mod json |
+| base wiki `/input/*` | the knowledge: five stores, vanilla mappings a mod repurposes, key-name vocabularies, packed VK codes, a store that emptied itself, why contexts are not categories |
+| `references/input-bindings.md` | an index of those, plus the procedure for generating and **measuring** a sheet |
+| `tools/KeyIdentity.ps1` | the one key-identity table, and the reasoning in its header - read it before adding a store |
