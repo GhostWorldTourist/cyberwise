@@ -40,6 +40,19 @@ overwritten by the *next* crash. On 2026-08-23 a crash was looked at twenty
 minutes later and every one of those had already been rewritten - the only
 survivor was `CrashInfo.json`, and only because the watcher had copied it.
 
+**0b. SAY WHEN THEY CAN LAUNCH AGAIN.** The moment the snapshot is written,
+tell them plainly: *"evidence is preserved, you can launch."*
+
+They are sitting at a dead game waiting for permission they were never told they
+needed. Every second you spend analysing before saying it is a second they spend
+not playing, and they will either wait needlessly or relaunch early and destroy
+the evidence you were about to read. One sentence, before any analysis.
+
+Say it again whenever a step ends: after a snapshot, after a diff, before you
+start reasoning. "I have what I need, go ahead" costs nothing and is the
+difference between a diagnosis that fits around them and one they have to sit
+through.
+
 **1. Take the bare facts from the crash reporter.** Time, district, coordinates,
 tracked quest, `isOom`, session length. Facts, not readings. Resist the theory
 forming while you read them - the first theory becomes the frame everything else
@@ -119,6 +132,20 @@ manager that redeploys mid-test - can leave the order in a state nobody can
 reconstruct. `cyberwise/tools/ModFileBackup.ps1` takes the snapshot and restores
 it; `-Restore` on the round below only undoes the parking, not an order that
 something else rewrote underneath it.
+
+**NEVER PARK, UNLINK, DISABLE OR REMOVE A MOD WITHOUT ASKING FIRST.**
+
+Not as a bisect round, not as a quick test, not "just to check". Name the mod,
+say what parking it would prove, and wait for a yes. It is their install and
+their playthrough, and a mod removed underneath them can cost save state, not
+just time. The tooling makes parking easy, which is exactly why the rule has to
+be explicit - the cost of asking is one message, and the cost of not asking is
+somebody's game.
+
+This holds even when the suspect is obvious and the test is one round. An
+obvious suspect is a good reason to ASK CONFIDENTLY - "this one mod places an
+object exactly where you crash, may I park it and have you reload?" - not a
+reason to skip asking.
 
 **When you do bisect: arm the round AND launch the game yourself.**
 
