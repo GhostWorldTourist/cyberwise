@@ -4,6 +4,8 @@ How the game and its script layers actually behave, independent of any mod. Mods
 appear here only as examples.
 
 - [A .reds file on disk is not code the game is running](/engine/compiled-script-bundle) - the compiled bundle, what is in it, and the three false absences
+- [Compile-testing redscript without inventing the errors yourself](/engine/compile-testing-redscript) - the two symmetric ways to manufacture thousands of errors, and how to tell a test that ran from one that did not
+- [Reading a redscript failure without trusting its own explanation](/engine/reading-a-redscript-failure) - the popup's appended guess is a heuristic, and it names mods the compiler never saw
 - [An archived redscript log is named for the run that replaced it](/engine/redscript-log-names-the-wrong-run) - the rotation trap, and how a compile test destroys the record of the last launch
 - [Reading live game objects from CET Lua without losing the row that mattered](/engine/cet-lua-runtime) - LuaJIT limits, per-field `pcall`, and the out-param return slot that moves between builds
 - [There are two load-order systems, and a conflict scan only sees one of them](/engine/two-load-order-domains) - loose archives and REDmod are ordered by different lists, and nothing ranks across them
