@@ -34,7 +34,21 @@ param(
     # material, not things you glance at mid-fight, and every row they add is a
     # row competing with the ones you actually came to look up.
     [switch] $ShowMousePad,
-    [switch] $ShowSharedKeys
+    [switch] $ShowSharedKeys,
+
+    # Include the bindings the BASE GAME claims, from
+    # r6\config\inputUserMappings.xml. Off by default for the same reason
+    # Get-Hotkeys.ps1 has it off: ~99 vanilla rows swamp a sheet about mods.
+    #
+    # But "vanilla row" and "the key I actually use" are not the same thing, and
+    # that is why this switch had to exist here at all. Several mods CHANGE
+    # BEHAVIOUR ON A VANILLA MAPPING rather than registering their own input -
+    # Advanced Control and Lean Anywhere both ride LeanLeft_Button/
+    # LeanRight_Button (IK_Q / IK_E), and consumable and grenade cycling ride
+    # UseConsumable_Button and CombatGadget_Button. Those read as base-game
+    # rows and were therefore invisible on a modded install's own cheatsheet,
+    # with no way to switch them on. Reported by the user, 2026-08-24.
+    [switch] $IncludeBaseGame
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,6 +60,7 @@ function esc { param([string]$s) ($s -replace '&','&amp;' -replace '<','&lt;' -r
 # Get-Hotkeys' own detection with a blank path.
 $harvestArgs = @{}
 if ($GameRoot) { $harvestArgs.GameRoot = $GameRoot }
+if ($IncludeBaseGame) { $harvestArgs.IncludeBaseGame = $true }
 $binds = @(& (Join-Path $PSScriptRoot 'Get-Hotkeys.ps1') @harvestArgs)
 Write-Host "harvested $($binds.Count) keyboard bindings" -ForegroundColor Cyan
 if ($binds.Count -eq 0) {
