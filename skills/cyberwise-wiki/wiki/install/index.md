@@ -13,3 +13,15 @@ it drifts with manager releases rather than with game patches.
 - [Fixing a bug in someone else's mod](/install/overriding-another-authors-mod) - override or patch, and why the override's danger is silence rather than breakage
 - [Two downloads from one mod page may not be alternatives](/install/two-builds-of-one-filename) - and byte size is the only thing that identifies which build is deployed
 - [Never write into a mod manager's staging folder](/install/never-write-into-a-managers-staging-folder) - what a file added there breaks, and the zip that delivers the same change as its own mod
+
+## User data, which no manager can see
+
+Saves and the state written beside them sit outside the install entirely, so every
+install-side check is blind to them - and so is every install-side repair.
+
+- [Saves live under Saved Games, by publisher and title](/install/where-the-game-keeps-its-saves) - re-derived in session after session; also why a purge, a verify and a clean reinstall all leave saves untouched
+- [A storefront's cloud-save integration may not follow the storefront's own layout](/install/platform-cloud-saves-may-ignore-convention) - a documented per-app remote folder that does not exist, no per-game toggle, and deleted saves that came back *(draft: one machine, one storefront, one title)*
+
+## Researching a mod
+
+- [A mod page's own text may be unreachable to automated fetching](/install/a-mod-page-can-be-unreachable-to-tooling) - search results still carry mirrored copies, so the page looks retrievable until it is not; plan on asking for a paste rather than falling back to one

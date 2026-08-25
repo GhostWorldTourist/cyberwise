@@ -31,6 +31,19 @@ ReShade, why the bloom setting did nothing, why a calibration stopped being vali
 - [Photo mode is a separate rendering context](/rendering/composing-in-the-gameplay-renderer) - ray reconstruction is broken inside it; freeze time and fly a detached camera instead
 - [Frame generation is display smoothness, never input latency](/rendering/frame-generation-is-smoothness-not-latency) - latency rises with the multiplier, and in frozen time there is nothing to interpolate
 - [Judging a visual change](/rendering/judging-a-visual-change) - toggle layers in place rather than comparing side by side, and the four scenes a grade has to survive
+- [The player has no head in ray-traced reflections](/rendering/the-player-has-no-head-in-ray-traced-reflections) - a vanilla engine limitation surfacing through a mod, not a mod fault; the base game removed the player from RT reflections for this reason
+
+## Lighting a character
+
+Portrait lighting inside a game engine, using a relighting shader. **Read the axis
+article before acting on any coordinate in the other three** - an entire session of
+placement advice was once built on the conventional axis mapping and was wrong in
+every instruction.
+
+- [A tool's X, Y and Z may not mean what 3D convention says](/rendering/an-axis-label-is-not-a-3d-convention) - one shader creates lights pointing at the camera, so Y is side-to-side, X is near-to-far and Z is up-down; verify by moving a light and watching, every time
+- [Range does more work than intensity, in both directions](/rendering/light-range-does-more-than-intensity) - a blown-out face is a range too short, a lit backdrop is a range too long, and several dim lights beat one bright one
+- [A fill light pushed off-axis becomes a second key](/rendering/a-fill-light-belongs-near-the-camera-axis) - 20-30 degrees off the camera-subject axis at 40-50% of key, and overhead is a rim light rather than a key
+- [Environmental light alone silhouettes a subject](/rendering/environmental-light-silhouettes-a-subject) - scenes are lit for gameplay legibility, and an added light dropped to just above ambient reads as motivated rather than pasted on
 
 ## Effects, and how they interact
 
@@ -49,3 +62,10 @@ photo mode's broken ray reconstruction, and the display-side features.
 
 The mechanisms in those articles generalise. The measurements in them do not, and
 should be re-derived rather than copied.
+
+The lighting articles are `stable` for a different reason: their mechanisms are
+photographic practice rather than a measurement of this build, and the axis mapping
+was confirmed in the tool by the person using it. But **the numbers in them - an
+intensity, a range in metres, a cone angle - are one worked portrait's**, and carry
+exactly as little weight as any other single measurement. Each says so in its own
+"Confidence and scope" section.

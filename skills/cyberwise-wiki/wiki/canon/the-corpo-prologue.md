@@ -74,6 +74,19 @@ Where a character's first name has never been established in game, the honest
 formulation is: *the surname is canon and the first name is not.* Say that
 instead of picking one.
 
+**The dispute is live, and it can surface inside a single conversation.** One
+session recorded a user correcting an assistant with one first name for a named
+Arasaka director, while the same session elsewhere used a different one - two
+candidates in circulation in one exchange, with nobody noticing the collision.
+That is the practical shape of an unestablished first name: not that the answer
+is hard to find, but that several answers are in circulation and each of them
+sounds sourced. Naming either candidate here - even to say which is more common -
+would settle by repetition a thing the game never settled, so neither is written
+down. Before concluding that a name traces to nothing, though,
+[search the mail and the shards](/canon/search-the-mail-and-the-shards-first): a
+minor corporate character's first name is exactly the sort of detail that exists
+in one readable and nowhere else.
+
 ## What the prologue does NOT establish
 
 The single largest unwritten space in corpo V's life sits right here:
