@@ -232,6 +232,58 @@ namespace Cyberwise
             // Forget it and re-derive instead.
             if (!string.IsNullOrWhiteSpace(Watcher) && !File.Exists(Watcher)) { Watcher = ""; }
 
+            // ...AND A REMEMBERED PATH TO THE FLAT FALLBACK COPY IS AS BAD,
+            // for a reason that is invisible from here: it EXISTS, so the check
+            // above happily keeps it, but it cannot resolve
+            // New-InstallSnapshot.ps1 beside it. The watcher then runs, samples
+            // fine, and silently records no session-start snapshot - so the one
+            // question the snapshots exist to answer, WHAT CHANGED SINCE THIS
+            // LAST WORKED, has nothing behind it.
+            //
+            // This is the half that reaches EXISTING installs. Preferring the
+            // skills-tree copy in the candidate list below only helps a machine
+            // that has never written this file; anyone who ran an older build
+            // keeps the crippled path for ever. Judge the remembered path by
+            // whether it can actually do the job, not by whether it is there.
+            if (!string.IsNullOrWhiteSpace(Watcher))
+            {
+                try
+                {
+                    var dir = System.IO.Path.GetDirectoryName(Watcher);
+                    if (string.IsNullOrEmpty(dir) ||
+                        !File.Exists(System.IO.Path.Combine(dir, "New-InstallSnapshot.ps1")))
+                    { Watcher = ""; }
+                }
+                catch { Watcher = ""; }
+            }
+
+            // A REMEMBERED PATH TO THE FLAT FALLBACK IS REPLACED WHEN THE REAL
+            // ONE IS THERE. The check above asks whether the remembered copy
+            // CAN snapshot, and on this machine an older installer had left
+            // New-InstallSnapshot.ps1 beside the flat copy - so it passes, and
+            // the flat path is kept for ever even though the proper copy sits
+            // in the skills tree next to it. That leftover is not shipped any
+            // more, so the day anything tidies it the watcher silently stops
+            // snapshotting and nothing says so.
+            //
+            // Narrow on purpose: only a path in the app ROOT is replaced, and
+            // only when a skills-tree copy actually exists. Someone who pointed
+            // Watcher at their own clone meant it, and keeps it.
+            if (!string.IsNullOrWhiteSpace(Watcher))
+            {
+                try
+                {
+                    var exeDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(System.IO.Path.DirectorySeparatorChar);
+                    var dir = (System.IO.Path.GetDirectoryName(Watcher) ?? "").TrimEnd(System.IO.Path.DirectorySeparatorChar);
+                    if (string.Equals(dir, exeDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var proper = System.IO.Path.Combine(exeDir, @"skills\cyberwise-crashes\tools\Watch-Crashes.ps1");
+                        if (File.Exists(proper)) { Watcher = proper; }
+                    }
+                }
+                catch { }
+            }
+
             if (string.IsNullOrWhiteSpace(Watcher))
             {
                 // PREFER THE COPY INSIDE THE SKILLS TREE, in every layout.

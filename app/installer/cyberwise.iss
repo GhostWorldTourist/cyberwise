@@ -22,7 +22,7 @@
 ;    where someone has the repo linked for development.
 
 #define AppName      "Cyberwise"
-#define AppVersion   "2026.08.25"
+#define AppVersion   "2026.08.25.1"
 #define AppPublisher "Ghost World Tourist"
 #define AppExe       "CyberwiseTray.exe"
 
