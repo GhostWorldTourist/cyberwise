@@ -369,6 +369,30 @@ build that means nothing.
 The tooling shipped with this skill is PowerShell, and both of these produced
 convincing wrong answers before being caught:
 
+- **`$PSScriptRoot` is EMPTY inside a param-block default** on Windows
+  PowerShell 5.1, whenever the script carries `[CmdletBinding()]` and is started
+  with `-File` or dot-sourced. Under the call operator it is populated, and
+  pwsh 7 populates it in every case - which is exactly why it survives review.
+  A tool gets written and tried at a prompt, where it works, and then breaks the
+  first time a scheduled task, an installer step, the tray or an agent runs it
+  with `-File`. **Six tools shipped with it here before anything noticed**, and
+  the only reason it surfaced was an agent running one non-interactively.
+
+  It fails two ways, and the quiet one is worse: `Split-Path` and `Join-Path`
+  reject the empty string loudly, so those at least stop - but
+  `"$PSScriptRoot	hemes"` silently becomes `"	hemes"`, the root of whatever
+  drive is current. `$MyInvocation.MyCommand.Path` is **not** a workaround; it
+  is null in the same position. Leave the parameter undefaulted and resolve it
+  in the body:
+
+  ```powershell
+  [CmdletBinding()]
+  param([string] $ThemeDir)
+  if (-not $ThemeDir) { $ThemeDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'themes' }
+  ```
+
+  That is correct on both engines by every invocation route, and still honours
+  an explicit override. `Test-Family.ps1` checks for this by AST.
 - **`Test-Path` without `-LiteralPath`** treats `[` and `]` in mod filenames as
   wildcards. On a large load order this reports a handful of phantom missing files.
 - **`Sort-Object $scriptblock` binds `$_`**, so a `param($n)` block inside it

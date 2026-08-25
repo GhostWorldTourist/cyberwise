@@ -73,11 +73,19 @@ param(
     # tool's own directory where it can end up committed by accident.
     [string] $Out         = 'mod-manifest.md',
     [string] $CachePath,
-    [string] $OverridePath = (Join-Path $PSScriptRoot 'nsfw-overrides.json'),
+    [string] $OverridePath,
     [string] $HtmlOut,
     [switch] $NoHtml,
     [int]    $ThrottleMs  = 120
 )
+
+# $PSScriptRoot is EMPTY inside a param default on Windows PowerShell 5.1
+# when the script is run with -File or dot-sourced - it is only populated
+# under the call operator, and pwsh 7 populates it in every case. So the
+# default below is resolved HERE, where it is correct on both engines and
+# by every invocation route. See cyberwise/references/environment.md.
+
+if (-not $OverridePath) { $OverridePath = (Join-Path $PSScriptRoot 'nsfw-overrides.json') }
 
 # --- upstream guard ---------------------------------------------------------
 # Advisory, and only that: silent while this copy matches what shipped, one

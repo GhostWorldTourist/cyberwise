@@ -52,7 +52,7 @@ param(
     [string] $GameRoot = '',
 
     # The cyberwise checkout, so the report can name a version.
-    [string] $RepoRoot = (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))),
+    [string] $RepoRoot,
 
     [string] $Out = (Join-Path (Get-Location) 'problem-report.md'),
 
@@ -60,6 +60,14 @@ param(
     # a stranger on the internet, by design.
     [switch] $NoRedact
 )
+
+# $PSScriptRoot is EMPTY inside a param default on Windows PowerShell 5.1
+# when the script is run with -File or dot-sourced - it is only populated
+# under the call operator, and pwsh 7 populates it in every case. So the
+# default below is resolved HERE, where it is correct on both engines and
+# by every invocation route. See cyberwise/references/environment.md.
+
+if (-not $RepoRoot) { $RepoRoot = (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) }
 
 # --- upstream guard ---------------------------------------------------------
 # Advisory, and only that: silent while this copy matches what shipped, one

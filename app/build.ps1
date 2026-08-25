@@ -18,9 +18,17 @@
 
 [CmdletBinding()]
 param(
-    [string] $OutDir = (Join-Path $PSScriptRoot 'bin'),
+    [string] $OutDir,
     [switch] $Run
 )
+
+# $PSScriptRoot is EMPTY inside a param default on Windows PowerShell 5.1
+# when the script is run with -File or dot-sourced - it is only populated
+# under the call operator, and pwsh 7 populates it in every case. So the
+# default below is resolved HERE, where it is correct on both engines and
+# by every invocation route. See cyberwise/references/environment.md.
+
+if (-not $OutDir) { $OutDir = (Join-Path $PSScriptRoot 'bin') }
 
 $ErrorActionPreference = 'Stop'
 

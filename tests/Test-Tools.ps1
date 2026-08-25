@@ -1,4 +1,4 @@
-﻿# Test-Tools.ps1 -- behaviour tests for the shipped tools, against fixtures.
+# Test-Tools.ps1 -- behaviour tests for the shipped tools, against fixtures.
 #
 #     .\tests\Test-Tools.ps1
 #
@@ -27,7 +27,7 @@
 
 [CmdletBinding()]
 param(
-    [string] $Root = (Split-Path -Parent $PSScriptRoot),
+    [string] $Root,
 
     # Skip the headless-browser checks. They are the slow part by a wide margin,
     # and Test-ToolMutations.ps1 runs this whole suite nine times over - so it
@@ -35,6 +35,14 @@ param(
     # Never pass it for a real run.
     [switch] $Quick
 )
+
+# $PSScriptRoot is EMPTY inside a param default on Windows PowerShell 5.1
+# when the script is run with -File or dot-sourced - it is only populated
+# under the call operator, and pwsh 7 populates it in every case. So the
+# default below is resolved HERE, where it is correct on both engines and
+# by every invocation route. See cyberwise/references/environment.md.
+
+if (-not $Root) { $Root = (Split-Path -Parent $PSScriptRoot) }
 
 # EVERY TOOL RUNS THE UPSTREAM GUARD AT STARTUP, and it prints a line when the
 # tree differs from the shipped manifest. Test-ToolMutations.ps1 deliberately
@@ -1196,9 +1204,24 @@ $padBad = @(
     if ($padText -notmatch '(?s)grid-row:3;grid-column:1"[^>]*>\s*<span class="pkb">G1<') { 'G1 is not in the bottom-left cell' }
     if ($padText -notmatch '(?s)grid-row:1;grid-column:1"[^>]*>\s*<span class="pkb">G3<') { 'G3 is not in the top-left cell' }
     if ($padText -notmatch '(?s)grid-row:3;grid-column:2"[^>]*>\s*<span class="pkb">G4<') { 'G4 is not in the bottom-right cell' }
-    # The seats the device has and the profile does not use. Drawn, because
-    # where the spare button is is something you can feel.
-    if ($padText -notmatch 'class="pk free"')  { 'a key the profile never assigns was omitted instead of drawn empty' }
+    # A SEAT WITH NOTHING ON IT IS NOT DRAWN. It used to be, and it cost a full
+    # cell - the same width as a key carrying an action - to say "not assigned",
+    # which the owner already knows, being the one who did not assign it.
+    if ($padText -match 'class="pk free"')       { 'an unassigned seat is still drawn on the pad' }
+    if ($padText -match '<span class="pkb">G5<') { 'a seat the profile never assigns was drawn anyway' }
+    if ($padText -match '<span class="pkb">G6<') { 'a seat the profile never assigns was drawn anyway' }
+    # AND THE GEOMETRY STAYS HONEST, which is the half that could regress
+    # silently: omitting a key must leave its POSITION empty, never let the keys
+    # after it slide up into the gap. The pad is only worth drawing while its
+    # shape is the shape under the thumb. Two things carry that - the grid still
+    # declares the DEVICE's size rather than the drawn subset's, and every key
+    # still states its own coordinates instead of relying on source order.
+    if ($padText -notmatch 'class="pad" style="--pc:2;--pr:3"') {
+        'the pad no longer declares the device size, so dropped seats reflow the grid'
+    }
+    if (@([regex]::Matches($padText, 'class="pk[^"]*" style="grid-row:')).Count -ne 4) {
+        'a drawn key lost its explicit grid position'
+    }
     # THE FINDING. G3 sends Numpad + and nothing on this install binds it.
     if ($padText -notmatch '(?s)class="pk dead"[^>]*>\s*<span class="pkb">G3<') { 'the dead key is not marked dead in the grid' }
     # Read the G1 CELL, not the whole document: `.*?` across a page will happily
@@ -1231,12 +1254,27 @@ else         { Ok  'geometry: the pad draws the join and marks a dead key, and f
 # remembered, so it cannot drift from the file it sits in. It has to name the
 # skill, name where the geometry lives, and carry the flags actually used - a
 # regeneration that forgets the bundle silently loses the pad.
+#
+# The paths in it are checked in their DE-NAMED form. A cheatsheet gets
+# screenshotted and posted, and every absolute path on it carries the home
+# directory, which carries the account name. The substitution is
+# `$env:USERPROFILE` rather than `~` because the command in the prompt still has
+# to run when it is pasted back, and PowerShell expands the variable.
+$deName = {
+    param([string] $p)
+    if ($p.StartsWith($env:USERPROFILE, [StringComparison]::OrdinalIgnoreCase)) {
+        return '$env:USERPROFILE' + $p.Substring($env:USERPROFILE.Length)
+    }
+    return $p
+}
 $regenBad = @(
     if ($padText -notmatch 'id="regenprompt"')       { 'the sheet carries no regeneration prompt' }
     if ($padText -notmatch 'cyberwise-hotkeys')      { 'the prompt does not name the skill to load' }
     if ($padText -notmatch 'New-HotkeySheet\.ps1')   { 'the prompt does not name the tool to run' }
-    if ($padText -notmatch [regex]::Escape($geoRoot)){ 'the prompt does not say where the device geometry lives' }
-    if ($padText -notmatch [regex]::Escape($padHtmlPath)) { 'the prompt does not carry -Out, so a rerun would write somewhere else' }
+    if ($padText -notmatch [regex]::Escape((& $deName $geoRoot))) { 'the prompt does not say where the device geometry lives' }
+    if ($padText -notmatch [regex]::Escape((& $deName $padHtmlPath))) { 'the prompt does not carry -Out, so a rerun would write somewhere else' }
+    if ($padText -notmatch 'sheet-preferences\.md')  { 'the prompt does not name the article holding the hidden list, so a regeneration would silently un-hide everything' }
+    if ($padText -notmatch '-Hide ')                 { 'the prompt carries no -Hide, so the hidden set cannot survive a regeneration' }
     if ($padText -match '-IncludeBaseGame')          { 'the prompt claims a switch this run did not use' }
     # It is a clipboard control, not a link: a file:// page can reach no agent,
     # and a deep link into a web session would land somewhere with no access to
@@ -1245,6 +1283,160 @@ $regenBad = @(
 )
 if ($regenBad) { Bad 'sheet: the regeneration prompt names the skill, the bundle and the real flags' ($regenBad -join "`n") }
 else           { Ok  'sheet: the regeneration prompt names the skill, the bundle and the real flags' }
+
+# ------------------------------------------------- a page built to be shared
+#
+# NO ACCOUNT NAME ON IT, ANYWHERE. Not in the prose, not in the footer, not
+# inside the prompt that is meant to be pasted into a chat window. The sandbox
+# lives under %TEMP%, which is under the home directory, so a sheet built here
+# is a real test of the substitution rather than a contrived one.
+$nameBad = @(
+    if ($env:USERPROFILE -and $padText -match [regex]::Escape($env:USERPROFILE)) {
+        'the sheet prints the home directory, and therefore the account name'
+    }
+    if ($padText -notmatch [regex]::Escape('$env:USERPROFILE')) {
+        'no path was de-named at all - the substitution is not running'
+    }
+)
+if ($nameBad) { Bad 'sheet: no account name reaches a page built to be screenshotted' ($nameBad -join "`n") }
+else          { Ok  'sheet: no account name reaches a page built to be screenshotted' }
+
+# A FINDING EARNS A LINE. GOOD NEWS DOES NOT.
+#
+# Both of these were on the sheet and both were asked for out. One explained
+# that a mouse emits keystrokes rather than performing game actions - which the
+# owner knew, having configured the mouse. The other was a green sentence
+# confirming there was nothing to report, on a page where every millimetre
+# competes with a keycap. The dead button they replaced is flagged AT THE KEY,
+# in red, which is where somebody actually looks.
+$wordBad = @(
+    if ($padText -match 'The mouse performs no game action') { 'the sheet still explains that a peripheral emits keystrokes' }
+    if ($padText -match 'Every assigned button lands on')     { 'the green "everything is fine" line is still on the sheet' }
+    if ($padText -match 'class="foot ok"' -or $padText -match '<b class="ok">') { 'a validation line survived in some other form' }
+    # It is not enough to have deleted them - the facts they carried have to be
+    # somewhere. One measured count line in the header carries all of it.
+    if ($padText -notmatch 'id="counts"')    { 'nothing replaced the prose - the sheet no longer states its own size' }
+    if ($padText -notmatch 'id="cAssigned"') { 'the count line does not carry the assigned count' }
+    if ($padText -notmatch 'id="cDead"')     { 'the count line cannot report a dead key, which is the finding the prose used to carry' }
+)
+if ($wordBad) { Bad 'sheet: no peripheral lecture, and no green good-news line' ($wordBad -join "`n") }
+else          { Ok  'sheet: no peripheral lecture, and no green good-news line' }
+
+# ------------------------------------------------ hiding what you never press
+#
+# THE PART A PURE-JS IMPLEMENTATION GETS WRONG. localStorage makes hiding
+# instant and survives a reload; it cannot survive a REGENERATION, because the
+# next sheet is a different file built from disk. So the durable copy is an
+# article in the user's wiki bundle - the same data layer the device geometry
+# uses - and what is tested here is the round trip through it, because that is
+# the half that silently un-hides everything when it breaks.
+$prefBundle = Join-Path $sandbox 'prefwiki'
+New-Item -ItemType Directory -Path $prefBundle -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $geoRoot 'devices.md') -Destination $prefBundle
+$prefFile  = Join-Path $prefBundle 'sheet-preferences.md'
+$hideHtml  = Join-Path $sandbox 'hotkeys-hide.html'
+$hideMd    = Join-Path $sandbox 'hotkeys-hide.md'
+
+# Take the entries to hide from the sheet's own markup rather than inventing
+# them. The id in `data-hid` is the SAME STRING the article stores and the
+# command line passes; hand-writing a fourth spelling here would test the test.
+$allHids = @([regex]::Matches($padText, 'data-hid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+$padHid  = @($allHids | Where-Object { $_ -like 'button: G4*' })[0]
+$rowHid  = @($allHids | Where-Object { $_ -like 'binding:*' })[0]
+
+$hideBad = @()
+if (-not $allHids.Count) { $hideBad += 'nothing on the sheet is hideable - there are no data-hid ids at all' }
+if (-not $padHid)        { $hideBad += 'the pad key G4 carries no hide id' }
+if (-not $rowHid)        { $hideBad += 'no keyboard row carries a hide id' }
+
+if (-not $hideBad.Count) {
+    # 1. WRITE. -Hide is authoritative: what it names becomes the hidden set.
+    $wOut = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $hideHtml -MouseProfileRoot $cueRoot -WikiBundle $prefBundle -Hide $rowHid, $padHid }
+    if (-not (Test-Path -LiteralPath $prefFile)) {
+        $hideBad += '-Hide wrote no preferences article, so nothing would survive a regeneration'
+    } else {
+        $pref = Get-Content -LiteralPath $prefFile -Raw
+        if ($pref -notmatch '(?m)^\s*```\s*sheet-hidden\s*$') { $hideBad += 'the article has no sheet-hidden block' }
+        foreach ($e in @($rowHid, $padHid)) {
+            if ($pref -notmatch [regex]::Escape($e)) { $hideBad += "the article does not carry the entry '$e'" }
+        }
+        # It has to be readable BY A PERSON as well as by the regex, or the
+        # promise that hiding is reversible without a tool is not true.
+        if ($pref -notmatch '(?m)^type:\s*\S') { $hideBad += 'the article has no OKF frontmatter and would fail the bundle validator' }
+    }
+
+    # 2. READ BACK. A fresh run, no -Hide at all, must reach the same state from
+    # the article alone - that IS surviving regeneration.
+    $rOut  = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $hideHtml -Md $hideMd -MouseProfileRoot $cueRoot -WikiBundle $prefBundle }
+    $hText = Get-Content -LiteralPath $hideHtml -Raw
+    if ($rOut -notmatch '2 entries from') { $hideBad += 'the second run did not report reading the hidden entries back' }
+
+    # 3. OMITTED. Marked hidden in the markup, not deleted from it: the page's
+    # own hidden list has to be able to offer them back, and it cannot offer
+    # back an element that was never rendered.
+    foreach ($e in @($rowHid, $padHid)) {
+        $cell = [regex]::Match($hText, '<div class="([^"]*)"[^>]*data-hid="' + [regex]::Escape($e) + '"')
+        if (-not $cell.Success) {
+            # The pad key states its style before its data-hid; try the other order.
+            $cell = [regex]::Match($hText, '<div class="([^"]*)"[^>]*\s(?:style)="[^"]*"\s*data-hid="' + [regex]::Escape($e) + '"')
+        }
+        if (-not $cell.Success)                 { $hideBad += "the hidden entry '$e' is not in the page at all - the lightbox could never put it back" }
+        elseif ($cell.Groups[1].Value -notmatch '\bhid\b') { $hideBad += "the entry '$e' was read back but not marked hidden" }
+    }
+    if ($hText -notmatch 'id="cHid"[^>]*>2 hidden<') { $hideBad += 'the count line does not say how many entries are hidden' }
+    if ($hText -notmatch 'id="lb"')                  { $hideBad += 'there is no hidden-entry list, so unhiding would need the file edited by hand' }
+    # HIDDEN MEANS HIDDEN IN BOTH OUTPUTS. A row taken off the sheet coming back
+    # in the copy pasted into a chat would make the control a lie half the time.
+    $hMd = Get-Content -LiteralPath $hideMd -Raw
+    $rowAction = ($rowHid -split '\|')[1].Trim()
+    if ($hMd -match ('(?m)^\|[^|]*\|\s*' + [regex]::Escape($rowAction) + '\s*\|')) {
+        $hideBad += "the hidden row '$rowAction' is still in the markdown"
+    }
+
+    # 4. REVERSIBLE, WITH NO FILE OPENED. `-Hide @()` is what the page's own
+    # unhide control produces once everything is put back - the set is
+    # authoritative, so a shorter list is an instruction to un-hide.
+    $null   = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $hideHtml -MouseProfileRoot $cueRoot -WikiBundle $prefBundle -Hide @() }
+    $pref2  = Get-Content -LiteralPath $prefFile -Raw
+    $hText2 = Get-Content -LiteralPath $hideHtml -Raw
+    if ($pref2 -match [regex]::Escape($padHid))  { $hideBad += 'unhiding everything left an entry in the article' }
+    if ($hText2 -match 'data-hid="[^"]*"[^>]*>' -and $hText2 -match 'class="[^"]*\bhid\b[^"]*"[^>]*data-hid') {
+        $hideBad += 'an entry is still marked hidden after -Hide @()'
+    }
+    # The prose a person wrote around the block is not collateral damage.
+    if ($pref2 -notmatch '(?m)^type:\s*\S') { $hideBad += 'rewriting the block destroyed the article around it' }
+}
+if ($hideBad) { Bad 'hiding: the hidden set survives a regeneration through the wiki bundle' (($hideBad | Where-Object { $_ }) -join "`n") }
+else          { Ok  'hiding: the hidden set survives a regeneration through the wiki bundle' }
+
+# DEGRADING IS THE NORMAL CASE HERE TOO. Nobody has hidden anything on a first
+# run, most bundles have no preferences article, and a hand-edited one can be
+# empty or wrong. Every one of those is a sheet with nothing hidden - never an
+# error, and never a guess at what a broken line meant, because losing one entry
+# is recoverable and hiding the wrong row is not: nobody goes looking for a row
+# they never noticed vanishing.
+$prefDegrade = @()
+foreach ($case in @(
+        @{ n = 'no preferences article at all'; body = $null }
+        @{ n = 'an article with an empty block'; body = "---`ntype: Preference`n---`n`n``````sheet-hidden`n``````" }
+        @{ n = 'an article with no block in it'; body = "---`ntype: Preference`n---`n`nnothing here." }
+        @{ n = 'a block of unparseable lines';   body = "---`ntype: Preference`n---`n`n``````sheet-hidden`nthis is not an entry`n# a comment`n``````" })) {
+    $b = Join-Path $sandbox ('pref-' + ($case.n -replace '\W', ''))
+    New-Item -ItemType Directory -Path $b -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $geoRoot 'devices.md') -Destination $b -Force
+    if ($case.body) { Set-Content -LiteralPath (Join-Path $b 'sheet-preferences.md') -Value $case.body }
+    $o = Join-Path $sandbox ('pref-' + ($case.n -replace '\W', '') + '.html')
+    try {
+        $null = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $o -MouseProfileRoot $cueRoot -WikiBundle $b }
+        $t = Get-Content -LiteralPath $o -Raw
+        if ($t -match 'class="[^"]*\bhid\b[^"]*"[^>]*data-hid') { $prefDegrade += "$($case.n): something was hidden anyway" }
+        if ($t -notmatch 'id="cAssigned">\d+<')                 { $prefDegrade += "$($case.n): the sheet did not render its count line" }
+    } catch {
+        $prefDegrade += "$($case.n): THREW '$($_.Exception.Message)' instead of rendering a sheet with nothing hidden"
+    }
+}
+if ($prefDegrade) { Bad 'hiding: a missing, empty or unparseable preferences article hides nothing, and never errors' ($prefDegrade -join "`n") }
+else              { Ok  'hiding: a missing, empty or unparseable preferences article hides nothing, and never errors' }
 
 # ------------------------------------------------------ one key, one identity
 #

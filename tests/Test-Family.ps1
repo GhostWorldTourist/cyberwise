@@ -19,8 +19,16 @@
 
 [CmdletBinding()]
 param(
-    [string] $Root = (Split-Path -Parent $PSScriptRoot)
+    [string] $Root
 )
+
+# $PSScriptRoot is EMPTY inside a param default on Windows PowerShell 5.1
+# when the script is run with -File or dot-sourced - it is only populated
+# under the call operator, and pwsh 7 populates it in every case. So the
+# default below is resolved HERE, where it is correct on both engines and
+# by every invocation route. See cyberwise/references/environment.md.
+
+if (-not $Root) { $Root = (Split-Path -Parent $PSScriptRoot) }
 
 $script:fail = 0
 $script:pass = 0
@@ -351,6 +359,44 @@ Check 'every shipped .ps1 parses' {
         $errs = $null
         [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
         if ($errs) { "$($f.Name): $($errs[0].Message)" }
+    }
+}
+
+# ----------------------------------------------- a 5.1 trap in param blocks --
+#
+# $PSScriptRoot is EMPTY inside a param-block DEFAULT on Windows PowerShell 5.1
+# whenever the script carries [CmdletBinding()] and is started with -File, or is
+# dot-sourced. Under the call operator it is populated, and pwsh 7 populates it
+# in every case - which is precisely why this survives review. Every tool here
+# gets written and tried at a prompt, where it works, and then breaks the first
+# time a scheduled task, an installer step, the tray or an agent runs it with
+# -File. Six tools shipped with it before anything noticed.
+#
+# It fails two ways and the quiet one is worse. Split-Path and Join-Path reject
+# the empty string loudly, so those at least stop; but "$PSScriptRoot	hemes"
+# silently becomes "	hemes" - the root of whatever drive happens to be current.
+#
+# The fix is to leave the parameter undefaulted and resolve it in the BODY,
+# which is correct on both engines by every route and still honours an override.
+# $MyInvocation.MyCommand.Path is NOT a workaround: it is null in the same spot.
+Check 'no param default reads $PSScriptRoot (it is empty there on 5.1)' {
+    foreach ($f in (Get-ChildItem -LiteralPath $Root -Filter *.ps1 -Recurse)) {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$null)
+        if (-not $ast -or -not $ast.ParamBlock) { continue }
+        # Only an ADVANCED script binds its defaults early enough to hit this.
+        $cb = @($ast.ParamBlock.Attributes | Where-Object { $_.TypeName.Name -eq 'CmdletBinding' })
+        if (-not $cb.Count) { continue }
+        foreach ($prm in $ast.ParamBlock.Parameters) {
+            if (-not $prm.DefaultValue) { continue }
+            $bad = $prm.DefaultValue.FindAll({
+                param($n)
+                $n -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                $n.VariablePath.UserPath -eq 'PSScriptRoot'
+            }, $true)
+            if ($bad) {
+                "$($f.Name): `$$($prm.Name.VariablePath.UserPath) defaults from `$PSScriptRoot - empty on 5.1 under -File; resolve it in the body instead"
+            }
+        }
     }
 }
 

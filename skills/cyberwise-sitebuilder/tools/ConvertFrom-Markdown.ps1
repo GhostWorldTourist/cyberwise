@@ -87,7 +87,17 @@ function ConvertTo-Html {
     .OUTPUTS
         [string] the fragment.
     #>
-    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Markdown)
+    param(
+        [Parameter(Mandatory)] [AllowEmptyString()] [string] $Markdown,
+
+        # Push every heading down N levels. The page supplies its own <h1> for
+        # the headline, and the themes style a BARE h1 as display type - up to
+        # 76px, uppercase, with a misregistration layer. A document whose own
+        # sections are written as "# Section" would render each one in that
+        # face. Offsetting keeps one h1 per page and puts the sections back at
+        # the size they are meant to be.
+        [ValidateRange(0, 5)] [int] $HeadingOffset = 0
+    )
 
     $lines = ($Markdown -replace "`r`n", "`n") -split "`n"
     $out = New-Object System.Collections.Generic.List[string]
@@ -211,7 +221,7 @@ function ConvertTo-Html {
         # --- heading
         if ($trim -match '^(#{1,6})\s+(.*)$') {
             Close-Para; Close-List
-            $level = $matches[1].Length
+            $level = [Math]::Min(6, $matches[1].Length + $HeadingOffset)
             [void]$out.Add("<h$level>$(ConvertTo-HtmlText $matches[2])</h$level>")
             continue
         }

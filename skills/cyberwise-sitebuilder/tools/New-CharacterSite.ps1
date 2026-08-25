@@ -52,8 +52,16 @@ param(
     [switch] $IncludeDrafts,
 
     # Where the stylesheets live. Point this somewhere else to ship your own set.
-    [string] $ThemeDir = (Join-Path (Split-Path -Parent $PSScriptRoot) 'themes')
+    [string] $ThemeDir
 )
+
+# $PSScriptRoot is EMPTY inside a param default on Windows PowerShell 5.1
+# when the script is run with -File or dot-sourced - it is only populated
+# under the call operator, and pwsh 7 populates it in every case. So the
+# default below is resolved HERE, where it is correct on both engines and
+# by every invocation route. See cyberwise/references/environment.md.
+
+if (-not $ThemeDir) { $ThemeDir = (Join-Path (Split-Path -Parent $PSScriptRoot) 'themes') }
 
 # --- upstream guard ---------------------------------------------------------
 # Advisory, and only that: silent while this copy matches what shipped, one
@@ -185,8 +193,18 @@ foreach ($dir in (Get-ChildItem -LiteralPath $From -Directory | Sort-Object Name
     # The document's own H1. It is usually NOT the character's name - "Too Bad,
     # Too Bad", "Campfire Myth", a case number - and that is the useful thing to
     # show, because it says what kind of document this is before it is opened.
-    $docTitle = ($lines | Where-Object { $_ -match '^#\s+\S' } | Select-Object -First 1) -replace '^#\s+', ''
-    if (-not $docTitle) { $docTitle = $dir.Name }
+    # ...and ONLY when it is the document's ONE H1. A document with several H1s
+    # is using them as SECTION headings and has no title line at all. Taking the
+    # first anyway got both halves wrong on a plain profile that opens
+    # "# Appearance": every page was headlined "Appearance", every directory row
+    # said the same word, and - because the title is stripped from the body
+    # below so it is not printed twice - a real section heading was silently
+    # deleted. Falling back is the honest answer; inventing a title is not.
+    $h1s = @($lines | Where-Object { $_ -match '^#\s+\S' })
+    $hasTitleLine = ($h1s.Count -eq 1)
+    $docTitle = if ($hasTitleLine) { $h1s[0] -replace '^#\s+', '' } else { '' }
+    if (-not $docTitle) { $docTitle = "$($fm.Data['title'])".Trim() }
+    if (-not $docTitle) { $docTitle = (Get-Culture).TextInfo.ToTitleCase($dir.Name) }
 
     # The line under the title, and ONLY when the document opens with a header
     # block - a run of LABEL: lines, the way a file or a report does.
@@ -221,7 +239,7 @@ foreach ($dir in (Get-ChildItem -LiteralPath $From -Directory | Sort-Object Name
     # the blank line under it, and a multi-line pattern here is one escaping
     # mistake away from silently matching nothing.
     $bodyLines = [System.Collections.Generic.List[string]] $lines
-    for ($li = 0; $li -lt $bodyLines.Count; $li++) {
+    for ($li = 0; ($hasTitleLine -and $li -lt $bodyLines.Count); $li++) {
         if ($bodyLines[$li] -match '^#\s+\S') {
             $bodyLines.RemoveAt($li)
             while ($li -lt $bodyLines.Count -and -not $bodyLines[$li].Trim()) { $bodyLines.RemoveAt($li) }
@@ -243,7 +261,10 @@ foreach ($dir in (Get-ChildItem -LiteralPath $From -Directory | Sort-Object Name
         Latest    = if ($chapters.Count -gt 1) { $chapters[-1] } else { '' }
         ChapterNo = if ($chapters.Count -gt 1) { $chapters.Count } else { 0 }
         Changed   = $changed
-        Body      = ConvertTo-Html -Markdown ($bodyLines -join "`n")
+        # A document with no title line keeps all its own headings, so they are
+        # pushed down one level to sit under the page's headline rather than
+        # competing with it.
+        Body      = ConvertTo-Html -Markdown ($bodyLines -join "`n") -HeadingOffset $(if ($hasTitleLine) { 0 } else { 1 })
         MetaBody  = if ($meta) { ConvertTo-Html -Markdown (Get-Content -LiteralPath $meta.FullName -Raw) } else { $null }
         MetaTitle = if ($meta) { ($meta.BaseName -replace '^Meta\s*-\s*', '') } else { $null }
         Media     = $media
@@ -343,8 +364,7 @@ foreach ($c in $chars) {
     # underneath, a few pixels off - a plate out of register on a failing press.
     $body = @"
 <main class="doc" id="doc">
-  <p class="eyebrow">$(Get-Esc $c.Name)</p>
-  <h1 data-title="$(Get-Esc $c.DocTitle)">$(Get-Esc $c.DocTitle)</h1>
+$(if ($c.DocTitle -ne $c.Name) { "  <p class=""eyebrow"">$(Get-Esc $c.Name)</p>`n" })  <h1 data-title="$(Get-Esc $c.DocTitle)">$(Get-Esc $c.DocTitle)</h1>
   <p class="subhead">$(Get-Esc $c.Subhead)</p>
   $gallery
   <div class="content">
@@ -355,7 +375,7 @@ $($c.Body)
 </main>
 <div class="lightbox"><img alt=""></div>
 "@
-    Write-Page -File "$($c.Slug).html" -PageTitle "$($c.Name) - $($c.DocTitle)" -Theme $c.Theme `
+    Write-Page -File "$($c.Slug).html" -PageTitle $(if ($c.DocTitle -ne $c.Name) { "$($c.Name) - $($c.DocTitle)" } else { $c.Name }) -Theme $c.Theme `
                -BodyClass "page-doc is-$($c.Slug)" -Crumb $c.Name -Body $body
 }
 
@@ -375,7 +395,7 @@ $rows = foreach ($c in $chars) {
     @"
   <li class="file is-$($c.Slug)">
     <a href="$($c.Slug).html">
-      <span class="name">$(Get-Esc $c.Name)$chapter<span class="doctitle">$(Get-Esc $c.DocTitle)</span></span>
+      <span class="name">$(Get-Esc $c.Name)$chapter$(if ($c.DocTitle -ne $c.Name) { "<span class=""doctitle"">$(Get-Esc $c.DocTitle)</span>" })</span>
       <span class="when"><time datetime="$($c.Changed)">$($c.Changed)</time></span>
       <span class="excerpt" aria-hidden="true"><i>$(Get-Esc $c.Excerpt)</i></span>
     </a>
