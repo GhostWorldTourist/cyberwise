@@ -230,6 +230,24 @@ here should answer something that cost somebody time.
   you.
 - **Record what was ruled out and why.** Half the value of a hard diagnosis is
   the four wrong roads nobody needs to walk again.
+- **But never write the article's own edit history into the article.** Those are
+  two different things and the distinction is easy to lose:
+
+  | belongs in the ARTICLE | belongs in `log.md` |
+  |---|---|
+  | a wrong theory a READER would plausibly form | a wrong thing a previous version of this article said |
+  | "this looks like a conflict and is not - here is what was ruled out" | "an earlier version claimed X, which was wrong" |
+  | evidence that discriminates between two live hypotheses | who found the mistake, and when |
+
+  The first saves the next person an afternoon. The second is the document
+  apologising to itself, and a bundle that accumulates it becomes unreadable -
+  every article carrying a sediment of its own revisions. **State what is true
+  now.** Put what changed and why in the log, where somebody reviewing the
+  bundle a month later will actually look for it.
+
+  The same goes for struck-through rows and RETRACTED banners in a report. If a
+  finding was withdrawn, the report should state the correct finding; the log
+  records that it changed.
 - **Say what you did not verify.** `status: draft` and a plain sentence beats a
   confident article that turns out to be wrong - a note that is false is worse
   than no note.
