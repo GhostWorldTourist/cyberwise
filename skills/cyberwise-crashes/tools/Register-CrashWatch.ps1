@@ -28,6 +28,11 @@ param(
     [string] $GameRoot,
     [string] $TaskName = 'Cyberwise crash watch',
     [string] $RunValueName = 'Cyberwise crash watch',
+
+    # The TRAY's own Run entry. It launches CyberwiseTray.exe, which starts the
+    # watcher itself - a third autostart route this script does not own but must
+    # be able to see, or it reports a perfectly good setup as unregistered.
+    [string] $TrayRunValueName = 'Cyberwise',
     [int]    $IntervalSec = 15,
     [switch] $Status,
     [switch] $Remove
@@ -49,20 +54,74 @@ function Get-Task { Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyC
 
 $runKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 function Get-RunEntry { (Get-ItemProperty -Path $runKeyPath -Name $RunValueName -ErrorAction SilentlyContinue).$RunValueName }
+function Get-TrayRunEntry { (Get-ItemProperty -Path $runKeyPath -Name $TrayRunValueName -ErrorAction SilentlyContinue).$TrayRunValueName }
+
+# A Run entry stores an ABSOLUTE PATH, and Windows says nothing whatsoever when
+# that path stops existing - the icon simply never appears again. Checking the
+# target is the whole point of reporting the entry at all.
+function Test-RunTarget {
+    param([string] $Value)
+    if (-not $Value) { return $null }
+    $exe = if ($Value -match '^"([^"]+)"') { $matches[1] } else { ($Value -split '\s+')[0] }
+    [pscustomobject]@{ Path = $exe; Exists = (Test-Path -LiteralPath $exe) }
+}
+
+# Which COPY of the watcher is running decides whether it can snapshot at all.
+# Watch-Crashes.ps1 resolves New-InstallSnapshot.ps1 from $PSScriptRoot; the
+# installer also drops a flat copy in {app}, where that sibling does not exist.
+# Run flat, the watcher works and silently takes no session-start snapshot - so
+# "what changed since this last worked" has nothing to answer with, and nothing
+# anywhere says so.
+function Get-WatcherHealth {
+    param([string] $CommandLine)
+    if ($CommandLine -notmatch '-File\s+"?([^"]*Watch-Crashes\.ps1)"?') { return $null }
+    $script = $matches[1]
+    $sib = Join-Path (Split-Path -Parent $script) 'New-InstallSnapshot.ps1'
+    [pscustomobject]@{ Script = $script; CanSnapshot = (Test-Path -LiteralPath $sib) }
+}
 
 if ($Status) {
     $t = Get-Task
     $run = Get-RunEntry
+    $tray = Get-TrayRunEntry
     if (-not $t -and $run) {
         Write-Host "registered as a logon Run entry '$RunValueName'" -ForegroundColor Green
         Write-Host "  (starts at logon, but will NOT restart the watcher if it dies)" -ForegroundColor Yellow
+        $tgt = Test-RunTarget $run
+        if ($tgt -and -not $tgt.Exists) {
+            Write-Host "  BUT its target no longer exists: $($tgt.Path)" -ForegroundColor Red
+            Write-Host "  Windows reports nothing when this happens - it just stops starting." -ForegroundColor DarkGray
+        }
     }
-    if (-not $t -and -not $run) { Write-Host "not registered ('$TaskName')" -ForegroundColor Yellow }
+    # The tray is a legitimate third route. Reporting "not registered" while the
+    # watcher is plainly running reads as "somebody started this by hand and it
+    # is gone after a reboot" - which is the opposite of what is true.
+    if (-not $t -and -not $run -and $tray) {
+        Write-Host "started at logon by the Cyberwise tray ('$TrayRunValueName')" -ForegroundColor Green
+        Write-Host "  (the tray owns the watcher - start and stop it from the tray menu)" -ForegroundColor DarkGray
+        $tgt = Test-RunTarget $tray
+        if ($tgt -and -not $tgt.Exists) {
+            Write-Host "  BUT its target no longer exists: $($tgt.Path)" -ForegroundColor Red
+            Write-Host "  Windows reports nothing when this happens - it just stops starting." -ForegroundColor DarkGray
+        }
+    }
+    if (-not $t -and -not $run -and -not $tray) { Write-Host "not registered ('$TaskName')" -ForegroundColor Yellow }
     if (-not $t) {
         $live = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" -ErrorAction SilentlyContinue |
                   Where-Object { $_.CommandLine -like '*-File*Watch-Crashes.ps1*' })
         Write-Host "process   $(if ($live.Count) { "running (pid $($live[0].ProcessId))" } else { 'NOT running' })" `
             -ForegroundColor $(if ($live.Count) { 'Green' } else { 'Yellow' })
+        if ($live.Count) {
+            $h = Get-WatcherHealth $live[0].CommandLine
+            if ($h -and -not $h.CanSnapshot) {
+                Write-Host "snapshot  NO - this copy cannot take one" -ForegroundColor Red
+                Write-Host "  $($h.Script)" -ForegroundColor DarkGray
+                Write-Host "  New-InstallSnapshot.ps1 is not beside it, so no session-start snapshot" -ForegroundColor DarkGray
+                Write-Host "  is recorded and 'what changed since this worked' cannot be answered." -ForegroundColor DarkGray
+            } elseif ($h) {
+                Write-Host "snapshot  yes" -ForegroundColor Green
+            }
+        }
         exit 0
     }
 

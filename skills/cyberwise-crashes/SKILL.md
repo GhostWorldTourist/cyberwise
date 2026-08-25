@@ -274,6 +274,19 @@ Three things about this that are not obvious:
 - **Verify it is actually running**, with `-Status`. Match the process on its
   `-File` argument; a bare script-name substring also matches the query asking
   the question, which cheerfully reports a watcher that is not there.
+- **`-Status` knows all three autostart routes**, and has to: the scheduled
+  task, this script's own `Run` entry, and the **tray's** `Run` entry, which
+  starts the watcher itself under a different value name. Seeing only its own
+  two, it reported a perfectly good tray install as `not registered` while also
+  reporting the watcher as running - which reads as "somebody started this by
+  hand and it is gone after a reboot", the opposite of the truth.
+- **It also reports whether the running copy can take a snapshot at all.**
+  `Watch-Crashes.ps1` resolves `New-InstallSnapshot.ps1` from `$PSScriptRoot`,
+  and the installer drops a flat fallback copy in `{app}` where that sibling
+  does not exist. Run flat, the watcher works and silently records no
+  session-start snapshot, so the one question the snapshots exist to answer -
+  *what changed since this last worked* - has nothing behind it. `snapshot NO`
+  in the status output means recording is happening but history is not.
 - **Starting it twice is safe.** The watcher holds a mutex keyed on its output
   folder and a second launch exits immediately, so the tray, a logon entry and
   someone at a prompt cannot end up interleaving session CSVs. A second *game
@@ -287,7 +300,9 @@ says nothing whatsoever. There is no error, no log, no dialog: the icon just
 stops appearing, and if the watcher started from there the recording stops with
 it. Weeks of "crashes" can pass with nothing recorded.
 
-Check the entry against the filesystem before believing anything else:
+Check the entry against the filesystem before believing anything else.
+`-Status` now does this for whichever route is in use and says so in red, but
+by hand it is:
 
 ```powershell
 $v = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run').'Cyberwise'
