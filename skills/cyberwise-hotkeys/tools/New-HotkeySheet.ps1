@@ -143,8 +143,22 @@ function Hide-Home {
 # Get-Hotkeys' own detection with a blank path.
 $harvestArgs = @{}
 if ($GameRoot) { $harvestArgs.GameRoot = $GameRoot }
-if ($IncludeBaseGame) { $harvestArgs.IncludeBaseGame = $true }
-$binds = @(& (Join-Path $PSScriptRoot 'Get-Hotkeys.ps1') @harvestArgs)
+# THE VANILLA MAPPINGS ARE ALWAYS HARVESTED, EVEN WHEN THEY ARE NOT SHOWN.
+#
+# -IncludeBaseGame governs whether ~99 generic rows appear on a sheet about
+# mods. It must NOT govern whether this tool KNOWS about them, and for a while
+# it did: with the switch off, nothing in $binds claimed IK_MiddleMouse, so a
+# mouse button sending Middle Mouse was reported as "nothing binds this key -
+# does nothing in game". The game binds it to combatGadget out of the box. The
+# sheet was confidently telling its owner that a working button was dead.
+#
+# So harvest everything, then split: the vanilla set answers "is this key
+# claimed at all", and the display set is filtered exactly as before.
+$harvestArgs.IncludeBaseGame = $true
+$allBinds     = @(& (Join-Path $PSScriptRoot 'Get-Hotkeys.ps1') @harvestArgs)
+$vanillaBinds = @($allBinds | Where-Object { $_.System -eq 'base game' })
+$binds        = if ($IncludeBaseGame) { $allBinds }
+                else { @($allBinds | Where-Object { $_.System -ne 'base game' }) }
 Write-Host "harvested $($binds.Count) keyboard bindings" -ForegroundColor Cyan
 if ($binds.Count -eq 0) {
     # Not an error: an archive-only load order declares no keys. The sheet still
@@ -454,12 +468,18 @@ if (-not $NoMouseProfile) {
             if ($m.Kind -ne 'key remap') { $mouseOther += $m; continue }
             $canon = Get-KeyIdentity $m.Key
             $hits  = @($binds | Where-Object { (Get-KeyIdentity $_.Key) -eq $canon })
+            # Kept apart from $hits so the sheet can say WHICH claims the key.
+            # "the base game uses this" and "a mod uses this" are different
+            # answers to the user's actual question, which is whether pressing
+            # the button will do something.
+            $vhits = @($vanillaBinds | Where-Object { (Get-KeyIdentity $_.Key) -eq $canon })
             $mouseRows += [pscustomobject]@{
-                Button   = $m.Button
-                Label    = $m.Action        # what the USER called it in iCUE
-                Key      = $m.Key
-                Hits     = $hits
-                Assigned = [bool]$m.Button
+                Button      = $m.Button
+                Label       = $m.Action     # what the USER called it in iCUE
+                Key         = $m.Key
+                Hits        = $hits
+                VanillaHits = $vhits
+                Assigned    = [bool]$m.Button
             }
         }
 
@@ -470,7 +490,7 @@ if (-not $NoMouseProfile) {
                     " - $(@($mouseRows).Count) key remap(s) on $mouseDev" +
                     $(if ($extra -gt 0) { " ($extra other profile$(if ($extra -gt 1){'s'}) on this machine)" })) -ForegroundColor Cyan
 
-        $dead = @($mouseRows | Where-Object { $_.Assigned -and -not $_.Hits.Count })
+        $dead = @($mouseRows | Where-Object { $_.Assigned -and -not $_.Hits.Count -and -not $_.VanillaHits.Count })
         if ($dead.Count) {
             Write-Host ("      $($dead.Count) button(s) send a key nothing on disk is bound to: " +
                         (($dead | ForEach-Object { "$($_.Button) sends '$($_.Key)'" }) -join ', ')) -ForegroundColor DarkYellow
@@ -620,6 +640,22 @@ if ($mouseRows.Count) {
     }
 }
 
+# The base game's action names are internal identifiers - combatGadget, tag,
+# vehicleReverseCam. Splitting the camelCase and sentence-casing it is a pure
+# presentation change: nothing is renamed or guessed, so "combatGadget" becomes
+# "Combat gadget" and stays checkable against the XML it came from. Anything
+# already spaced or capitalised is left exactly as it is.
+function Format-GameAction {
+    param([string] $Name)
+    ($Name -split ',' | ForEach-Object {
+        $t = $_.Trim()
+        if (-not $t) { return }
+        if ($t -match '\s') { return $t }
+        $words = [regex]::Replace($t, '(?<=[a-z0-9])(?=[A-Z])', ' ')
+        $words.Substring(0,1).ToUpper() + $words.Substring(1).ToLower()
+    }) -join ', '
+}
+
 # What a keystroke actually does, in the one markup both a grid key and a list
 # row use. Written once because the two must never disagree about whether a
 # button is dead - that disagreement would be the finding contradicting itself.
@@ -628,6 +664,14 @@ function Get-DoesHtml {
     if ($M.Hits.Count) {
         return (($M.Hits | Sort-Object Mod, Action | ForEach-Object {
             "<span class=""pd"">$(esc $_.Action)<em>$(esc $_.Mod)</em></span>"
+        }) -join '')
+    }
+    # Nothing in the mod stores claims it, but the BASE GAME might - and saying
+    # "does nothing in game" about a key the game itself binds is the worst
+    # thing this sheet can do, because it reads as a finding.
+    if ($M.VanillaHits.Count) {
+        return (($M.VanillaHits | ForEach-Object {
+            "<span class=""pd"">$(esc (Format-GameAction $_.Action))<em>base game</em></span>"
         }) -join '')
     }
     if ($M.Assigned) {
@@ -671,7 +715,7 @@ if ($mouseRows.Count) {
             }
             $m = $byButton[$c.Label]
             $onPad[$m.Button] = $true
-            $isDead = -not $m.Hits.Count
+            $isDead = (-not $m.Hits.Count) -and (-not $m.VanillaHits.Count)
             $cls = if ($isDead) { ' dead' } else { '' }
             $h = New-Hid -Kind 'button' -Fields @($c.Label) -Label "$($c.Label) &middot; $($m.Key)" -Dead:$isDead
             @"
@@ -719,9 +763,10 @@ if ($mouseRows.Count) {
     $listRows = @($mouseRows | Where-Object { -not $onPad.ContainsKey($_.Button) -and $_.Assigned })
     $items = foreach ($m in $listRows) {
         $cls = @()
-        if (-not $m.Hits.Count) { $cls += 'dead' }
+        $rowDead = (-not $m.Hits.Count) -and (-not $m.VanillaHits.Count)
+        if ($rowDead) { $cls += 'dead' }
         $btn = esc $m.Button
-        $h = New-Hid -Kind 'button' -Fields @($m.Button) -Label "$($m.Button) &middot; $($m.Key)" -Dead:(-not $m.Hits.Count)
+        $h = New-Hid -Kind 'button' -Fields @($m.Button) -Label "$($m.Button) &middot; $($m.Key)" -Dead:$rowDead
         @"
       <div class="prow$(if ($cls) { ' ' + ($cls -join ' ') })$($h.Cls)"$($h.Attr)>
         <span class="pbtn">$btn</span>
@@ -911,6 +956,8 @@ if ($Md) {
         foreach ($m in $mdMouse) {
             $does = if ($m.Hits.Count) {
                 (($m.Hits | Sort-Object Mod, Action | ForEach-Object { "$(& $cell $_.Action) ($(& $cell $_.Mod))" }) -join '; ')
+            } elseif ($m.VanillaHits.Count) {
+                (($m.VanillaHits | ForEach-Object { "$(& $cell (Format-GameAction $_.Action)) (base game)" }) -join '; ')
             } elseif ($m.Assigned) { '**nothing on disk binds this key**' }
             else { 'on no button; nothing binds the key either' }
             $btn = if ($m.Assigned) { "$(& $cell $m.Button) - $(& $cell $m.Label)" } else { "- $(& $cell $m.Label)" }

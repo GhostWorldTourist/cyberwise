@@ -758,6 +758,7 @@ else            { Ok  'feedback: an unknown game patch is reported as unknown' }
 $hk = New-FixtureGame -Name 'hotkeys' -Archives @() -NoModlist
 New-Item -ItemType Directory -Path (Join-Path $hk 'r6\input') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hk 'r6\cache') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $hk 'r6\config') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hk 'red4ext\plugins\mod_settings') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $hk 'bin\x64\plugins\cyber_engine_tweaks') -Force | Out-Null
 
@@ -785,6 +786,23 @@ Set-Content -LiteralPath (Join-Path $hk 'r6\cache\inputUserMappings.xml') @'
     <button id="IK_F5"/>
   </buttonGroup>
 </root>
+'@
+
+# THE BASE GAME'S OWN MAPPINGS, in r6\config (not r6\cache above, which is a
+# different file for a different purpose). This fixture had none, which is why
+# nothing here noticed that a key the GAME binds was being reported as bound to
+# nothing at all. IK_MiddleMouse really does carry overridableUI="combatGadget"
+# in the shipped file, and really is what a middle click does.
+Set-Content -LiteralPath (Join-Path $hk 'r6\config\inputUserMappings.xml') @'
+<?xml version="1.0" encoding="UTF-8"?>
+<bindings>
+  <mapping name="CombatGadget" type="Button">
+    <button id="IK_MiddleMouse" overridableUI="combatGadget"/>
+  </mapping>
+  <mapping name="Tagging" type="Button">
+    <button id="IK_MiddleMouse" overridableUI="tag"/>
+  </mapping>
+</bindings>
 '@
 
 # ...and the USER actually rebound it to F7. This is the value that must win.
@@ -922,6 +940,9 @@ $cueActions = @(
     (New-CueAction 2 'Nothing Here'  'KeypadPlus'           'MouseG3')
     (New-CueAction 3 'Odd Key'       'SomeKeyIcueInvented'  'MouseG4')
     (New-CueAction 4 'Orphan'        'BracketLeft'          '')
+    # VANILLA -> a key NO mod binds, but the BASE GAME does. Not a finding, and
+    # the sheet must not call it one. This is the case that shipped wrong.
+    (New-CueAction 5 'Use Gadget'    'MiddleMouse'          'MouseG7')
 ) -join ''
 
 Set-Content -LiteralPath (Join-Path $cueRoot '{aaaaaaaa-0000-0000-0000-000000000001}.cueprofiledata') @"
@@ -1001,7 +1022,7 @@ if ($cueErr) {
     Bad 'mouse: an iCUE profile is read into button / key / label rows' "the tool threw: $cueErr"
 } else {
     $cueBad = @(
-        if ($cue.Count -ne 5) { "expected 5 actions, got $($cue.Count)" }
+        if ($cue.Count -ne 6) { "expected 6 actions, got $($cue.Count)" }
         $g2 = $cue | Where-Object { $_.Action -eq 'Lean Right' } | Select-Object -First 1
         if (-not $g2)                 { 'the Lean Right action was not found at all' }
         elseif ($g2.Button -ne 'G2')  { "MouseG2 was reported as '$($g2.Button)', not G2" }
@@ -1284,6 +1305,35 @@ $padBad += @(
 )
 if ($padBad) { Bad 'geometry: the pad draws the join and marks a dead key, and falls back to a list' ($padBad -join "`n") }
 else         { Ok  'geometry: the pad draws the join and marks a dead key, and falls back to a list' }
+
+# A KEY THE BASE GAME BINDS IS NOT A DEAD BUTTON.
+#
+# -IncludeBaseGame decides whether ~99 generic vanilla rows are SHOWN on a sheet
+# about mods. It used to also decide whether the tool KNEW about them, and the
+# consequence shipped: a mouse button sending Middle Mouse was printed as
+# "nothing binds this key - does nothing in game" on a sheet whose own owner had
+# labelled that button "Use Gadget". The game binds IK_MiddleMouse to
+# combatGadget out of the box. The sheet was not merely unhelpful, it was
+# asserting something false, in the red reserved for findings.
+#
+# Both halves are checked, because fixing one by breaking the other is the easy
+# mistake: the vanilla claim must be VISIBLE on the button, and the 99 vanilla
+# rows must still be ABSENT from the sheet.
+$vanBad = @(
+    if ($padText -match '(?s)<div class="prow[^"]*dead[^"]*"[^>]*data-hid="button: G7"') {
+        'a button whose key the base game binds is marked dead'
+    }
+    if ($padText -notmatch 'Combat gadget') { 'the base game action is not shown for the button that sends its key' }
+    if ($padText -notmatch 'base game')     { 'nothing attributes the binding to the base game' }
+    # The whole point of the switch: the vanilla set informs, it does not fill
+    # the page. Nothing here binds IK_F1, so if a vanilla row leaked into the
+    # displayed table it would show up as an action nobody asked for.
+    if ($padText -match 'class="row"[^>]*data-s="[^"]*game default') {
+        'vanilla rows leaked into the sheet even though -IncludeBaseGame was not passed'
+    }
+)
+if ($vanBad) { Bad 'sheet: a key the base game binds is never called dead' ($vanBad -join "`n") }
+else         { Ok  'sheet: a key the base game binds is never called dead' }
 
 # The regeneration prompt is reconstructed from the arguments rather than
 # remembered, so it cannot drift from the file it sits in. It has to name the

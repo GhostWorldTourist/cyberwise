@@ -1,4 +1,4 @@
-﻿# Test-ToolMutations.ps1 -- proves Test-Tools.ps1 can actually fail.
+# Test-ToolMutations.ps1 -- proves Test-Tools.ps1 can actually fail.
 #
 #     .\tests\Test-ToolMutations.ps1
 #
@@ -102,6 +102,7 @@ $repairRel   = 'skills\cyberwise-conflicts\tools\Repair-LoadOrder.ps1'
 $indexRel    = 'skills\cyberwise\tools\Get-ToolIndex.ps1'
 $capRel      = 'skills\cyberwise-recommends\tools\Test-Capabilities.ps1'
 $prefRel     = 'skills\cyberwise-recommends\tools\ModPreference.ps1'
+$sheetRel    = 'skills\cyberwise-hotkeys\tools\New-HotkeySheet.ps1'
 Save-Original $profileRel
 Save-Original $saveRel
 Save-Original $presetRel
@@ -122,6 +123,7 @@ Save-Original $repairRel
 Save-Original $indexRel
 Save-Original $capRel
 Save-Original $prefRel
+Save-Original $sheetRel
 
 # Three of the mutations below are owned by bisect tests, and those tests skip
 # themselves while Cyberpunk is running (the tool refuses to move mod files under
@@ -493,6 +495,18 @@ Assert-Detects 'a stale register entry that blesses every later edit' $guardRel 
     'if ($entry -and $entry.Sha -eq $h.Sha) {' `
     'if ($entry) {' `
     'an entry that no longer matches the file stops covering it'
+
+# THE BUG THAT SHIPPED, reduced to one line. -IncludeBaseGame governs whether
+# the ~99 vanilla rows are DISPLAYED; it must never govern whether the tool
+# knows they exist. When it did, a mouse button sending Middle Mouse was printed
+# as "nothing binds this key - does nothing in game" on a sheet whose owner had
+# labelled that very button "Use Gadget". The game binds IK_MiddleMouse to
+# combatGadget out of the box, so the sheet asserted something false in the
+# colour it reserves for findings. Emptying the vanilla set reproduces it.
+Assert-Detects 'the base game mappings known only when they are displayed' $sheetRel `
+    '$vanillaBinds = @($allBinds | Where-Object { $_.System -eq ''base game'' })' `
+    '$vanillaBinds = @()' `
+    'a key the base game binds is never called dead'
 
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
