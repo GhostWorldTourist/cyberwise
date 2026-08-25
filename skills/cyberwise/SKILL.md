@@ -141,7 +141,7 @@ defending the reading or folding to the claim.
 command, and it is the first thing to run on any Cyberwise task:
 
 ```powershell
-tools\Test-Upstream.ps1        # ~0.1s. Silent-ish when clean; names anything unlogged.
+tools\Test-Upstream.ps1        # ~0.1s. Exit 0 nothing unlogged, 1 findings, 2 cannot check.
 ```
 
 Then the behavioural half, which is the part a check cannot do for you. **If you
@@ -306,6 +306,39 @@ local modifications to files Cyberwise itself ships, so it has to survive a fres
 clone, a hard reset, and an update that overwrites the working tree. A record of
 local changes kept in the repo is destroyed by exactly the event it exists for.
 
+## A generated page can ask for work - carefully
+
+The reports here are dead HTML, so a sheet that has drifted from reality stays
+wrong: fixing it means leaving the page, finding a terminal and remembering a
+tool name. `tools/Start-CwEndpoint.ps1` is a loopback service that lets a button
+on the page ask for the work instead.
+
+**"A local listener that runs prompts when poked" is a genuinely bad object to
+leave on a machine**, and the obvious implementation is an exploit. Five
+properties make it safe, and none is optional:
+
+| property | what it stops |
+|---|---|
+| binds `127.0.0.1` only, never `+` | anything off this machine. Needs no admin, no URL reservation |
+| the request names an **id** and nothing else | injection - there is no request field that reaches a shell, which is a stronger claim than sanitising one |
+| `Origin` must be absent or `null` | **a website making your browser POST to 127.0.0.1.** A browser sets Origin and a page cannot forge it, so any `http(s)` origin is refused |
+| a token from a file, in a custom header | a page that defeated the origin check. It also forces a CORS preflight, which is a second origin check before anything runs |
+| a mode the user chooses, defaulting to `prompt` | everything, by default. `prompt` executes **nothing** - it hands the text back to copy |
+
+Commands, script paths and arguments live in `endpoint.actions.json`, which
+ships. Adding a capability is an edit to that file and a review, never a runtime
+decision. Placeholders in an action's arguments are filled from the endpoint's
+own startup parameters - never from the caller.
+
+`GET /actions` returns each action's real prompt text, which is what the page's
+`?` lightbox must display. **A page that shipped its own copy of the prompt
+could show one thing and send another**, which would make inspecting it theatre.
+
+Every request is appended to `<records>\Cyberwise\endpoint.log`, refusals
+included. The page must degrade on its own: if `/health` does not answer it
+falls back to a copy button, because the endpoint is an accelerator and must
+never become a dependency.
+
 ## Know where each kind of mod lives
 
 Not everything deploys to `archive\pc\mod`. A mod "missing" from there may simply
@@ -345,6 +378,7 @@ because an unlisted archive sorts last and loses.
 | `tools/Test-Upstream.ps1` | does this copy of Cyberwise still match what shipped, and is every difference written down |
 | `tools/UpstreamGuard.ps1` | the shared helper behind that: `Register-CwChange`, and the advisory every tool runs at startup |
 | `tools/New-UpstreamManifest.ps1` | declare what upstream looks like now. Deliberately separate from checking |
+| `tools/Start-CwEndpoint.ps1` | a loopback endpoint so a generated page can ask for work, gated by a mode the user picks |
 
 **Cyberwise watches itself, and it is advisory on purpose.**
 `skills\cyberwise\upstream.manifest` carries a sha256 of every behaviour-bearing
@@ -443,6 +477,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `ModFileBackup.ps1` | `cyberwise` | take back the ability to undo. |
 | `ModPatchWatch.ps1` | `cyberwise` | notice when a mod you patched or overrode has changed. |
 | `New-UpstreamManifest.ps1` | `cyberwise` | declare what upstream looks like, right now. |
+| `Start-CwEndpoint.ps1` | `cyberwise` | a loopback endpoint so a generated page can ask for work. |
 | `Test-InstallReady.ps1` | `cyberwise` | if you launched right now, what would be wrong? |
 | `Test-ModPresent.ps1` | `cyberwise` | is this mod actually installed right now? |
 | `Test-ScriptsLive.ps1` | `cyberwise` | is a script mod's code actually in the compiled bundle? |
