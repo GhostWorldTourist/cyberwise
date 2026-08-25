@@ -1186,6 +1186,29 @@ foreach ($case in @(
 if ($degradeGeo) { Bad 'geometry: an undescribed device degrades to nothing, never an error' ($degradeGeo -join "`n") }
 else             { Ok  'geometry: an undescribed device degrades to nothing, never an error' }
 
+# A DESCRIBED device must resolve whichever way the file was SAVED, and this is
+# not a nicety. `$` in .NET multiline mode matches before the `\n`, which is
+# after the `\r` of a CRLF pair, so a closing fence in a Windows-line-ended file
+# matched nothing and every block in it was invisible. Notepad, most Windows
+# editors and Set-Content all write CRLF, and this article exists precisely to
+# be hand-edited - so CRLF is the NORMAL case, not an edge one. The failure was
+# silent: a correct, readable article, and a sheet that quietly drew a list.
+$eolBad = @()
+foreach ($eol in @("`n", "`r`n")) {
+    $b = Join-Path $sandbox ('eolwiki-' + $eol.Length)
+    New-Item -ItemType Directory -Path $b -Force | Out-Null
+    $lines = @('---', 'type: Environment', 'title: EOL fixture', '---', '',
+               ('`' * 3 + 'device'), 'match: EOL MOUSE', 'columns: 2', 'rows: 2',
+               'origin: top-left', 'flow: row', 'prefix: G', ('`' * 3), '')
+    [IO.File]::WriteAllText((Join-Path $b 'devices.md'), ($lines -join $eol))
+    $g = Get-DeviceGeometry -Name 'EOL MOUSE' -Bundle $b -WarningAction SilentlyContinue
+    $what = if ($eol -eq "`n") { 'LF' } else { 'CRLF' }
+    if (-not $g) { $eolBad += "a $what-terminated devices.md resolved to no geometry at all" }
+    elseif (@($g.Cells).Count -ne 4) { $eolBad += "a $what-terminated devices.md gave $(@($g.Cells).Count) keys, not 4" }
+}
+if ($eolBad) { Bad 'geometry: a device article resolves whichever line endings it was saved with' ($eolBad -join "`n") }
+else         { Ok  'geometry: a device article resolves whichever line endings it was saved with' }
+
 # End to end: the same fixture profile, once with geometry and once without.
 # The pad must carry the JOIN and mark the dead key, and must not ALSO list the
 # keys it drew - the flat list existed to substitute for the grid, not to sit

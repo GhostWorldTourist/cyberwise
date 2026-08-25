@@ -117,6 +117,22 @@ function Get-DeviceBlock {
     # frames from anything that explains it.
     $out = @()
     if (-not $Text) { return ,$out }
+
+    # NORMALISE THE LINE ENDINGS FIRST, and this is not a nicety.
+    #
+    # .NET's `$` in multiline mode matches immediately before a `\n` - which is
+    # AFTER the `\r` of a CRLF pair. So `^[ \t]*```[ \t]*$` never matches a
+    # closing fence in a file with Windows line endings, and every block in it
+    # is invisible.
+    #
+    # That is the normal way for this file to be written. Notepad, most Windows
+    # editors and PowerShell's own Set-Content all produce CRLF, and this
+    # article is meant to be HAND-EDITED - the whole point of keeping device
+    # geometry in a wiki bundle is that adding a device is a text edit rather
+    # than a release. The failure was silent in the worst way: the article sits
+    # there, correct and readable, and the sheet just quietly draws a list.
+    $Text = $Text -replace "`r`n", "`n"
+
     foreach ($m in [regex]::Matches($Text, '(?ms)^[ \t]*```[ \t]*device[ \t]*\r?\n(.*?)^[ \t]*```[ \t]*$')) {
         $f = ConvertFrom-DeviceBlock $m.Groups[1].Value
         $f['_from'] = $From

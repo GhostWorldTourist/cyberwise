@@ -671,6 +671,7 @@ function Test-CwUpstream {
     # opened. $byFile stays $null until the first difference asks for it.
     $reg = $null
     $byFile = $null
+    $byFileAny = $null   # includes superseded/retired entries, for the wording only
 
     $onDisk = @{}
     foreach ($f in (Get-CwGuardedFile -Root $Root)) { $onDisk[$f.Path] = $f }

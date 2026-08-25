@@ -278,6 +278,72 @@ That is also the only way a grid can show a **dead** button - and a physical
 layout is the best possible place to show one, because the useful fact is not
 "G8 is dead", it is "the one your thumb rests on is".
 
+**Draw only the seats that carry an action.** A seat the profile never assigned
+costs a full cell to say "not assigned", which is a thing the owner knows,
+because they are the one who did not assign it. Leave it out - and because every
+key states its own grid coordinates, its position stays EMPTY rather than letting
+the keys after it slide up into the gap. The shape on the page is still the shape
+under the thumb, which is the entire reason for drawing a pad instead of a list.
+
+A key whose keystroke is bound to **nothing** is the opposite case and must still
+draw, flagged. That one is a finding, and there is nowhere else it can be seen.
+
+## Hiding what you never press
+
+A cheatsheet is only useful at a size you can take in, and on a large install
+most rows are things this player will never touch. So the sheet has a **hide**
+mode - the eye-off toggle in its header - and clicking any row or key in that
+mode takes it off the sheet.
+
+**The hard part is not the clicking, it is that the sheet is REGENERATED.** A
+hidden set living in the page evaporates the next time it is built from disk, and
+the owner gets all of it back with no explanation. So there are two tiers, and
+only the second one is durable:
+
+| tier | holds | lasts |
+|---|---|---|
+| `localStorage` | the instant effect | until the sheet is regenerated |
+| `sheet-preferences.md` in the **user wiki bundle** | the real list | for ever |
+
+Same argument as the device geometry above, and the same bundle: what somebody
+wants on their own cheatsheet is a fact about them, not about Cyberpunk.
+
+````markdown
+```sheet-hidden
+binding: Kiroshi Night Vision | Toggle night vision | F3
+button: G11
+action: Skip radio song
+```
+````
+
+`<kind>: <field> | <field>`, parsed with regex and string work like every other
+block this family reads - there is no YAML parser on a PowerShell 5.1 box. **The
+same string appears in the article, in the page's `data-hid`, and on the
+generator's command line**, so an entry cannot mean one thing in one place and
+something else in another. A line that will not parse is skipped, never guessed
+at: losing one entry is recoverable, hiding the wrong row is not, because nobody
+goes looking for a row they never noticed vanishing.
+
+**`-Hide` is authoritative, not additive.** What is passed BECOMES the hidden
+set, so `-Hide @()` unhides everything and the page's own hidden list can undo
+itself simply by handing over a shorter list. That is what makes hiding
+reversible without anybody opening a file - and it is why **the regeneration
+prompt has to carry the list and name the article**. A regeneration that forgets
+it silently un-hides everything, which looks exactly like the feature not
+working.
+
+## No account name on a page built to be shared
+
+A cheatsheet gets screenshotted. Every absolute path the sheet prints - in the
+prose, in the footer, inside the prompt meant to be pasted into a chat window -
+carries the home directory, and the home directory carries the username.
+
+`New-HotkeySheet.ps1` substitutes **`$env:USERPROFILE`** rather than `~`,
+because the prompt's command still has to run when it is pasted back, and
+PowerShell expands the variable. Paths are de-named where they are built, and the
+whole page is swept once more before it is written; anything that survives is
+warned about at generation time rather than found by a reader.
+
 ## Tools
 
 ```powershell

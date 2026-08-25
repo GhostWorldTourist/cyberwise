@@ -33,7 +33,10 @@ The one line to carry out of all of it:
   be joined to the bindings. Separate from the harvest on purpose: a mouse action
   is not a binding.
 - `tools/New-HotkeySheet.ps1` - renders a self-contained HTML cheatsheet, merging
-  an optional notes json for hardware maps and tap/hold semantics.
+  an optional notes json for hardware maps and tap/hold semantics. `-Hide`
+  carries the entries the owner has taken off the sheet; it is **authoritative**,
+  so it both rewrites `sheet-preferences.md` in the user's wiki bundle and omits
+  what it names, and `-Hide @()` puts everything back.
 - `cyberwise-reports/tools/Measure-PageFit.ps1` - renders a page headless at a
   given viewport and reports document height, viewport height, and the class of
   anything overflowing horizontally.
@@ -75,3 +78,20 @@ feature that does nothing. Drive the real control instead:
 (Get-Content $f -Raw) -replace '(?i)</body>',
   '<script>document.getElementById("modtoggle").click();</script></body>'
 ```
+
+**Every toggle state has to be measured, not just the default one** - hide mode,
+the greyed-out state inside it, the sheet with things hidden, and the hidden-list
+lightbox are four different layouts, and only one of them is what the generator
+wrote.
+
+Two things that make those measurements lie, both hit while building hide mode:
+
+- **`localStorage` is shared across the copies.** Every state file is written to
+  the same folder, they are all `file://`, and the state that hid four rows leaks
+  into the next screenshot - which then looks correct for the wrong reason. Clear
+  it **in `<head>`**, before the page's own script reads it; clearing after only
+  clears the store, not the variable the page already built from it.
+- **`DocHeight == ViewHeight` says nothing.** `scrollHeight` has the viewport as
+  its floor, so five states all reporting 1554 against a 1647px window means only
+  "all shorter than that". Re-run each against `-Height 400` for the real content
+  height, which is the number that shows whether a state actually grew.

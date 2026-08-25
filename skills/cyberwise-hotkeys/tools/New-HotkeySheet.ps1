@@ -84,11 +84,58 @@ param(
     # Format: /input/describing-a-device-physical-geometry in the base wiki.
     # Absent, unreadable or unmatched, the buttons render as the flat list they
     # always did - most people own no programmable device at all.
-    [string] $WikiBundle = (Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\wiki')
+    [string] $WikiBundle = (Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\wiki'),
+
+    # ---- what the owner has hidden ----------------------------------------
+    #
+    # The sheet has a hide mode: click a row or a key and it goes away, because
+    # a cheatsheet is only useful at the size you can actually take in, and half
+    # of any install's bindings are things the owner will never press.
+    #
+    # THE PAGE CANNOT KEEP THAT BY ITSELF. localStorage survives a reload, and
+    # nothing more - the sheet is REGENERATED, and a hidden set living only in
+    # the browser evaporates the moment it is. So the durable copy goes where
+    # the device geometry already went: this user's wiki bundle, in
+    # `sheet-preferences.md`, in a block a person can read and edit.
+    #
+    # PASSING -Hide IS AUTHORITATIVE, not additive. The list given here BECOMES
+    # the hidden set - it is written to the article, and anything absent from it
+    # becomes visible again. That is what makes unhiding work without anybody
+    # hand-editing a file: the page hands over the complete list it is holding,
+    # and the next run agrees with the page.
+    #
+    # Omit it entirely and nothing is written - the article is read as it
+    # stands. `-Hide @()` is therefore how you unhide everything.
+    [string[]] $Hide,
+
+    # Where that article lives. Defaults inside the bundle, beside devices.md.
+    [string] $PreferencesPath
 )
 
 $ErrorActionPreference = 'Stop'
 function esc { param([string]$s) ($s -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;') }
+
+# ---------------------------------------------------------- no names on it ---
+#
+# THIS SHEET GETS SCREENSHOTTED AND SHARED. A home directory carries the account
+# name, so every absolute path on the page - in the prose, in the footer, in the
+# prompt meant to be pasted into a chat, and inside the command that prompt
+# carries - is a username waiting to be posted somewhere. There is no reason for
+# one to be on a page about keybinds.
+#
+# `$env:USERPROFILE` is the right substitute rather than `~` because the prompt's
+# command has to still RUN: PowerShell expands the variable, and it expands to
+# the same folder on the machine that generated the sheet. `~` would too, but it
+# does not survive being pasted into a quoted argument.
+$homeDir = ([string]$env:USERPROFILE).TrimEnd('\')
+function Hide-Home {
+    param([string] $s)
+    if (-not $s -or -not $homeDir) { return $s }
+    if ($s.StartsWith($homeDir, [StringComparison]::OrdinalIgnoreCase)) {
+        return '$env:USERPROFILE' + $s.Substring($homeDir.Length)
+    }
+    return $s
+}
 
 # ==================================================================== gather ==
 
@@ -154,6 +201,200 @@ foreach ($e in $n.extra) {
 # one place, read by whoever needs it - except that this one's DATA is not here
 # at all, only the reader for it. See the header of DeviceGeometry.ps1.
 . (Join-Path $PSScriptRoot 'DeviceGeometry.ps1')
+
+# ================================================== what the owner has hidden ==
+#
+# TWO TIERS, AND THE SECOND ONE IS THE POINT.
+#
+# localStorage gives hiding its instant effect and carries it across a reload.
+# That is all it can do. THE SHEET IS REGENERATED - from disk, on demand - and a
+# hidden set that lives only in the page is gone the first time it is. Anybody
+# who hides thirty rows and then asks for a fresh sheet gets all thirty back and
+# no explanation.
+#
+# So the durable copy lives where the device geometry already lives: this user's
+# wiki bundle. Same argument, and it is worth restating because it is the whole
+# reason there is a bundle at all - "which rows I care about" is a fact about one
+# person, not about Cyberpunk, so it belongs beside their machine profile rather
+# than inside a tool or inside a browser.
+#
+# THE FORMAT IS REGEX AND STRING WORK, DELIBERATELY. Windows PowerShell 5.1 has
+# no YAML parser and is not getting one, exactly as DeviceGeometry.ps1 says of
+# its own blocks. One fenced ```sheet-hidden block, one entry per line:
+#
+#     binding: Kiroshi Night Vision | Toggle night vision | F3
+#     button: G11
+#     action: Skip radio song
+#
+# `<kind>: <field> | <field> | ...`, and that same string is what the page puts
+# in `data-hid` and what the regeneration command passes to -Hide. ONE spelling
+# in three places, so an entry cannot mean one thing in the article and another
+# in the page. Unknown kinds and unparseable lines are skipped rather than
+# guessed at - a hide list that hides the wrong row is worse than one that
+# hides nothing, because nobody goes looking for a row they did not notice
+# vanishing.
+if (-not $PreferencesPath) { $PreferencesPath = Join-Path $WikiBundle 'sheet-preferences.md' }
+
+function Get-Hid {
+    <#  .SYNOPSIS  The one canonical spelling of a hideable entry.  #>
+    param([string] $Kind, [string[]] $Fields)
+    # A literal pipe in a mod name would split one field into two and the entry
+    # would never match itself again, so it is folded to a slash on the way in -
+    # in the article, in the markup and on the command line alike.
+    $clean = @($Fields | ForEach-Object { ((([string]$_) -replace '\|', '/') -replace '\s+', ' ').Trim() } |
+               Where-Object { $_ -ne '' })
+    if (-not $clean.Count) { return '' }
+    return ($Kind.ToLowerInvariant() + ': ' + ($clean -join ' | '))
+}
+
+function ConvertTo-HideEntry {
+    <#  .SYNOPSIS  Normalise one written line, or null if it is not an entry.  #>
+    param([string] $Raw)
+    if (-not $Raw) { return $null }
+    $s = (($Raw -replace '\s+', ' ').Trim())
+    if ($s -notmatch '^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.+)$') { return $null }
+    return (Get-Hid -Kind $matches[1] -Fields @($matches[2] -split '\|'))
+}
+
+function Get-HiddenEntry {
+    <#  .SYNOPSIS  Every hidden entry in the preferences article; never an error.  #>
+    param([string] $Path)
+    # Emitted one entry at a time rather than returned as `,$array`: that idiom
+    # turns an EMPTY result into a one-element array holding an empty array, and
+    # the caller then iterates a phantom entry. Nothing to say, say nothing.
+    $out = @()
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $out }
+    $text = Get-Content -LiteralPath $Path -Raw -ErrorAction SilentlyContinue
+    if (-not $text) { return $out }
+    # NORMALISE THE LINE ENDINGS BEFORE MATCHING. `$` in .NET multiline mode
+    # matches before the `\n` and AFTER the `\r`, so a fence written CRLF never
+    # matches `^[ \t]*```[ \t]*$` - and the failure is silent, which is the worst
+    # possible shape for it: the article is right there, readable, saying exactly
+    # what should be hidden, and the sheet quietly ignores it. A file can easily
+    # end up mixed - Set-Content terminates the last line CRLF while the body
+    # keeps whatever the string had - so this is the normal case, not an edge.
+    $text = $text -replace "`r`n", "`n"
+    foreach ($m in [regex]::Matches($text, '(?ms)^[ \t]*```[ \t]*sheet-hidden[ \t]*\r?\n(.*?)^[ \t]*```[ \t]*$')) {
+        foreach ($line in ($m.Groups[1].Value -split "\r?\n")) {
+            if ($line -match '^\s*(#|$)') { continue }
+            $e = ConvertTo-HideEntry $line
+            if ($e -and $out -notcontains $e) { $out += $e }
+        }
+    }
+    return $out
+}
+
+function Set-HiddenEntry {
+    <#
+    .SYNOPSIS
+        Write the hidden set into the preferences article, creating it if needed.
+    .DESCRIPTION
+        Only the fenced block is rewritten. Everything a person wrote around it
+        survives - the article is meant to be edited by hand as well as by this
+        tool, and a generator that flattens somebody's notes teaches them not to
+        write any.
+    #>
+    param([string] $Path, [string[]] $Entries)
+
+    $fence = ([string][char]96) * 3
+    $body  = @($Entries)
+    $block = $fence + "sheet-hidden`n" + $(if ($body.Count) { ($body -join "`n") + "`n" }) + $fence
+    $now   = Get-Date -Format 'yyyy-MM-ddTHH:mm:sszzz'
+
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        $doc = @"
+---
+type: Preference
+title: Hotkey sheet preferences
+description: The entries this user has hidden from their generated hotkey cheatsheet, so a regenerated sheet comes back looking the way they left it.
+distribution: user-only
+status: stable
+tags: [input, hotkeys, reports, preferences]
+generated: { by: "New-HotkeySheet.ps1", at: "$now" }
+---
+
+# Hotkey sheet preferences
+
+The cheatsheet has a **hide** mode: turn it on, click a row or a key, and it
+stops being drawn. This article is where that survives regeneration - the page's
+own memory only lasts until the sheet is built again from disk.
+
+Each line below is one entry, spelled the same way here, in the page's markup and
+on the generator's command line, so the three can never disagree:
+
+| kind | fields | means |
+|---|---|---|
+| ``binding`` | mod \| action \| key | one row of the keyboard tables |
+| ``button`` | button label | one key of a device pad, or one row of its list |
+| ``action`` | iCUE label | a profile action sitting on no button |
+
+**Delete a line to bring an entry back** - or use the sheet's own hidden list,
+which does the same thing and rewrites this block for you. Lines that do not
+parse are skipped rather than guessed at, so a typo loses one entry and never
+hides the wrong one.
+
+$block
+"@
+        Set-Content -LiteralPath $Path -Value $doc -Encoding UTF8
+        return
+    }
+
+    # Same normalisation as the reader, and for the same reason: a mixed-ending
+    # file would otherwise gain a second block on every write instead of having
+    # its existing one replaced.
+    $text = (Get-Content -LiteralPath $Path -Raw) -replace "`r`n", "`n"
+    $rx   = [regex]'(?ms)^[ \t]*```[ \t]*sheet-hidden[ \t]*\r?\n.*?^[ \t]*```[ \t]*$'
+    # A MatchEvaluator, not a replacement string: an entry can contain `$`, and
+    # .NET would read that as a substitution and quietly mangle the line.
+    if ($rx.IsMatch($text)) {
+        $text = $rx.Replace($text, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $block }, 1)
+    } else {
+        $text = $text.TrimEnd() + "`n`n" + $block + "`n"
+    }
+    $text = [regex]::Replace($text, '(?m)^(generated:\s*\{[^}]*\bat:\s*")[^"]*(")',
+                             [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $m.Groups[1].Value + $now + $m.Groups[2].Value })
+    Set-Content -LiteralPath $Path -Value $text -Encoding UTF8
+}
+
+if ($PSBoundParameters.ContainsKey('Hide')) {
+    $hiddenEntries = @($Hide | ForEach-Object { ConvertTo-HideEntry $_ } | Where-Object { $_ } | Select-Object -Unique)
+    Set-HiddenEntry -Path $PreferencesPath -Entries $hiddenEntries
+    Write-Host "hidden: $($hiddenEntries.Count) entr$(if ($hiddenEntries.Count -eq 1) { 'y' } else { 'ies' }) written to $(Hide-Home $PreferencesPath)" -ForegroundColor Cyan
+} else {
+    $hiddenEntries = @(Get-HiddenEntry -Path $PreferencesPath)
+    if ($hiddenEntries.Count) {
+        Write-Host "hidden: $($hiddenEntries.Count) entr$(if ($hiddenEntries.Count -eq 1) { 'y' } else { 'ies' }) from $(Hide-Home $PreferencesPath)" -ForegroundColor Cyan
+    }
+}
+$hiddenLookup = @{}
+foreach ($h in $hiddenEntries) { $hiddenLookup[$h.ToLowerInvariant()] = $true }
+
+# Counters, so the header's one count line is measured rather than asserted.
+$script:HidTotal = 0; $script:HidHidden = 0; $script:HidDead = 0
+
+function Test-HiddenHid { param([string] $Hid) return ($Hid -and $hiddenLookup.ContainsKey($Hid.ToLowerInvariant())) }
+
+function New-Hid {
+    <#
+    .SYNOPSIS
+        The markup that makes one element hideable, and its share of the counts.
+    #>
+    param([string] $Kind, [string[]] $Fields, [string] $Label, [switch] $Dead)
+    $hid = Get-Hid -Kind $Kind -Fields $Fields
+    $hit = Test-HiddenHid $hid
+    $script:HidTotal++
+    if ($hit) { $script:HidHidden++ } elseif ($Dead) { $script:HidDead++ }
+    if (-not $Label) { $Label = ($Fields -join ' - ') }
+    [pscustomobject]@{
+        Hid    = $hid
+        Hidden = $hit
+        Cls    = $(if ($hit) { ' hid' } else { '' })
+        Attr   = " data-hid=""$(esc $hid)"" data-hlabel=""$(esc $Label)""$(if ($Dead) { ' data-dead="1"' })"
+    }
+}
 
 # Sort the pad the way it is laid out under the thumb, not the way cereal
 # happened to serialise it: G1..G12 numerically, then the named buttons, then
@@ -310,7 +551,6 @@ if ($n.mouse -and $ShowMousePad -and -not $mouseRows.Count) {
   <section class="panel mouse">
     <h2><span class="dot yellow"></span>$(esc $n.device)<b>thumb pad</b></h2>
     <div class="mgrid">$($cells -join '')</div>
-    <p class="foot">Hardware mapping - the mouse sends these keys, and the grey line is what the game currently does with them.</p>
   </section>
 "@
 }
@@ -326,8 +566,9 @@ $catHtml = foreach ($c in $order) {
             "<b class=""ms"" title=""$(esc $mouseTitle) button"">$(esc $mouseFor[$mbc])</b>"
         } else { '' }
         $mark = if ($b.Source -eq 'your setting') { '' } else { '<span class="def" title="mod default - not rebound by you">&#9679;</span>' }
+        $h = New-Hid -Kind 'binding' -Fields @($b.Mod, $b.Action, $b.Key) -Label "$($b.Action) &middot; $($b.Key)"
         @"
-      <div class="row" data-s="$(esc "$($b.Action) $($b.Mod) $($b.Key)".ToLower())">
+      <div class="row$($h.Cls)"$($h.Attr) data-s="$(esc "$($b.Action) $($b.Mod) $($b.Key)".ToLower())">
         <span class="act">$(esc $b.Action)<em>$(esc $b.Mod)$mark</em></span>
         <span class="keys">$mb$keys</span>
       </div>
@@ -397,8 +638,6 @@ function Get-DoesHtml {
 }
 
 if ($mouseRows.Count) {
-    $deadRows = @($mouseRows | Where-Object { $_.Assigned -and -not $_.Hits.Count })
-
     # ---- the pad, drawn where the keys are --------------------------------
     $padHtml = ''
     $onPad   = @{}
@@ -414,23 +653,29 @@ if ($mouseRows.Count) {
             # information; the coordinates are.
             $pos = "grid-row:$($c.Row + 1);grid-column:$($c.Col + 1)"
             if (-not $byButton.ContainsKey($c.Label)) {
-                # A key the device has and the profile does not use. Drawn
-                # rather than omitted: an empty seat in the grid is exactly what
-                # a physical layout is good at showing - it is where the spare
-                # button is, and you can feel where that is.
-                @"
-        <div class="pk free" style="$pos">
-          <span class="pkb">$(esc $c.Label)</span>
-          <span class="pkfree">not assigned</span>
-        </div>
-"@
+                # A SEAT WITH NOTHING ON IT IS NOT DRAWN. It cost a full cell -
+                # the same width as a key carrying an action - to say "not
+                # assigned", which is a thing the owner already knows because
+                # they are the one who did not assign it.
+                #
+                # The geometry stays honest anyway: every key states its own
+                # grid-row and grid-column, so an omitted one leaves its
+                # position EMPTY rather than letting the ones after it slide up
+                # into the gap. The shape you see is still the shape under your
+                # thumb, which is the entire reason for drawing a pad.
+                #
+                # A key whose keystroke is bound to NOTHING is a different thing
+                # and still draws, flagged - see `.pk.dead` below. That one is a
+                # finding, and it is invisible everywhere else.
                 continue
             }
             $m = $byButton[$c.Label]
             $onPad[$m.Button] = $true
-            $cls = if (-not $m.Hits.Count) { ' dead' } else { '' }
+            $isDead = -not $m.Hits.Count
+            $cls = if ($isDead) { ' dead' } else { '' }
+            $h = New-Hid -Kind 'button' -Fields @($c.Label) -Label "$($c.Label) &middot; $($m.Key)" -Dead:$isDead
             @"
-        <div class="pk$cls" style="$pos">
+        <div class="pk$cls$($h.Cls)" style="$pos"$($h.Attr)>
           <span class="pkb">$(esc $c.Label)</span>
           <kbd class="k">$(esc $m.Key)</kbd>
           <span class="pkd">$(Get-DoesHtml $m -Compact)</span>
@@ -445,12 +690,16 @@ if ($mouseRows.Count) {
         # corners this sentence is about, and the mistake reads as correct.
         $blCell = @($padGeom.Cells | Sort-Object @{e={$_.Row}; d=$true}, Col)[0]
         $trCell = @($padGeom.Cells | Sort-Object Row, @{e={$_.Col}; d=$true})[0]
-        $padHtml = @"
+        # Every seat unassigned means there is no pad to draw, only an empty
+        # grid under a caption claiming a device. Fall through to the list.
+        if (@($keys | Where-Object { $_ }).Count) {
+            $padHtml = @"
     <div class="padwrap">
       <div class="pad" style="--pc:$($padGeom.Columns);--pr:$($padGeom.Rows)">$($keys -join '')</div>
-      <p class="padcap"><b>$(esc $padGeom.Name)</b>$(if ($padGeom.Surface) { ' &middot; ' + (esc $padGeom.Surface) }) &middot; drawn as it sits under your hand - $(esc $blCell.Label) bottom-left, $(esc $trCell.Label) top-right. The arrangement comes from your wiki bundle, not from this tool.</p>
+      <p class="padcap"><b>$(esc $padGeom.Name)</b>$(if ($padGeom.Surface) { ' &middot; ' + (esc $padGeom.Surface) }) &middot; $(esc $blCell.Label) bottom-left, $(esc $trCell.Label) top-right</p>
     </div>
 "@
+        } else { $onPad = @{} }
     }
 
     # ---- everything not on the pad, as the list it always was --------------
@@ -467,8 +716,13 @@ if ($mouseRows.Count) {
         if (-not $m.Assigned)   { $cls += 'unassigned' }
         elseif (-not $m.Hits.Count) { $cls += 'dead' }
         $btn = if ($m.Assigned) { esc $m.Button } else { '&mdash;' }
+        $h = if ($m.Assigned) {
+            New-Hid -Kind 'button' -Fields @($m.Button) -Label "$($m.Button) &middot; $($m.Key)" -Dead:(-not $m.Hits.Count)
+        } else {
+            New-Hid -Kind 'action' -Fields @($m.Label) -Label "$($m.Label) &middot; $($m.Key)"
+        }
         @"
-      <div class="prow$(if ($cls) { ' ' + ($cls -join ' ') })">
+      <div class="prow$(if ($cls) { ' ' + ($cls -join ' ') })$($h.Cls)"$($h.Attr)>
         <span class="pbtn">$btn</span>
         <kbd class="k">$(esc $m.Key)</kbd>
         <span class="pdoes">$(Get-DoesHtml $m)</span>
@@ -481,25 +735,28 @@ if ($mouseRows.Count) {
         "<div class=""plist"">$cap<div class=""pgrid"">$($items -join '')</div></div>"
     } else { '' }
 
-    # Lead with the finding, per the house rule. A dead button is invisible in
-    # iCUE - it looks exactly like a working one - so if there is one, it is the
-    # most useful sentence on the page.
-    $deadLine = if ($deadRows.Count) {
-        '<p class="foot warn"><b>' + $deadRows.Count + ' button' + $(if ($deadRows.Count -gt 1) { 's send keys' } else { ' sends a key' }) +
-        ' nothing on this install is bound to</b> - ' +
-        (($deadRows | ForEach-Object { "$(esc $_.Button) sends <kbd class=""k"">$(esc $_.Key)</kbd>" }) -join ', ') +
-        '. Rebind the mod to the key the mouse sends, or the mouse to the key the mod listens for.</p>'
-    } else {
-        ''
-    }
-    $okLine = if ($deadRows.Count) { '' } else {
-        ' <b class="ok">Every assigned button lands on something the game or a mod is listening for.</b>'
-    }
-
+    # NO PROSE ABOVE THE GRID, AND NO GOOD NEWS AT ALL.
+    #
+    # Two paragraphs used to sit here. One explained that a mouse emits
+    # keystrokes rather than performing game actions; the owner configured the
+    # mouse, so they knew. The other was a green line saying every button landed
+    # on something - a whole sentence spent confirming that there was nothing to
+    # report, on a sheet where every millimetre is competing with a keycap.
+    #
+    # A FINDING EARNS A LINE. GOOD NEWS DOES NOT. That is the house rule for
+    # every report in this family, and it applies hardest here, because the
+    # finding this panel exists for - a dead button - is already flagged AT THE
+    # KEY, in red, in the place your eye goes. Narrating it above the grid said
+    # the same thing twice and buried the grid further down the page.
+    #
+    # What replaces both is one measured count line in the header, which carries
+    # the same facts in the space of half a sentence.
+    #
+    # Actions that emit no keystroke stay, because nothing else on the sheet can
+    # account for them - but as a label and a list, not a paragraph.
     $otherLine = if ($mouseOther.Count) {
-        '<p class="foot">' + $mouseOther.Count + ' more action' + $(if ($mouseOther.Count -gt 1) { 's' }) +
-        ' in this profile send no keystroke at all (macros, DPI, launchers), so nothing on disk can describe them: ' +
-        (($mouseOther | ForEach-Object { esc $_.Action }) -join ' &middot; ') + '.</p>'
+        '<p class="foot">No keystroke (macro / DPI / launcher): ' +
+        (($mouseOther | ForEach-Object { esc $_.Action }) -join ' &middot; ') + '</p>'
     } else { '' }
 
     $mpHtml = @"
@@ -512,8 +769,6 @@ if ($mouseRows.Count) {
       if ($mouseLinked) { ' &middot; auto-activates for Cyberpunk2077.exe' }
       elseif ($mouseAllCount -gt 1) { " &middot; $mouseAllCount profiles here, none linked to the game - this one has the most remaps" }
     )</b></h2>
-    $deadLine
-    <p class="foot">The mouse performs no game action - it sends a <b>keystroke</b>, and the game or a mod decides what that means. Each key is that join: the button, what it sends, what is bound to it here <i>now</i>. The small grey line is your own iCUE label, the one thing on this sheet that can go stale.$okLine</p>
     <div class="pwrap">$padHtml$listHtml</div>
     $otherLine
   </section>
@@ -572,9 +827,24 @@ if ($collisions -and $ShowSharedKeys) {
 }
 
 $stamp   = Get-Date -Format 'yyyy-MM-dd HH:mm'
-# No key counts here. How many bindings exist is not something you look up, and
-# the one fact this line has to carry is how stale the sheet is.
 $subline = "READ FROM DISK $stamp"
+
+# Which generation of the sheet this is. The page's own hidden set is stored
+# against it, so a REGENERATED sheet is recognised as newer than whatever the
+# browser is holding and the article wins - which is the only way "hide it, then
+# regenerate, and it stays hidden" and "unhide it, then regenerate, and it stays
+# visible" can both be true. Same file reopened, same id, and the browser's copy
+# wins instead, which is what makes hiding survive a reload.
+$genId = Get-Date -Format 'yyyyMMddHHmmssfff'
+
+# ONE MEASURED LINE, IN PLACE OF THE PARAGRAPHS. Rendered here as well as
+# recomputed by script, so the sheet still states its own size with scripting
+# off. Segments that would read zero are not drawn: a finding earns a line, and
+# "0 dead" is the green validation text wearing a number.
+$countsHtml =
+    "<b id=""cAssigned"">$($script:HidTotal - $script:HidHidden)</b> assigned" +
+    "<span id=""cDeadWrap""$(if (-not $script:HidDead) { ' class="hide"' })> &middot; <b id=""cDead"" class=""bad"">$($script:HidDead)</b> dead</span>" +
+    "<span id=""cHidWrap""$(if (-not $script:HidHidden) { ' class="hide"' })> &middot; <button id=""cHid"" class=""hlink"" title=""list what is hidden, and put any of it back"">$($script:HidHidden) hidden</button></span>"
 
 # ------------------------------------------------------------------ markdown --
 #
@@ -604,7 +874,12 @@ if ($Md) {
     [void]$mb.AppendLine("Read from disk $stamp. An asterisk means the mod's own default, not a key you chose.")
     [void]$mb.AppendLine()
     foreach ($c in $order) {
-        $set = @($binds | Where-Object Context -eq $c | Sort-Object Mod, Action)
+        # Hidden means hidden in both outputs. A row the owner took off the sheet
+        # reappearing in the copy they paste into Discord would make the hide
+        # control a lie about half the time.
+        $set = @($binds | Where-Object Context -eq $c |
+                 Where-Object { -not (Test-HiddenHid (Get-Hid -Kind 'binding' -Fields @($_.Mod, $_.Action, $_.Key))) } |
+                 Sort-Object Mod, Action)
         if (-not $set) { continue }
         [void]$mb.AppendLine("## $c")
         [void]$mb.AppendLine()
@@ -616,10 +891,13 @@ if ($Md) {
         }
         [void]$mb.AppendLine()
     }
-    if ($mouseRows.Count) {
+    $mdMouse = @($mouseRows | Where-Object {
+        $hid = if ($_.Assigned) { Get-Hid -Kind 'button' -Fields @($_.Button) }
+               else             { Get-Hid -Kind 'action' -Fields @($_.Label) }
+        -not (Test-HiddenHid $hid)
+    })
+    if ($mdMouse.Count) {
         [void]$mb.AppendLine("## Mouse buttons - iCUE profile ""$mouseName""$(if ($mouseDev) { " ($mouseDev)" })")
-        [void]$mb.AppendLine()
-        [void]$mb.AppendLine('The mouse sends a keystroke; the game decides what it means. Button, key sent, what is bound to it.')
         [void]$mb.AppendLine()
         # Three columns, matching every other table in this file. The iCUE label
         # is folded into the button cell rather than given a fourth column: it is
@@ -627,7 +905,7 @@ if ($Md) {
         # the width to spend on it.
         [void]$mb.AppendLine('| Button | Sends | What that key does |')
         [void]$mb.AppendLine('| --- | --- | --- |')
-        foreach ($m in $mouseRows) {
+        foreach ($m in $mdMouse) {
             $does = if ($m.Hits.Count) {
                 (($m.Hits | Sort-Object Mod, Action | ForEach-Object { "$(& $cell $_.Action) ($(& $cell $_.Mod))" }) -join '; ')
             } elseif ($m.Assigned) { '**nothing on disk binds this key**' }
@@ -694,7 +972,39 @@ if ($Md) {
 # The raw text is printed on the page as well as copied, because the clipboard
 # API is frequently unavailable on file:// and a button whose whole function is
 # invisible when it fails is the same failure again.
-$qa = { param([string]$s) "'" + (([string]$s) -replace "'", "''") + "'" }
+#
+# AND IT CARRIES THE HIDDEN LIST, or the loop does not close. Hiding happens in
+# the page, after the file was written; a regeneration that does not know what
+# was hidden silently un-hides everything, and the owner has no way to tell that
+# from the feature not working. So the prompt names the preferences article, and
+# the command carries `-Hide` with the complete set - which is also what makes
+# UNhiding survive, since the set is authoritative rather than additive.
+#
+# The version on the page is rebuilt by script on every change, because the
+# hidden set moves after this text is generated. The one written here is the
+# state at generation time, so the control still says something true with
+# scripting off.
+#
+# EVERY PATH IN IT IS DE-NAMED. This block is meant to be copied into a chat
+# window; a home directory carries an account name, and there is no reason for
+# one to travel with a list of keybinds. `$env:USERPROFILE` expands on the
+# machine that runs it, so the command still works.
+$qa = {
+    param([string]$s)
+    $r = Hide-Home ([string]$s)
+    if ($r.StartsWith('$env:USERPROFILE')) {
+        # Double quotes, so PowerShell expands the variable rather than passing
+        # it as a literal. Everything after the token is escaped for a
+        # double-quoted string: backtick first, or it would escape its own
+        # escapes; `$$` is how .NET spells a literal dollar in a replacement.
+        $rest = $r.Substring('$env:USERPROFILE'.Length)
+        $rest = $rest -replace '`', '``'
+        $rest = $rest -replace '\$', '`$$'
+        $rest = $rest -replace '"', '`"'
+        return '"$env:USERPROFILE' + $rest + '"'
+    }
+    return "'" + ($r -replace "'", "''") + "'"
+}
 $cmdParts = @("& $(& $qa $PSCommandPath)")
 foreach ($nm in @('GameRoot', 'Notes', 'MouseProfile', 'MouseProfileRoot', 'WikiBundle')) {
     if ($PSBoundParameters.ContainsKey($nm)) { $cmdParts += "-$nm $(& $qa ([string]$PSBoundParameters[$nm]))" }
@@ -707,13 +1017,23 @@ if ($Md) { $cmdParts += "-Md $(& $qa $Md)" }
 # -Out is emitted even when it was defaulted: regenerating somewhere else would
 # leave this file sitting here looking current.
 $cmdParts += "-Out $(& $qa $Out)"
+if ($PSBoundParameters.ContainsKey('PreferencesPath')) { $cmdParts += "-PreferencesPath $(& $qa $PreferencesPath)" }
 $regenCmd = $cmdParts -join ' '
 
-$regenPrompt = @"
-Regenerate my Cyberpunk 2077 hotkey cheatsheet from what is on disk right now. Load the cyberwise-hotkeys skill. The physical layout of my input devices lives in my Cyberwise wiki bundle at $WikiBundle (devices.md) - read it for the geometry, and update it there if a device changed. Then run exactly:
+# The `-Hide` argument, alone, so the page can replace just this part.
+function Format-HideArg {
+    param([string[]] $Entries)
+    $e = @($Entries)
+    if (-not $e.Count) { return '-Hide @()' }
+    return '-Hide ' + (($e | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ',')
+}
 
-$regenCmd
+$prefsName   = Split-Path -Leaf $PreferencesPath
+$bundleShown = Hide-Home $WikiBundle
+$regenHead = @"
+Regenerate my Cyberpunk 2077 hotkey cheatsheet from disk. Load the cyberwise-hotkeys skill. My wiki bundle at $bundleShown holds both devices.md (where my input devices' keys physically are) and $prefsName (what I have hidden) - read both, or the sheet silently loses the pad or un-hides everything. The -Hide list below is the COMPLETE hidden set, not an addition to it: write exactly it into $prefsName. Then run:
 "@
+$regenPrompt = $regenHead + "`n`n" + $regenCmd + ' ' + (Format-HideArg $hiddenEntries)
 
 
 $html = @"
@@ -753,6 +1073,9 @@ header{position:relative;padding:10px 0 8px;overflow:hidden;border-bottom:1px so
    they fight the text; over a title block they just set the tone. */
 header::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:repeating-linear-gradient(0deg,rgba(0,0,0,.34) 0 1px,transparent 1px 3px)}
+/* The masthead is also the control the whole hide feature hangs off, so the
+   title and the toggle share one line and the toggle sits above the scanlines. */
+.mast{display:flex;align-items:center;gap:18px;position:relative;z-index:2}
 h1{font-family:var(--mono);font-size:calc(var(--fs)*1.7);font-weight:700;margin:0;
   letter-spacing:.09em;text-transform:uppercase;color:var(--yellow);
   text-shadow:2px 0 var(--red),-2px 0 var(--cyan)}
@@ -772,6 +1095,45 @@ h1 span{color:var(--text);text-shadow:none}
   text-transform:uppercase;white-space:nowrap;transition:.12s}
 .pill:hover{color:var(--text);border-color:#3a3a54}
 .pill.on{background:var(--yellow);color:#07070a;border-color:var(--yellow);font-weight:700}
+/* ---- hide mode ---- */
+/* The eye-off icon, at the size of the type beside it rather than a fixed pixel
+   count, so it scales with -Scale like everything else on the sheet. */
+.eyebtn{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
+.eyebtn svg{width:calc(var(--fs)*.72);height:calc(var(--fs)*.72);flex:0 0 auto}
+.sub b{color:var(--text);font-weight:400}
+.sub .bad{color:var(--red)}
+/* The hidden count is a control, not a number: it is the only way back, so it
+   has to look like something you can press. */
+.hlink{font:inherit;color:var(--yellow);background:none;border:0;border-bottom:1px dashed rgba(252,238,10,.5);
+  padding:0;cursor:pointer;letter-spacing:inherit}
+.hlink:hover{color:#fff;border-bottom-color:#fff}
+
+/* A hidden entry stays in the document and stops being drawn - it has to, or
+   the lightbox would have nothing to offer back. In hide mode it reappears,
+   greyed, because you cannot take something off a list you cannot see. */
+body:not(.hiding) .hid{display:none !important}
+body.hiding .hid{opacity:.3;filter:grayscale(1)}
+/* Being in hide mode has to be visible without a sentence saying so, or the
+   next click is a surprise. The lit toggle is one signal and a ring round the
+   page is the other; between them nothing has to be explained in words. */
+body.hiding .wrap{outline:1px solid rgba(252,238,10,.4);outline-offset:-3px}
+body.hiding [data-hid]{cursor:pointer}
+body.hiding [data-hid]:hover{outline:1px solid var(--yellow);outline-offset:1px}
+body.hiding .row:hover,body.hiding .pk:hover,body.hiding .prow:hover{background:#1b1b26}
+
+/* ---- the hidden list ---- */
+.lb{position:fixed;inset:0;z-index:50;background:rgba(3,3,6,.82);display:flex;
+  align-items:flex-start;justify-content:center;padding:6vh 20px}
+.lbbox{background:var(--panel);border:1px solid var(--line);padding:14px 18px 12px;
+  width:min(760px,100%);max-height:80vh;overflow:auto;
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
+.lbbox h2 .pill{margin-left:12px}
+.lbrow{display:flex;align-items:baseline;gap:12px;padding:6px 2px;border-bottom:1px solid #191926}
+.lbrow:last-child{border-bottom:0}
+.lbl1{flex:1 1 auto;min-width:0;font-size:calc(var(--fs)*.72);overflow-wrap:anywhere}
+.lbl2{font-family:var(--mono);font-size:calc(var(--fs)*.44);color:#5a5a70;letter-spacing:.04em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34ch}
+.lbrow .pill{flex:0 0 auto;padding:5px 10px}
 /* Hiding the mod name drops every row to a single line - the densest the sheet
    gets, for when you know your mods and only want the keys. */
 body.nomods .act em,body.nomods .pd em{display:none}
@@ -900,8 +1262,8 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
 .pnone{color:var(--red)}
 .prow.unassigned .pnone{color:var(--dim)}
 .foot.warn{color:#ffb3c4} .foot.warn b{color:var(--red)}
-.foot.ok b,.foot.ok,.foot b.ok{color:var(--green)}
-.foot b.ok{font-weight:400}
+/* There is deliberately no "everything is fine" style here. Good news does not
+   earn a line on this sheet; a finding does, and it is flagged at the key. */
 .foot kbd.k{padding:2px 7px;font-size:calc(var(--fs)*.62)}
 
 /* ---- the pad: the buttons where they physically are ---- */
@@ -926,7 +1288,7 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
 .pkb{grid-row:1;grid-column:1;font-family:var(--mono);font-size:calc(var(--fs)*.62);
   font-weight:700;color:var(--yellow);letter-spacing:.04em;align-self:center}
 .pk kbd.k{grid-row:1;grid-column:2;justify-self:start;font-size:calc(var(--fs)*.66);padding:3px 9px}
-.pkfree,.pk .pkd{margin-top:2px}
+.pk .pkd{margin-top:2px}
 .pkd{grid-row:2;grid-column:1/-1;display:flex;flex-direction:column;gap:2px;min-width:0}
 .pkd .pd{font-size:calc(var(--fs)*.63);line-height:1.2}
 .pkl{grid-row:1;grid-column:3;align-self:center;justify-self:end;font-family:var(--mono);font-size:calc(var(--fs)*.44);
@@ -937,11 +1299,9 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
    dead", it is "the one your thumb rests on is". */
 .pk.dead{border-left-color:var(--red);border-color:#4a1024;background:#1a1016}
 .pk.dead kbd.k{color:var(--red);border-color:#4a1024}
-/* A key the device has and the profile does not use. Present, because where the
-   spare button is is something you can feel. */
-.pk.free{border-left-color:#3a3a52;border-color:#3a3a52;border-style:dashed;background:#0d0d15}
-.pkfree{grid-row:1;grid-column:2/-1;font-family:var(--mono);font-size:calc(var(--fs)*.5);color:#6a6a80;
-  letter-spacing:.06em;align-self:center}
+/* A seat the profile does not use is NOT DRAWN - see the renderer. It cost a
+   full cell to say "not assigned", which the owner already knew. The grid keeps
+   its shape regardless, because every key states its own coordinates. */
 .padcap{font-family:var(--mono);font-size:calc(var(--fs)*.45);color:#5a5a70;letter-spacing:.05em;
   line-height:1.45;margin:6px 0 0;overflow-wrap:anywhere}
 .padcap b{color:#8a8aa2;font-weight:400}
@@ -993,8 +1353,13 @@ footer span:last-child{margin-left:auto}
 <div class="wrap">
 
 <header>
-  <h1>Cyberpunk 2077 <span>Hotkeys</span></h1>
-  <div class="sub">$subline</div>
+  <div class="mast">
+    <h1>Cyberpunk 2077 <span>Hotkeys</span></h1>
+    <button id="hidetoggle" class="pill eyebtn" title="hide mode - click any row or key to take it off the sheet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>hide
+    </button>
+  </div>
+  <div class="sub">$subline &middot; <span id="counts">$countsHtml</span></div>
 </header>
 
 <div class="bar">
@@ -1013,14 +1378,23 @@ $gestHtml
 $colHtml
 
 <section class="regen">
-  <button id="regen" class="pill" title="copy a prompt that regenerates this sheet with the same flags">copy regen prompt</button>
+  <button id="regen" class="pill" title="copy a prompt that regenerates this sheet with the same flags, and the same things hidden">copy regen prompt</button>
   <pre id="regenprompt">$(esc $regenPrompt)</pre>
 </section>
+
+<!-- What is hidden, and the way back. Hiding is only safe to offer if putting
+     something back costs one click and needs no file opened. -->
+<div id="lb" class="lb hide">
+  <div class="lbbox" role="dialog" aria-label="hidden entries">
+    <h2><span class="dot yellow"></span>Hidden<b id="lbn"></b><button id="lbx" class="pill">close</button></h2>
+    <div id="lbrows"></div>
+  </div>
+</div>
 
 <footer>
   <span>Keys read from r6\input\*.xml &middot; r6\cache\inputUserMappings.xml &middot; red4ext\plugins\mod_settings\user.ini &middot; cyber_engine_tweaks\bindings.json &middot; cyber_engine_tweaks\mods\*\*.json</span>
   $(if ($mouseName) { "<span>Mouse buttons read from %APPDATA%\Corsair\CUE5\profiles &middot; profile &ldquo;$(esc $mouseName)&rdquo;</span>" })
-  $(if ($padGeom) { "<span>Physical arrangement from your wiki bundle &middot; $(esc $WikiBundle)</span>" })
+  $(if ($padGeom) { "<span>Physical arrangement from your wiki bundle &middot; $(esc (Hide-Home $WikiBundle))</span>" })
   <span>&#9679; mod default you have not rebound</span>
   <span>Generated $stamp // CYBERWISE</span>
 </footer>
@@ -1072,8 +1446,127 @@ mt.addEventListener('click', () => setMods(document.body.classList.contains('nom
 // prompt is printed on the page for exactly this reason: when both fail it is
 // still selectable, which is the whole difference between a degraded control
 // and a broken one.
+// ============================================================== hide mode ====
+//
+// TWO TIERS, AND THE PAGE ONLY OWNS THE FIRST.
+//
+// localStorage makes hiding instant and survives a reload. It cannot survive a
+// REGENERATION, because the next sheet is a different file built from disk. The
+// durable copy is an article in the user's wiki bundle, which the generator
+// reads and this page cannot write - so the page's job is to hold the current
+// set and hand it to the regeneration prompt, which is what closes the loop.
+//
+// Which of the two wins is decided by GEN. Same generation - the same file
+// reopened - and the browser's copy is the newer one, so it wins and hiding
+// survives a reload. A different generation means the sheet was rebuilt from
+// the article since, so the article wins and the browser's copy is replaced.
+// Without that, unhiding something and regenerating would leave stale storage
+// hiding it again for ever, and the lightbox would look broken.
+//
+// Every localStorage call is wrapped: file:// origins and private modes throw
+// on access, not on read, and an exception here would take the whole control
+// with it. No storage means hiding still works for this visit.
+const GEN = $(ConvertTo-Json -InputObject $genId -Compress);
+const SKEY = 'cw_hidden';
+const items = [...document.querySelectorAll('[data-hid]')];
+const byHid = new Map(items.map(e => [e.dataset.hid, e]));
+
+let hidden = new Set(items.filter(e => e.classList.contains('hid')).map(e => e.dataset.hid));
+try {
+  const raw = localStorage.getItem(SKEY);
+  if (raw) {
+    const o = JSON.parse(raw);
+    if (o && o.gen === GEN && Array.isArray(o.hidden)) hidden = new Set(o.hidden);
+  }
+} catch (e) { /* no storage: this visit only */ }
+
+function saveHidden(){
+  try { localStorage.setItem(SKEY, JSON.stringify({ gen: GEN, hidden: [...hidden] })); } catch (e) {}
+}
+
+const lb = document.getElementById('lb');
+const lbRows = document.getElementById('lbrows'), lbN = document.getElementById('lbn');
+const cAssigned = document.getElementById('cAssigned'), cDead = document.getElementById('cDead');
+const cHid = document.getElementById('cHid');
+const cDeadWrap = document.getElementById('cDeadWrap'), cHidWrap = document.getElementById('cHidWrap');
+
+function applyHidden(){
+  items.forEach(e => e.classList.toggle('hid', hidden.has(e.dataset.hid)));
+
+  // The count line, measured rather than asserted. A segment that would read
+  // zero is not drawn - "0 dead" is the good-news line wearing a number.
+  const shown = items.filter(e => !hidden.has(e.dataset.hid));
+  cAssigned.textContent = shown.length;
+  const dead = shown.filter(e => e.dataset.dead).length;
+  cDead.textContent = dead;
+  cDeadWrap.classList.toggle('hide', dead === 0);
+  cHid.textContent = hidden.size + ' hidden';
+  cHidWrap.classList.toggle('hide', hidden.size === 0);
+  if (!hidden.size) lb.classList.add('hide');
+
+  // The list, and the way back out. An entry with no element on the page - a
+  // mod uninstalled since it was hidden - is still listed, by its raw id: it is
+  // still in the set, it will still be written back on the next regeneration,
+  // and silently dropping it would make it unremovable.
+  lbRows.innerHTML = '';
+  [...hidden].sort().forEach(h => {
+    const el = byHid.get(h);
+    const row = document.createElement('div');
+    row.className = 'lbrow';
+    const a = document.createElement('span');
+    a.className = 'lbl1';
+    // The entry's own label, not its id. The id is machinery - it only earns a
+    // line when it is the ONLY thing left to identify a row by.
+    a.innerHTML = el ? el.dataset.hlabel : h + ' <i>(not on this sheet any more)</i>';
+    const u = document.createElement('button');
+    u.className = 'pill'; u.textContent = 'unhide';
+    u.addEventListener('click', () => { hidden.delete(h); saveHidden(); applyHidden(); });
+    row.append(a, u);
+    lbRows.appendChild(row);
+  });
+  lbN.textContent = hidden.size;
+  regenText();
+}
+
+const ht = document.getElementById('hidetoggle');
+ht.addEventListener('click', () => {
+  const on = !document.body.classList.contains('hiding');
+  document.body.classList.toggle('hiding', on);
+  ht.classList.toggle('on', on);
+});
+
+// One delegated listener rather than one per row: the rows are rebuilt by the
+// filter and the lightbox, and a listener attached per element goes stale.
+document.addEventListener('click', ev => {
+  if (!document.body.classList.contains('hiding')) return;
+  if (ev.target.closest('.lb') || ev.target.closest('header') || ev.target.closest('.bar')) return;
+  const el = ev.target.closest('[data-hid]');
+  if (!el) return;
+  ev.preventDefault();
+  const h = el.dataset.hid;
+  if (hidden.has(h)) hidden.delete(h); else hidden.add(h);
+  saveHidden();
+  applyHidden();
+});
+
+cHid.addEventListener('click', () => lb.classList.toggle('hide'));
+document.getElementById('lbx').addEventListener('click', () => lb.classList.add('hide'));
+lb.addEventListener('click', ev => { if (ev.target === lb) lb.classList.add('hide'); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') lb.classList.add('hide'); });
+
 const rg = document.getElementById('regen'), rp = document.getElementById('regenprompt');
 const rgLabel = rg.textContent;
+
+// The prompt is rebuilt on every change, because the hidden set moves after the
+// file was written and a prompt that carries a stale list un-hides things.
+const REGEN_HEAD = $(ConvertTo-Json -InputObject ($regenHead + "`n`n" + $regenCmd) -Compress);
+function regenText(){
+  const q = [...hidden].sort().map(h => "'" + h.split("'").join("''") + "'");
+  rp.textContent = REGEN_HEAD + ' ' + (q.length ? '-Hide ' + q.join(',') : '-Hide @()');
+}
+
+saveHidden();
+applyHidden();
 function rgSay(t, ok){
   rg.textContent = t;
   rg.classList.toggle('on', !!ok);
@@ -1105,6 +1598,26 @@ rg.addEventListener('click', async () => {
 "@
 
 $html = $html.Replace('__FS__', [string][math]::Round(30 * $Scale, 1))
+
+# ---- last pass: no account name leaves this file ---------------------------
+#
+# Every path is already de-named where it is built, and this is the net under
+# that. A sheet gets screenshotted and posted; -Notes, a moved bundle or a mod
+# folder under the home directory can all put a username somewhere nobody
+# thought to look, and every one of those would be found by the reader rather
+# than by the author. A MatchEvaluator, not a replacement string, because a `$`
+# in a replacement is a substitution and would mangle the token it is inserting.
+if ($homeDir) {
+    $html = [regex]::Replace($html, [regex]::Escape($homeDir),
+                             [System.Text.RegularExpressions.MatchEvaluator]{ param($m) '$env:USERPROFILE' },
+                             'IgnoreCase')
+}
+# And say so if one survived anyway, rather than shipping it quietly. This is
+# advisory: a username can legitimately be a substring of an ordinary word, and
+# refusing to write the sheet over it would be worse than saying it is there.
+if ($env:USERNAME -and $html -match [regex]::Escape($env:USERNAME)) {
+    Write-Warning "the sheet still contains '$env:USERNAME' somewhere - check before sharing a screenshot of it"
+}
 
 $dir = Split-Path -Parent $Out
 if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }

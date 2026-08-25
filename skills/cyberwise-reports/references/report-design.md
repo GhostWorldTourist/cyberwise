@@ -201,6 +201,22 @@ Every flag names the symptom **and** the reason. "You have 6 GB of VRAM" is a
 statistic; "6 GB of VRAM against 40 GB of archives, which is why textures never
 sharpen" is a diagnosis.
 
+**A finding earns a line. Good news does not.** No green "everything checks out"
+sentence, no "0 problems found" line, no paragraph confirming there was nothing
+to report. The absence of findings is already visible - it is the empty space
+where they would have been - and spending a sentence on it costs exactly the room
+the findings would need on the day there are some. The hotkey sheet carried one
+of these for a while ("Every assigned button lands on something the game or a mod
+is listening for"), sitting above the grid it was pushing down the page, and its
+owner asked for it out.
+
+The counterpart rule is what makes that safe: **a problem is flagged where the
+problem is**, on the row, the key, the mod - not narrated in prose above the
+table. Prose above a table is read once and then skipped for ever; a red keycap
+is seen every time somebody looks for that key. Where a count is genuinely worth
+having, one measured line beats a paragraph - and its zero-valued parts are not
+drawn, because "0 dead" is the good-news line wearing a number.
+
 ## Markdown for Discord
 
 Where a companion markdown file exists, its target is a chat paste, and that
