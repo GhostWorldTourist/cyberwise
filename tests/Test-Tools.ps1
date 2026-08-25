@@ -3452,6 +3452,27 @@ Set-Content -LiteralPath (Join-Path $siteSrc 'nobody\Profile - Nobody.md') -Valu
 
 They have no theme file and no stylesheet named after them, and the site still has to hold them.
 '@
+# A PLAIN PROFILE, whose H1s are SECTIONS and not a title. This is what a real
+# character document looks like when nobody set out to write a dossier, and it
+# is the shape that broke: the builder took the first H1 as the document title,
+# so the page was headlined "Appearance", the directory row said the same word,
+# and - because the title is stripped from the body so it is not printed twice -
+# a genuine section heading was silently deleted.
+New-Item -ItemType Directory -Path (Join-Path $siteSrc 'sectioned') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $siteSrc 'sectioned\Profile - Sectioned.md') -Value @'
+# Appearance
+
+Tall, and never once photographed smiling.
+
+# Backstory
+
+Came down from the Badlands with nothing.
+
+## The First Year
+
+It did not go well.
+'@
+
 # A draft, which must not be published.
 New-Item -ItemType Directory -Path (Join-Path $siteSrc '_wip') -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $siteSrc '_wip\Profile - Wip.md') -Value '# Unfinished'
@@ -3461,6 +3482,7 @@ $index  = Get-Content -LiteralPath (Join-Path $siteOut 'index.html') -Raw
 $valk   = Get-Content -LiteralPath (Join-Path $siteOut 'valkyrie.html') -Raw
 $venom  = Get-Content -LiteralPath (Join-Path $siteOut 'venom.html') -Raw
 $nobody = Get-Content -LiteralPath (Join-Path $siteOut 'nobody.html') -Raw
+$sect   = Get-Content -LiteralPath (Join-Path $siteOut 'sectioned.html') -Raw
 
 $siteBad = @(
     foreach ($f in 'index.html', 'valkyrie.html', 'venom.html', 'nobody.html', 'site.js',
@@ -3482,6 +3504,40 @@ $siteBad = @(
 )
 if ($siteBad) { Bad 'sitebuilder: it writes a self-contained site and publishes only what it should' (($siteBad | Select-Object -Unique) -join "`n") }
 else          { Ok  'sitebuilder: it writes a self-contained site and publishes only what it should' }
+
+# --- a document with no title line -----------------------------------------
+#
+# BOTH HALVES MATTER, and fixing one by breaking the other is the easy mistake:
+# a document whose H1s are sections must keep them, and a document that really
+# does open with its own title must still have it lifted out of the body.
+$titleBad = @(
+    $sectBody = [regex]::Match($sect, '(?s)<div class="content">(.*?)</div>').Groups[1].Value
+    # Not "Appearance": that is the first section, not what the document is.
+    if ($sect -notmatch '<h1[^>]*>Sectioned</h1>') { 'a document with no title line was not headlined by its own name' }
+    if ($sect -match '<h1[^>]*>Appearance</h1>')   { 'a section heading was promoted to the page headline' }
+    # The deleted-heading half. This is the one that loses the user's writing.
+    if ($sectBody -notmatch '(?i)>Appearance<')    { 'the first section heading was eaten as if it were a title' }
+    if ($sectBody -notmatch '(?i)>Backstory<')     { 'a later section heading went missing' }
+    # Themes style a BARE h1 as display type - up to 76px, uppercase. A body
+    # section rendered as h1 comes out in that face, so the levels are pushed
+    # down and the page keeps exactly one h1.
+    if (@([regex]::Matches($sect, '<h1')).Count -ne 1) { "the page has $(@([regex]::Matches($sect, '<h1')).Count) h1 elements, not one" }
+    if ($sectBody -match '<h1')                        { 'a body heading is still an h1 and will render as display type' }
+    if ($sectBody -notmatch '<h2[^>]*>Appearance</h2>') { 'body headings were not pushed down a level' }
+    # Nothing repeats the name back at the reader.
+    if ($sect -match '(?s)<p class="eyebrow">\s*Sectioned\s*</p>') { 'the name is printed twice, as eyebrow and as headline' }
+    if ($index -match '(?s)Sectioned<span class="doctitle">Sectioned<') { 'the directory row repeats the name as its own doc title' }
+
+    # THE CONTROL: a document that DOES have one title line is untouched by all
+    # of the above. Venom opens "# Too Bad, Too Bad" and must still be headlined
+    # by it, still have it removed from the body, and still keep its eyebrow.
+    $venomBody = [regex]::Match($venom, '(?s)<div class="content">(.*?)</div>').Groups[1].Value
+    if ($venom -notmatch '<h1[^>]*>Too Bad, Too Bad</h1>') { 'a real document title stopped being the headline' }
+    if ($venomBody -match 'Too Bad, Too Bad')              { 'a real document title is printed twice' }
+    if ($venom -notmatch '<p class="eyebrow">Venom</p>')   { 'a titled document lost its eyebrow' }
+)
+if ($titleBad) { Bad 'sitebuilder: an H1 is a title only when it is the only one' (($titleBad | Select-Object -Unique) -join "`n") }
+else           { Ok  'sitebuilder: an H1 is a title only when it is the only one' }
 
 # --- the Zen Garden invariant ----------------------------------------------
 #
@@ -4011,6 +4067,228 @@ if ($Quick) {
         Bad 'upstream: the startup guard does not noticeably slow a tool' "the guard added ${ugCost} ms to a tool run ($([int]$ugOff) ms -> $([int]$ugOn) ms)"
     } else {
         Ok "upstream: the startup guard does not noticeably slow a tool (+${ugCost} ms on a $([int]$ugOff) ms run)"
+    }
+}
+
+# ============================================================ crash watch ==
+#
+# -Status has to describe THREE autostart routes: a scheduled task, this
+# script's own Run entry, and the TRAY's, which starts the watcher itself under
+# a different value name. Knowing only its own two, it printed "not registered"
+# and "process running" together on a working tray install - which reads as
+# "somebody started this by hand and it is gone after a reboot", the opposite of
+# what was true.
+#
+# PARTIAL BY DESIGN: the registered branches need real HKCU\...\Run values, and
+# writing autostart entries on the machine running the tests is not worth the
+# residue if a run is interrupted. What is pinned here is the branch that was
+# restructured - none of the three present - plus the invariant that -Status
+# never claims a route it has not found.
+$rcw = Join-Path $Root 'skills\cyberwise-crashes\tools\Register-CrashWatch.ps1'
+if (-not (Test-Path -LiteralPath $rcw)) {
+    Skip 'crash watch: -Status names only the autostart route it actually found' 'Register-CrashWatch.ps1 is not present'
+} else {
+    $absent = 'Cyberwise test value that does not exist ' + [guid]::NewGuid().ToString('N')
+    $stat = Get-AllOutput {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $rcw -Status `
+            -RunValueName $absent -TrayRunValueName $absent -TaskName $absent
+    }
+    $rcwBad = @(
+        if ($LASTEXITCODE -ne 0)          { "-Status exited $LASTEXITCODE with nothing wrong" }
+        if ($stat -notmatch 'not registered') { '-Status did not say the watcher is unregistered when no route exists' }
+        # It must still answer the other half of the question. "Not registered"
+        # and "not running" are different facts and the user needs both.
+        if ($stat -notmatch 'process')    { '-Status reported registration but never mentioned the process' }
+        # The failure this guards: claiming a route that was not found.
+        if ($stat -match 'started at logon by the Cyberwise tray') { '-Status claimed the tray route with no tray Run entry present' }
+        if ($stat -match 'registered as a logon Run entry')        { '-Status claimed its own Run entry with none present' }
+    )
+    if ($rcwBad) { Bad 'crash watch: -Status names only the autostart route it actually found' ($rcwBad -join "`n") }
+    else         { Ok  'crash watch: -Status names only the autostart route it actually found' }
+}
+
+# ================================================================ endpoint ==
+#
+# The endpoint is the only thing in this family that listens on a socket and can
+# start a process, so its gate is the one piece of code here where being wrong
+# is a security problem rather than a wrong answer. It is driven over real HTTP
+# against a real listener on purpose: the gate lives in the request loop, and a
+# test that re-implemented the decision would agree with itself while the
+# shipped loop did something else.
+
+$epTool = Join-Path $Root 'skills\cyberwise\tools\Start-CwEndpoint.ps1'
+if (-not (Test-Path -LiteralPath $epTool)) {
+    Skip 'endpoint: the loopback gate refuses everything it should' 'Start-CwEndpoint.ps1 is not present'
+} else {
+    $epRoot = Join-Path $sandbox 'endpoint'
+    New-Item -ItemType Directory -Path $epRoot -Force | Out-Null
+
+    # Two actions: one this mode may run, one it may not. Both point at a
+    # READ-ONLY tool, so a gate that wrongly opens cannot damage the fixture -
+    # the test would fail, which is the point, without side effects.
+    $epActions = @'
+{
+  "actions": [
+    { "id": "readonly", "title": "Read-only check", "requires": "tool",
+      "summary": "Runs a read-only report.", "cooldownSec": 1,
+      "prompt": "PROMPT-FOR-READONLY",
+      "run": { "skill": "cyberwise", "script": "Test-Upstream.ps1", "args": [] } },
+    { "id": "agentonly", "title": "Agent-only thing", "requires": "agent",
+      "summary": "Must be refused below agent mode.",
+      "prompt": "PROMPT-FOR-AGENTONLY",
+      "run": { "skill": "cyberwise", "script": "Test-Upstream.ps1", "args": [] } }
+  ]
+}
+'@
+    $epActionsFile = Join-Path $epRoot 'actions.json'
+    Set-Content -LiteralPath $epActionsFile -Value $epActions
+
+    function Get-FreeLoopbackPort {
+        $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+        $l.Start(); $p = $l.LocalEndpoint.Port; $l.Stop(); $p
+    }
+
+    function Start-Endpoint {
+        param([string] $Mode)
+        $port = Get-FreeLoopbackPort
+        $proc = Start-Process -FilePath 'powershell.exe' -PassThru -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $epTool,
+            '-Port', $port, '-Mode', $Mode, '-Records', $epRoot, '-ActionsFile', $epActionsFile)
+        $u = "http://127.0.0.1:$port"
+        foreach ($i in 1..60) {
+            try {
+                $r = Invoke-WebRequest -Uri "$u/health" -TimeoutSec 2 -SkipHttpErrorCheck -ErrorAction Stop
+                if ($r.StatusCode -eq 200) { return [pscustomobject]@{ Url = $u; Proc = $proc; Port = $port } }
+            } catch { }
+            Start-Sleep -Milliseconds 150
+        }
+        try { $proc | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
+        return $null
+    }
+
+    function Invoke-Ep {
+        param([string]$Url, [string]$Path, [string]$Method = 'GET',
+              [string]$Token, [string]$Origin, [string]$Body)
+        $h = @{}
+        if ($Token)  { $h['X-Cyberwise-Token'] = $Token }
+        if ($Origin) { $h['Origin'] = $Origin }
+        $p = @{ Uri = "$Url$Path"; Method = $Method; Headers = $h
+                TimeoutSec = 20; SkipHttpErrorCheck = $true; ErrorAction = 'Stop' }
+        if ($Body) { $p.Body = $Body; $p.ContentType = 'application/json' }
+        Invoke-WebRequest @p
+    }
+
+    $ep = Start-Endpoint -Mode 'tool'
+    if (-not $ep) {
+        Skip 'endpoint: the loopback gate refuses everything it should' 'the listener did not come up on a free loopback port'
+    } else {
+        try {
+            $tok = (Get-Content -LiteralPath (Join-Path $epRoot 'endpoint.token') -Raw).Trim()
+            $u   = $ep.Url
+            $bad = @()
+
+            # --- the token ---
+            if ((Invoke-Ep $u '/actions').StatusCode -ne 401)                        { $bad += '/actions served without a token' }
+            if ((Invoke-Ep $u '/actions' -Token 'deadbeef').StatusCode -ne 401)      { $bad += '/actions served to a wrong token' }
+            if ((Invoke-Ep $u '/actions' -Token $tok).StatusCode -ne 200)            { $bad += '/actions refused the real token' }
+            # /health must NOT need one, or a page cannot detect the service to
+            # degrade away from it - which is the whole reason it degrades.
+            if ((Invoke-Ep $u '/health').StatusCode -ne 200)                         { $bad += '/health required a token, so a page cannot detect the service' }
+
+            # --- the origin, which is the check that actually stops a website ---
+            # A page on the open internet can make a browser POST here. It cannot
+            # forge Origin. Every route must refuse a real one, INCLUDING with a
+            # valid token, or the token becomes the only thing standing there.
+            foreach ($route in '/health', '/actions') {
+                if ((Invoke-Ep $u $route -Origin 'https://evil.example' -Token $tok).StatusCode -ne 403) {
+                    $bad += "$route served a web origin"
+                }
+            }
+            if ((Invoke-Ep $u '/invoke' -Method POST -Origin 'https://evil.example' -Token $tok -Body '{"id":"readonly"}').StatusCode -ne 403) {
+                $bad += '/invoke ran for a web origin holding a valid token'
+            }
+            # The preflight is where a browser asks BEFORE sending the real
+            # request, so refusing it there is what makes the custom header safe.
+            if ((Invoke-Ep $u '/health' -Method OPTIONS -Origin 'https://evil.example').StatusCode -ne 403) {
+                $bad += 'a web origin was granted a CORS preflight'
+            }
+            if ((Invoke-Ep $u '/health' -Method OPTIONS -Origin 'null').StatusCode -ne 204) {
+                $bad += 'a file:// page was refused its CORS preflight'
+            }
+            # Never '*': that hands the response to every site on the internet.
+            $pf = Invoke-Ep $u '/health' -Method OPTIONS -Origin 'null'
+            if ($pf.Headers['Access-Control-Allow-Origin'] -contains '*') {
+                $bad += 'the endpoint answers with a wildcard allow-origin'
+            }
+
+            # --- the request names an ID and nothing else ---
+            if ((Invoke-Ep $u '/invoke' -Method POST -Token $tok -Body '{"id":"../../evil"}').StatusCode -ne 404) {
+                $bad += 'an unknown action id was not refused'
+            }
+            if ((Invoke-Ep $u '/nope' -Token $tok).StatusCode -ne 404) { $bad += 'an unknown route was not refused' }
+
+            # --- the mode gate ---
+            $r = (Invoke-Ep $u '/invoke' -Method POST -Token $tok -Body '{"id":"agentonly"}').Content | ConvertFrom-Json
+            if ($r.ran)             { $bad += 'an agent-only action ran while the endpoint was in tool mode' }
+            if ($r.reason -ne 'mode') { $bad += "an agent-only action was refused for '$($r.reason)', not the mode" }
+
+            # --- and a permitted action really does run ---
+            $r = (Invoke-Ep $u '/invoke' -Method POST -Token $tok -Body '{"id":"readonly"}').Content | ConvertFrom-Json
+            if (-not $r.ran) { $bad += "a permitted action did not run: $($r.error)" }
+
+            # --- /actions carries the REAL prompt, because the ? lightbox reads
+            # it from here. A page shipping its own copy could show one thing and
+            # send another, which would make inspecting it theatre.
+            $list = (Invoke-Ep $u '/actions' -Token $tok).Content | ConvertFrom-Json
+            $ro = $list.actions | Where-Object id -eq 'readonly'
+            $ao = $list.actions | Where-Object id -eq 'agentonly'
+            if ($ro.prompt -ne 'PROMPT-FOR-READONLY')  { $bad += '/actions did not return the action prompt the lightbox shows' }
+            if (-not $ro.permitted) { $bad += 'a tool action was marked not permitted in tool mode' }
+            if ($ao.permitted)      { $bad += 'an agent action was marked permitted in tool mode' }
+
+            if ($bad) { Bad 'endpoint: the loopback gate refuses everything it should' ($bad -join "`n") }
+            else      { Ok  'endpoint: the loopback gate refuses everything it should' }
+        } finally {
+            try { $ep.Proc | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
+        }
+    }
+
+    # PROMPT MODE EXECUTES NOTHING. This is the default, and it is what the user
+    # chose when they wanted the button to hand them a prompt rather than act.
+    # If it ever runs anything, the setting is decoration.
+    $ep2 = Start-Endpoint -Mode 'prompt'
+    if (-not $ep2) {
+        Skip 'endpoint: prompt mode hands back text and runs nothing' 'the listener did not come up'
+    } else {
+        try {
+            $tok = (Get-Content -LiteralPath (Join-Path $epRoot 'endpoint.token') -Raw).Trim()
+            $bad = @()
+            $r = (Invoke-Ep $ep2.Url '/invoke' -Method POST -Token $tok -Body '{"id":"readonly"}').Content | ConvertFrom-Json
+            if ($r.ran)                                 { $bad += 'prompt mode executed an action' }
+            if ($r.prompt -ne 'PROMPT-FOR-READONLY')    { $bad += 'prompt mode did not hand back the action prompt' }
+            $list = (Invoke-Ep $ep2.Url '/actions' -Token $tok).Content | ConvertFrom-Json
+            if (@($list.actions | Where-Object permitted).Count) { $bad += 'an action was marked permitted in prompt mode' }
+            if ($bad) { Bad 'endpoint: prompt mode hands back text and runs nothing' ($bad -join "`n") }
+            else      { Ok  'endpoint: prompt mode hands back text and runs nothing' }
+        } finally {
+            try { $ep2.Proc | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
+        }
+    }
+
+    # Every decision is written down, refusals included - the log is the only
+    # record that anything asked at all.
+    $epLog = Join-Path $epRoot 'endpoint.log'
+    if (-not (Test-Path -LiteralPath $epLog)) {
+        Bad 'endpoint: every refusal is written to the audit log' 'no log was written at all'
+    } else {
+        $lg = Get-Content -LiteralPath $epLog -Raw
+        $lbad = @()
+        if ($lg -notmatch 'refused\s+origin=https://evil\.example') { $lbad += 'a refused web origin left no audit line' }
+        if ($lg -notmatch 'refused\s+bad or missing token')         { $lbad += 'a refused token left no audit line' }
+        if ($lg -notmatch "refused\s+unknown action")               { $lbad += 'an unknown action left no audit line' }
+        if ($lg -notmatch 'run\s+readonly')                         { $lbad += 'an action that ran left no audit line' }
+        if ($lbad) { Bad 'endpoint: every refusal is written to the audit log' ($lbad -join "`n") }
+        else       { Ok  'endpoint: every refusal is written to the audit log' }
     }
 }
 

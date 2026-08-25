@@ -44,7 +44,12 @@
 [CmdletBinding()]
 param(
     [string] $From = (Join-Path (Get-Location) 'characters'),
-    [string] $Out = (Join-Path (Get-Location) 'site'),
+    # Beside the install's other records, not in whatever directory the caller
+    # happened to be standing in - which for an agent is usually a clone, so the
+    # site got written into the source tree. $From stays relative on purpose:
+    # it is an INPUT, and pointing it at your own folder of documents is the
+    # normal way to use this.
+    [string] $Out = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\site",
 
     [string] $Title = 'V of Night City',
 

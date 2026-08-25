@@ -109,7 +109,20 @@ about what the user changed.
 
 **The game's own claims are a sixth file** - `r6\config\inputUserMappings.xml`.
 It is left out of a mods report by default because ~99 identical vanilla rows
-swamp it, and that is fine for presentation and a correctness bug in the gate.
+swamp it. **That gate now governs DISPLAY only.** It used to govern knowledge
+too, and the consequence shipped: with the switch off nothing in the harvested
+set claimed `IK_MiddleMouse`, so a mouse button sending Middle Mouse was printed
+as *"nothing binds this key - does nothing in game"*, in red, on a sheet whose
+owner had labelled that button "Use Gadget". The game binds it to `combatGadget`
+out of the box. The sheet was not unhelpful; it was asserting something false in
+the style it reserves for findings.
+
+`New-HotkeySheet.ps1` therefore always harvests the vanilla mappings and then
+splits them: one set answers *is this key claimed by anything*, the other is
+filtered for display. A button whose key only the base game claims is shown with
+what the game does with it, attributed to the base game, and is never marked
+dead. **If you add another "is this key bound?" question anywhere, ask it of the
+full set, not the displayed one.**
 There is a sharper reason to keep it reachable: **a mod can change what a vanilla
 mapping does without registering a key of its own**, so the key somebody presses
 *because of a mod* can appear only there. Free-look leaning and consumable /

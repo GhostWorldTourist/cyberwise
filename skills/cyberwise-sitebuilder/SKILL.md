@@ -17,6 +17,12 @@ developers.
 tools\New-CharacterSite.ps1 -From <characters folder> -Out <site folder> -Open
 ```
 
+`-From` defaults to `characters` beside you, because pointing it at your own
+folder of documents is the normal way to use this. **`-Out` does not**: it
+defaults to `...\Cyberpunk 2077\Cyberwise\reports\site`, with the install's
+other records. It used to default to the current directory, which for an agent
+is usually a clone - so the site got written into the source tree.
+
 That is the whole interface. The output folder **is** the site: copy it to a web
 host, a USB stick or a Discord upload, or double-click `index.html`.
 

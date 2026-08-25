@@ -394,6 +394,37 @@ Check 'every shipped .ps1 parses' {
 # NOT banned here: ConvertFrom-Json -AsHashtable, which Get-Hotkeys.ps1 genuinely
 # requires - bindings.json has keys differing only in case, and 5.1 cannot read
 # it at all. That tool needs pwsh 7 for a real reason rather than by accident.
+# A GENERATED REPORT GOES WHERE THE OTHER RECORDS GO.
+#
+# These defaults were scattered three ways: %USERPROFILE%\Downloads, which is a
+# folder people empty; a bare relative filename; and (Get-Location), which is
+# whatever directory the caller happened to be standing in - so an agent run
+# from a clone wrote its reports into the repo. None of the three is a place
+# anybody looks a week later, and the last one quietly littered the source tree.
+#
+# Get-Location is the one worth a check rather than a convention, because it
+# LOOKS deliberate in a param block and its damage depends entirely on who
+# called the tool.
+Check 'no report defaults to Downloads or the current directory' {
+    $outNames = 'Out', 'Html', 'Md', 'OutFile', 'Report'
+    foreach ($f in (Get-ChildItem -LiteralPath $Root -Filter *.ps1 -Recurse)) {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$null)
+        if (-not $ast -or -not $ast.ParamBlock) { continue }
+        foreach ($prm in $ast.ParamBlock.Parameters) {
+            if (-not $prm.DefaultValue) { continue }
+            $name = $prm.Name.VariablePath.UserPath
+            if ($outNames -notcontains $name) { continue }
+            $txt = $prm.DefaultValue.Extent.Text
+            if ($txt -like '*Downloads*' -or $txt -like '*Desktop*') {
+                "$($f.Name): `$$name defaults into Downloads/Desktop; it belongs with the install's other records"
+            }
+            if ($txt -match 'Get-Location') {
+                "$($f.Name): `$$name defaults to Get-Location, so where the report lands depends on who called the tool"
+            }
+        }
+    }
+}
+
 Check 'no shipped tool uses the 5.1-absent no-BOM encoding name' {
     # The token is assembled from two halves so that this check's own name and
     # message do not match it. Spelling it out here would make the file its own
