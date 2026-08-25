@@ -379,6 +379,38 @@ Check 'every shipped .ps1 parses' {
 # The fix is to leave the parameter undefaulted and resolve it in the BODY,
 # which is correct on both engines by every route and still honours an override.
 # $MyInvocation.MyCommand.Path is NOT a workaround: it is null in the same spot.
+# The family's own suite runs under Windows PowerShell 5.1, so a tool that only
+# works on pwsh 7 is a tool most users cannot run. `-Encoding utf8NoBOM` is the
+# one that keeps reappearing: it does not exist on 5.1 and throws outright, and
+# the obvious "fix" of `-Encoding UTF8` writes a BOM there - three invisible
+# bytes in front of `---` that stop a front-matter parser and look like nothing.
+#
+# Six tools shipped with it while a seventh carried a comment explaining the
+# problem, which is the argument for a check over a convention. Write through
+# [System.IO.File]::WriteAllText/WriteAllLines with an explicit
+# UTF8Encoding($false) instead. Comment lines are skipped, since the guidance
+# has to be able to name the thing it is warning about.
+#
+# NOT banned here: ConvertFrom-Json -AsHashtable, which Get-Hotkeys.ps1 genuinely
+# requires - bindings.json has keys differing only in case, and 5.1 cannot read
+# it at all. That tool needs pwsh 7 for a real reason rather than by accident.
+Check 'no shipped tool uses the 5.1-absent no-BOM encoding name' {
+    # The token is assembled from two halves so that this check's own name and
+    # message do not match it. Spelling it out here would make the file its own
+    # first finding, which is funny once and then just noise forever.
+    $bad = 'utf8' + 'NoBOM'
+    foreach ($f in (Get-ChildItem -LiteralPath $Root -Filter *.ps1 -Recurse)) {
+        $n = 0
+        foreach ($line in (Get-Content -LiteralPath $f.FullName)) {
+            $n++
+            if ($line.TrimStart().StartsWith('#')) { continue }
+            if ($line -match ('-Encoding\s+' + $bad)) {
+                "$($f.Name):$n passes -Encoding $bad, which throws on Windows PowerShell 5.1"
+            }
+        }
+    }
+}
+
 Check 'no param default reads $PSScriptRoot (it is empty there on 5.1)' {
     foreach ($f in (Get-ChildItem -LiteralPath $Root -Filter *.ps1 -Recurse)) {
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$null)

@@ -390,7 +390,14 @@ if ($dirty) {
     if (-not (Test-Path -LiteralPath $backupDir)) { $null = New-Item -ItemType Directory -Path $backupDir }
     $bak = Join-Path $backupDir ("modlist.{0}.bak" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
     Copy-Item -LiteralPath $listPath -Destination $bak
-    Set-Content -LiteralPath $listPath -Value $lines -Encoding utf8NoBOM
+    # `-Encoding utf8NoBOM` DOES NOT EXIST on Windows PowerShell 5.1 and throws
+    # there; `-Encoding UTF8` means *with* a BOM on 5.1, which is how three
+    # invisible bytes end up in front of `---` and stop a front-matter parser. Write
+    # through an explicit no-BOM encoder instead. The path is made absolute first
+    # because [System.IO.File] resolves a relative path against .NET's own current
+    # directory, which is not PowerShell's.
+    $listFull = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($listPath)
+    [System.IO.File]::WriteAllLines($listFull, [string[]] $lines, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "`nmodlist.txt written. Backup: $bak" -ForegroundColor Green
     $dupes = @($lines | Group-Object | Where-Object Count -gt 1)
     if ($dupes.Count) { Write-Bad "duplicate entries introduced: $($dupes.Name -join ', ')" }

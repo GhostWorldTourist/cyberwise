@@ -109,10 +109,18 @@ function Save-CwPreferences {
 
     # Only the two fields that mean anything are written back, so a hand-edited
     # file cannot grow junk through a round trip.
-    ([pscustomobject]@{
+    $prefJson = ([pscustomobject]@{
         recommendations = $Preferences.recommendations
         declined        = @($Preferences.declined)
-    } | ConvertTo-Json -Depth 5) | Set-Content -LiteralPath $path -Encoding utf8NoBOM
+    } | ConvertTo-Json -Depth 5)
+    # `-Encoding utf8NoBOM` DOES NOT EXIST on Windows PowerShell 5.1 and throws
+    # there; `-Encoding UTF8` means *with* a BOM on 5.1, which is how three
+    # invisible bytes end up in front of `---` and stop a front-matter parser. Write
+    # through an explicit no-BOM encoder instead. The path is made absolute first
+    # because [System.IO.File] resolves a relative path against .NET's own current
+    # directory, which is not PowerShell's.
+    $prefFull = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path)
+    [System.IO.File]::WriteAllText($prefFull, $prefJson + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
     $path
 }
 

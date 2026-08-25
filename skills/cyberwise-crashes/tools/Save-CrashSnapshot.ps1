@@ -105,9 +105,16 @@ foreach ($k in ($layouts.Keys | Sort-Object)) {
         $lines += "{0,-10} {1}" -f $k, $i.Name
     }
 }
-$lines | Set-Content -LiteralPath (Join-Path $dest 'deployed.txt') -Encoding utf8NoBOM
+# `-Encoding utf8NoBOM` DOES NOT EXIST on Windows PowerShell 5.1 and throws
+# there; `-Encoding UTF8` means *with* a BOM on 5.1, which is how three
+# invisible bytes end up in front of `---` and stop a front-matter parser. Write
+# through an explicit no-BOM encoder instead. The path is made absolute first
+# because [System.IO.File] resolves a relative path against .NET's own current
+# directory, which is not PowerShell's.
+$noBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllLines((Join-Path $dest 'deployed.txt'), [string[]] $lines, $noBom)
 
-if ($Note) { "user said: $Note" | Set-Content -LiteralPath (Join-Path $dest 'note.txt') -Encoding utf8NoBOM }
+if ($Note) { [System.IO.File]::WriteAllText((Join-Path $dest 'note.txt'), "user said: $Note`r`n", $noBom) }
 
 # --- the bare facts, and nothing more ---------------------------------------
 Write-Host "snapshot: $dest" -ForegroundColor Green
