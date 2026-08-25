@@ -216,3 +216,4 @@ content, so the parse looks correct right up to the point where it throws.
 
 - [Where appearance lives inside a save](/formats/appearance-in-a-save)
 - [The AppearanceChangeUnlocker preset format](/formats/acu-preset)
+- [An inventory of somebody's install is personal data](/process/generated-output-is-personal-data) - what may be read out of a save and what must never be written down

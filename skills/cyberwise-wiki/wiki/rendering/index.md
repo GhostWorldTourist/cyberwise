@@ -25,6 +25,7 @@ ReShade, why the bloom setting did nothing, why a calibration stopped being vali
 
 - [The capture path can silently ruin a finished shot](/rendering/capture-formats-and-what-they-clip) - 16-bit PNGs that blew out highlights, JPEG XR from Game Bar and OBS, and the tooling gaps that reproduce the fault
 - [HDR screenshot metadata is a negotiated compromise, and SDR is the honest delivery format](/rendering/hdr-delivery-is-a-negotiation) - one hot pixel can dim a whole image, and every consumer re-tone-maps anyway
+- [The game's own picture importer decodes wrongly rather than refusing](/rendering/importing-a-picture-into-the-game) - the way back in: magenta from an HDR PNG, banding from a naive conversion, and the container that fixes both *(draft: one game version)*
 
 ## Composing a shot
 
@@ -51,14 +52,18 @@ every instruction.
 - [Sharpening recovers detail, it never invents it](/rendering/sharpening-recovers-detail-it-never-invents-it) - why a contrast-adaptive sharpener does not halo, and why SDR tolerates far more of it than HDR
 - [One grain pass, and one grain model](/rendering/one-grain-pass-and-one-grain-model) - three layers can each add grain, and the halide-crystal and sensor-noise models mean different things by the same control
 - [Telling bloom from what is not bloom](/rendering/telling-bloom-from-what-is-not-bloom) - reflections and lens flare get reported as bloom, and bloom itself is a per-shot decision
+- [Measuring what an injected shader chain costs](/rendering/measuring-what-a-shader-chain-costs) - three readings at one fixed spot, because uninstalling to measure removes the hook as well as the shaders *(draft: one machine, one scene)*
+- [A framerate average does not predict how the game feels](/rendering/smoothness-is-variance-not-average) - slow and jerky are different faults with opposite fixes, and the two worst failures never move the average *(draft: one configuration's thresholds)*
 
 ## What is marked draft, and why
 
-Five articles here carry `status: draft` because their central finding is a
+Eight articles here carry `status: draft` because their central finding is a
 **single observation** rather than a repeated test - one machine, one session,
 one version of a tool. Each says so in its own "What was not verified" section:
 the HDR retrofit layer, the HDR/SDR calibration article, the capture formats,
-photo mode's broken ray reconstruction, and the display-side features.
+photo mode's broken ray reconstruction, the display-side features, the shader
+chain's measured cost, the picture importer, and the smoothness article's
+thresholds.
 
 The mechanisms in those articles generalise. The measurements in them do not, and
 should be re-derived rather than copied.

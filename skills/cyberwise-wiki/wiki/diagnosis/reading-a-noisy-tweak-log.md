@@ -92,8 +92,9 @@ feature and the other is nothing.
 - **`Ambiguous definition`** on a record means the framework could not infer a
   type — commonly a malformed or doubled record path with no `$type`/`$base` to
   clone from. The feature that record was supposed to provide is not present.
-  See [a doubled prefix and other record-declaration
-  faults](/authoring/finding-the-real-record-id).
+  What that message and its neighbour are each telling you, and the fix for
+  both, is in [two TweakXL errors that are not "unknown
+  record"](/authoring/tweakxl-error-signatures).
 - **A whole file rejected** for a syntax error takes every record in it with it,
   and the symptom is a mod that appears installed and does nothing. See [a YAML
   error disables the whole file](/authoring/a-yaml-error-disables-the-whole-file).

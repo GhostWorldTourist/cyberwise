@@ -34,6 +34,18 @@ is a streaming-sector or archive problem in that district. If they scatter, it i
 systemic. That inference only holds if the records are genuinely distinct - which
 is the trap below.
 
+**A cluster is still not a reproduction.** Four crashes in one district, on
+different objectives, at session lengths of 83 seconds, 17 minutes and 24
+minutes, is a *neighbourhood*, not a condition - and blind bisection only works
+against a condition somebody can trigger on demand. The state worth reaching is
+narrower and much rarer: **the same spot twice, at a known interval from a known
+save.** Two crashes 5 m apart on the same job, the second one arriving 46 seconds
+after a save load, turns every subsequent bisect round from an evening into a
+minute.
+
+Until then, a single crash gets a watcher and more captures - never a suspect
+list.
+
 ## Windows Error Reporting will never help you
 
 Because the fault is *handled*, nothing reaches WER:
@@ -112,6 +124,32 @@ command to the user rather than retrying.
 
 **A watcher you believe is armed and is not is worse than none**, because the
 next crash then looks like a crash that produced no telemetry.
+
+## Autostart: the scheduled task is the bonus, the logon entry is the plan
+
+Registering a scheduled task is the better mechanism and **should be treated as
+the case that fails**. Attempted registration came back
+`scheduled task refused (Access is denied.)` - and not only inside a supervised
+session: it failed the same way in an ordinary user shell.
+
+So design for the **logon Run entry** and treat a task as an upgrade if it
+happens to register. Say the cost of the fallback out loud, because it is real:
+**a Run entry starts the watcher at logon and will not restart it if it dies.** A
+watcher that died on Tuesday is silent for the rest of the week, and silence is
+exactly what it looks like when nothing has crashed.
+
+## Two things that can start a watcher is a race, and losing it is quiet
+
+Once there is both an autostart entry and something the person can click, two
+launchers can each run "check whether one is running, then start". That check is
+not atomic, and losing the race gives **two watchers interleaving into the same
+output folder**, both capturing the same crash - which silently reintroduces the
+duplicate records the dedupe above exists to prevent.
+
+**Fix it in the watcher, not in each launcher.** A mutex keyed on the *output
+folder* makes a second instance exit immediately whatever started it, while a
+second install with its own folder still gets its own watcher. Every launcher
+added later inherits the guarantee instead of having to re-implement it.
 
 The same reasoning applies to any autostart route: an entry in
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` stores an **absolute path**,

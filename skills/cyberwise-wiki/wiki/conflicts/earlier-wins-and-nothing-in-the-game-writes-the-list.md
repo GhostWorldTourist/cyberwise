@@ -73,3 +73,4 @@ verdict.
 
 - [Every newly installed archive starts at the bottom of the stack](/conflicts/every-new-archive-starts-last)
 - [`#` is a filename character, not a comment marker](/conflicts/modlist-has-no-comment-syntax)
+- [A TweakXL record is resolved last-wins](/authoring/tweakxl-records-are-last-wins) - where a `zzz_` prefix genuinely does win, because the tweak layer resolves in read order rather than by this file

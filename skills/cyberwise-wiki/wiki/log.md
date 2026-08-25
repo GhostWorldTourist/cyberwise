@@ -1,5 +1,44 @@
 # Log
 
+## 2026-08-25
+
+**Two corrections, one of them load-bearing.**
+
+`authoring/tweakxl-records-are-last-wins` said resolution is per record and the
+later declaration simply wins. It is **per field within a record** - two mods
+declaring the same record with disjoint field sets both take effect. The old
+wording licensed exactly the wrong conclusion, "these two write the same record,
+they are duplicates, uninstall one", against a modular suite where all of them
+are needed. Corrected with the worked case: four handling mods, five shared
+vehicle records, disjoint fields, every one of them doing its job.
+
+`diagnosis/reading-a-noisy-tweak-log` carried a link labelled "a doubled prefix
+and other record-declaration faults" pointing at an article that does not cover
+doubled prefixes. Repointed at the new error-signatures article.
+
+**A mining pass over a year of sessions returned 755 findings; about 500 of the
+585 in scope were already written.** That is the number worth keeping: the
+reference migration had already covered load order, archive internals, crash
+forensics, input bindings, save formats and canon almost completely, and 9 of
+the 21 findings in the hardest-won recovered slice were already here in full.
+Thirty were genuinely absent and are now written; fifteen existing articles
+gained a dimension they lacked.
+
+**Four real duplications were found and collapsed** - unlisted archives,
+disjoint fields on a shared record, accumulation DOF, and a log artefact from
+parked archives. In each case the fuller treatment stayed and the other became a
+pointer. One of the four had been introduced by the same agent that found it.
+
+**What was deliberately not written** is as much of the shape as what was. About
+120 findings the report tagged BASE are mod-behaviour by this bundle's own
+boundary - one author's humanity tables, another's rent ladder, per-shader
+parameter guides - and belong to a user bundle rather than a shipping one; where
+one carried a transferable pattern, only the pattern was taken. About 25 more
+are image-editing and streaming knowledge: real, but not about this game.
+Single-search game trivia was declined against the area's standard, which is
+that an article should answer something expensive.
+
+
 ## 2026-08-24 (overnight — the archive sweep)
 
 **The bundle went from 21 articles to about 130, and the second half did not

@@ -10,10 +10,15 @@ generated: { by: "claude", at: "2026-08-24T21:15:00-04:00" }
 # A TweakXL record is resolved last-wins, and that is the lever for everything else
 
 TweakXL reads every `.yaml` / `.yml` under `r6\tweaks\`, recursively, and
-applies them in order. **The unit of resolution is the record.** Two files that
-both declare `Items.SomeThing` do not conflict, do not warn, and do not merge -
-the one applied later simply wins, and only for that record. Everything else
-each file declares stays live.
+applies them in order. **The unit of resolution is the record, and within a
+record it is the field.** Two files that both declare `Items.SomeThing` do not
+conflict and do not warn: each sets the fields it lists, and where they list the
+**same** field the one applied later wins. Everything else each file declares
+stays live.
+
+That granularity is finer than "last file wins" and the difference matters in
+both directions - it is what makes a one-field override possible, and it is why
+two mods writing the same record are frequently not fighting at all.
 
 That single fact decides how every "fix somebody else's tweak" job gets done,
 because it is the only mod layer in this game with **partial** override
@@ -47,6 +52,23 @@ alternatives:
 Declare **only the records you are changing.** The temptation is to copy their
 whole file and edit two lines; that turns a per-record override into a per-file
 one and hands you every disadvantage of replacing a `.reds`.
+
+## A shared record is not a conflict - compare fields, not IDs
+
+The same granularity produces a false positive that is easy to publish. A scan
+that groups mods by the record IDs they write will report several mods
+"duplicating" each other whenever they touch a popular record.
+
+Worked case: four handling mods all wrote the same five vehicle records and were
+flagged as duplicates. Reading what each one actually **set** settled it in
+minutes - one wrote the slope-traction fields, one the steering-smoothing fields,
+one the differential fields, one the handbrake and uphill helpers. **Disjoint
+field sets on a shared record is a modular suite, not a fight**, and removing any
+of them would have removed a feature rather than a redundancy.
+
+So the diagnostic form of this article's first line: two mods writing one record
+are in conflict **only over the fields they both declare**. Diff the fields
+before telling anybody to uninstall something.
 
 ## The retire condition is not optional
 

@@ -35,6 +35,26 @@ A clean round is a statement about *all* causes. A failing round is a statement
 about *no individual mod*. While you are still halving, a failing round is not
 evidence about anything in it.
 
+## A clean round only counts if it ran long enough to fail
+
+That table assumes "clean" means the fault had its chance and did not happen. For
+a crash that takes time to arrive, that is a claim about **duration**, and it
+usually goes unexamined.
+
+**A round that survived two minutes, against a fault observed to take up to
+twenty-four, is inconclusive - not a clean elimination.** Recorded as clean, it
+inverts the whole search onto a base that was never proven.
+
+So a bisect over a timed fault needs one number carried alongside the rounds: the
+**longest observed time to failure so far**. A round is clean when it outlasts
+that. Anything shorter is "did not run long enough", which is a different row and
+must not be counted as evidence.
+
+The same number stops the mirror-image error. Crash session lengths of 83
+seconds, 17 minutes and 24 minutes are not evidence that this is a load-time
+crash - short sessions are mostly **the length of a retry loop**, a fact about
+how somebody tests rather than about the fault.
+
 ## Once any round comes back clean, invert
 
 You now have a **proven-clean base**. Hold it disabled and add mods *back* in

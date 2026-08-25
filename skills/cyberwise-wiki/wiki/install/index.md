@@ -25,3 +25,4 @@ install-side check is blind to them - and so is every install-side repair.
 ## Researching a mod
 
 - [A mod page's own text may be unreachable to automated fetching](/install/a-mod-page-can-be-unreachable-to-tooling) - search results still carry mirrored copies, so the page looks retrievable until it is not; plan on asking for a paste rather than falling back to one
+- [A hosting site's adult flag is per page, author-set, and answers a different question](/install/the-adult-flag-is-per-page-and-author-set) - one flagged optional file flags the whole page, a keyword heuristic misses more than half, and propagation across an id must name what it hid

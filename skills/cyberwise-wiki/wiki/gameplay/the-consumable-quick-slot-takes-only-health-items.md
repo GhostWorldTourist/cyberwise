@@ -52,3 +52,4 @@ either finds one or sweeps the remaining layers.
 - [Five separate stores hold key bindings, and no single one answers what a key is bound to](/input/five-binding-stores)
 - [An input context is not a category, and a shared key is usually not a fault](/input/input-contexts-are-not-categories)
 - [Checking a gameplay claim against the game's own scripts](/gameplay/checking-a-gameplay-claim-against-the-shipped-scripts)
+- [An empty result is the absence of evidence](/process/an-empty-result-is-not-a-finding) - the shape of the negative this article states, and how wide it is

@@ -66,7 +66,34 @@ load order - hold at every size. Only the search strategy scales.
 game.** Quest-graph rewrites (`intercept: true` entries) only execute when the
 quests run from scratch, so an existing save loads fine and the new game
 livelocks. The culprit in one such case declared **33 quest parents and 30
-intercepts** - by far the heaviest in the load order.
+intercepts** - by far the heaviest in the load order. Both halves of that
+asymmetry have their own articles:
+[quest-graph interceptions](/conflicts/quest-graph-interceptions) and
+[resource patching runs on the new-game path only](/engine/archivexl-resource-patching).
+
+## Two layer interactions that manufacture failures
+
+The layers are not independent, and a round that ignores this tests something
+nobody asked about.
+
+**Park the ENTIRE `.xl` layer for the duration of an archive bisect, as a fixed
+variable.** Sidecars patch *into* archive content. With half the archives parked,
+sidecars point at content that is not there, and the resulting failures have
+nothing to do with the fault being hunted - two consecutive rounds hung
+spuriously that way. The round that finally isolated the real culprit ran with
+zero `.xl` live.
+
+**Removing one code layer while the other stays live is inconclusive, not
+signal.** Mods that ship both a script and a Lua half break in a new way when
+only one half is taken out - the reported symptom was *"can't just disable all
+the redscripts, makes the game hang in a different way but at same place"*, and a
+full removal of the other layer produced a hard crash instead. A round whose
+failure changed shape has not narrowed anything; treat both code layers as one
+variable, or park neither.
+
+**Check the timestamp on an error before chasing it.** Your own file moves are in
+the logs too, and a bisect manufactures errors that look exactly like findings -
+[an error can be an artefact of your own testing](/diagnosis/reading-a-noisy-tweak-log).
 
 ## Disabling versus parking
 

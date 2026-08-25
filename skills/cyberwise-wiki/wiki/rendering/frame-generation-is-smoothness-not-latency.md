@@ -23,6 +23,26 @@ already produced. Generation also costs work on top of rendering, so:
 What it genuinely buys is display smoothness. That is a real benefit and it is
 the only one; judge it on motion, never on feel.
 
+## With generation on you have two framerates, and only one of them means anything
+
+At a ×4 multiplier, three of every four displayed frames are invented. The two
+numbers then answer different questions, permanently:
+
+- **the rendered rate** sets latency, together with whatever latency-reduction
+  mode is on
+- **the displayed rate** sets smoothness, and is what every counter reports
+
+So **the counter can read 240 while the game feels like 60**, and that is the
+settings working as designed rather than anything being wrong. The number has
+been deliberately decoupled from the feel, which is why "does it feel right" is
+the only valid instrument once generation is on, and why a reported framerate
+stops being comparable to anybody else's the moment it is enabled.
+
+The rendered rate also has a floor worth knowing: **below roughly 40 frames a
+second the interpolation has too little to work from**, edges shimmer and the HUD
+smears. Turning the multiplier up to rescue a low rendered rate makes the image
+worse while making the number better.
+
 ## In frozen time it contributes nothing
 
 For photography and precise camera work the argument collapses entirely.
@@ -40,5 +60,6 @@ what it does there.
 
 ## Related
 
+- [A framerate average does not predict how the game feels](/rendering/smoothness-is-variance-not-average) - the diagnosis this feeds into, and the variable-refresh settings that go with generation
 - [Photo mode is a separate rendering context](/rendering/composing-in-the-gameplay-renderer) - the freeze-time workflow this applies to
 - [Sharpening recovers detail, it never invents it](/rendering/sharpening-recovers-detail-it-never-invents-it) - the other effect whose strength depends on upstream reconstruction

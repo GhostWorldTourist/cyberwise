@@ -63,3 +63,4 @@ and they were never the manager's to restore.
 - [The deployment manifest is the inventory](/install/the-deployment-manifest) - what a purge actually operates on
 - [Parking a directory selects an axis the mod list does not have](/install/selecting-mods-by-layer) - the cheaper way to remove one layer rather than all of them
 - [What the game directory shows you depends on how the mods got there](/install/how-the-install-is-assembled)
+- [A .reds file on disk is not code the game is running](/engine/compiled-script-bundle) - what the surviving compiled script cache actually is, and why a stale one is invisible

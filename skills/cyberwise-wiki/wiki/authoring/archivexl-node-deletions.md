@@ -74,3 +74,4 @@ mod](/install/overriding-another-authors-mod) for the general decision.
 - [One indentation error disables every record in a TweakXL file](/authoring/a-yaml-error-disables-the-whole-file) - the same whole-file blast radius in the tweak layer
 - [A TweakXL record is resolved last-wins, and that is the lever for everything else](/authoring/tweakxl-records-are-last-wins)
 - [Fixing a bug in someone else's mod](/install/overriding-another-authors-mod)
+- [Resource patching runs on the new-game path only](/engine/archivexl-resource-patching) - the sidecar's other in-place mechanism, with the same one-bad-target silence

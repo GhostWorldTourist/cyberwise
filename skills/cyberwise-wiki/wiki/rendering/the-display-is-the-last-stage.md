@@ -63,3 +63,4 @@ than as a fact about any product.
 
 - [ReShade sees the frame after the game has finished with it](/rendering/stage-order-decides-where-a-fix-belongs)
 - [HDR and SDR are two different calibrations](/rendering/hdr-and-sdr-are-two-different-calibrations) - including which luminance number the game actually wants
+- [A third-party program's menus cannot be recalled](/process/a-third-party-ui-cannot-be-recalled) - the same lesson one layer out: a panel's own menu text is not a source either

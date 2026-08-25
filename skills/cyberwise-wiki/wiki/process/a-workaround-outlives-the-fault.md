@@ -40,7 +40,9 @@ faulty keyboard went in a drawer.
 
 The correct write-up is a fact about hardware, not about the tool: a keyboard
 that is switched **off** but still cabled still enumerates and still reports, and
-a power transition is when a faulty one emits the stuck key.
+a power transition is when a faulty one emits the stuck key. That write-up - the
+fingerprint that names the layer, and the software theories eliminated first - is
+[a bind dialog reading "unknown+key" is a device on the machine](/input/a-phantom-input-device-poisons-the-bind-dialog).
 
 ## When a workaround is legitimate
 

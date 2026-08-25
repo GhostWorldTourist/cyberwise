@@ -21,6 +21,16 @@ For a class another **mod** declares, you cannot. Establish which you are dealin
 with before designing anything, or you will spend an evening on a hook that was
 never going to compile.
 
+**Proven the expensive way.** Three variants of a method wrapper against another
+mod's own class all failed to compile, and the one apparent precedent elsewhere
+in the load order turned out to be **commented out by its own author**, for the
+same reason. The instinct - write a small polite hook mod that touches nobody
+else's files - is the right instinct, and here it is simply unavailable.
+
+So the ownership question comes **before** anything is promised. "I can fix that
+with a separate mod" is a claim about who declares the class; it costs one grep
+to check and a lot of credibility to retract.
+
 ## Then choose by how much of their file you are replacing
 
 **Check whether the format lets you override PART of their file**, because that

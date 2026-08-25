@@ -42,14 +42,13 @@ differently.**
 ## The mirror image: shared records are not duplication
 
 The opposite inference fails just as often. Several mods writing to the same
-records are not necessarily duplicates. A set of vehicle-handling mods all wrote
-to the same vehicle records while touching **disjoint property sets**; the tweak
-layer merges that fine and all of them were needed.
-
-**Compare the properties each mod writes, not the records it targets**, before
-recommending that anybody uninstall one.
+records are frequently a modular suite rather than a fight, because the tweak
+layer resolves field by field - so **compare the fields each mod writes, not the
+records it targets**, before recommending that anybody uninstall one:
+[a TweakXL record is resolved last-wins](/authoring/tweakxl-records-are-last-wins).
 
 ## Related
 
 - [What the game directory shows you depends on how the mods got there](/install/how-the-install-is-assembled)
 - [There are two load-order systems](/engine/two-load-order-domains)
+- [A TweakXL record is resolved last-wins, and that is the lever for everything else](/authoring/tweakxl-records-are-last-wins) - the resolution rule behind the section above

@@ -66,3 +66,4 @@ on the suspect itself. Establish which is which before promising anybody a guard
 - [A failing round narrows nothing](/diagnosis/a-failing-round-narrows-nothing) - the point at which halving has told you everything it can
 - [Reading live game objects from CET Lua without losing the row that mattered](/engine/cet-lua-runtime)
 - [A .reds file on disk is not code the game is running](/engine/compiled-script-bundle) - the compile gate a redscript guard sits behind
+- [A workaround gets written down and outlives the fault it was written for](/process/a-workaround-outlives-the-fault) - why a guard has to say in its own text that it is containment

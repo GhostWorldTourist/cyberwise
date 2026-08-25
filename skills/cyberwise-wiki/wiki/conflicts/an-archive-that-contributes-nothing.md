@@ -34,6 +34,25 @@ It is cheap at any size: on one large install ~700 archives parsed in under ten
 seconds, index-only. Twenty archives are instant, so there is no list too small
 for this to be worth running.
 
+## The mod manager was never going to warn you
+
+A manager flags a conflict when two mods deploy the **same path** into the game
+folder. Every collision described here happens **inside** the archives, in their
+file tables, which no manager reads.
+
+So forty-seven differently-named `.archive` files all carrying the same internal
+resource hash produce **zero** manager warnings, correctly, while only one of
+them can be live. *"The manager didn't warn me"* is not evidence of no conflict;
+it is a statement about deployment paths.
+
+That specific case is worth carrying, because the consequence is not cosmetic.
+The winning copy was one of four mods writing one animation resource, and the
+companion index file that addresses those animations **by number** ships with the
+largest of them. If a small pack wins instead, every index past its range
+resolves to the wrong entry or to nothing - a fault that looks like a broken mod
+and is a load-order outcome. When several archives claim one resource, prefer the
+merged superset and remove the component packs rather than reordering them.
+
 ## Not every inert archive is a bug
 
 Two mods can ship an identical resource, in which case the loser is merely

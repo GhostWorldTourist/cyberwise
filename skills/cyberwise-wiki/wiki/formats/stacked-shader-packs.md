@@ -71,13 +71,12 @@ a broken effect rather than an ordering mistake.
 ## Not every DOF effect is depth-dependent
 
 Depth-buffer troubleshooting is the standard first move for a broken effect, and
-it does not apply to all of them.
-
-**IgcsDOF is the counterexample**: it accumulates frames while a free-camera tool
-physically walks the camera through an aperture pattern. No depth-buffer setting
-can affect it, so a depth-buffer investigation into it is guaranteed to find
-nothing. Point depth troubleshooting at the depth-dependent effects - MXAO,
-CinematicDOF and the like.
+it does not apply to all of them - an accumulation-based depth of field is driven
+by camera movement rather than by the depth buffer, so depth settings cannot
+affect it either way. Point depth troubleshooting at the depth-dependent effects
+instead:
+[photo mode is a separate rendering context](/rendering/composing-in-the-gameplay-renderer)
+carries which is which, and why "enabled" does not mean "applying".
 
 ## What was not verified
 

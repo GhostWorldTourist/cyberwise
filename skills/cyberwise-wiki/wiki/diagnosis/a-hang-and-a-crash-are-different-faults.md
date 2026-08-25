@@ -67,6 +67,31 @@ Take file sizes across the same interval rather than reading contents. A log tha
 is still being appended names the layer that is still alive; a log that stopped
 names the layer that stopped. That distinction is the whole diagnosis below.
 
+## Separating a livelock from a slow load, in about a minute
+
+A long load and a hung load look identical on screen, and the argument about
+which one it is usually costs more time than the measurement. Three readings
+settle it, and two of them are already above:
+
+| | still loading | livelocked |
+|---|---|---|
+| working set | **climbing** | **flat** |
+| logs | growing | silent |
+| bytes written **anywhere under the game folder** | non-zero | **zero** |
+
+The third row is the one nobody takes, and it is the most decisive: a game that
+is loading is reading and writing - caches, logs, shader compilation - and a
+livelocked one writes nothing at all while burning cores.
+
+One measured trace, taken ten seconds apart through a failing start: memory 1.65
+GB climbing to 5.98 GB with logs growing to t=90 s, then **flat at 5.98 GB, zero
+bytes written, 4.2 to 4.6 cores** from t=100 s onward with no forward progress.
+The thread shape was one thread near 100%, one near 60%, and about ten workers at
+roughly 18% each - a main thread and a job pool, spinning.
+
+Sixty seconds of measurement replaced fifteen minutes of waiting to see whether
+it would finish.
+
 ## The worked case: 200% CPU, twelve minutes, and not one log line
 
 Observed on a hung session:

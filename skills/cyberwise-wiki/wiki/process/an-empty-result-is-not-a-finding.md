@@ -82,6 +82,21 @@ contains no reference to a subsystem means enumerating the spellings the
 reference could take, not searching the one you thought of -
 [Prove absence in a file too large to read](/process/proving-absence-in-a-huge-file).
 
+## Say the scope FIRST, because the qualifier is what gets forgotten
+
+A negative that is correctly scoped in your head can still be remembered
+unscoped, and the sentence order decides which.
+
+Worked case: the honest answer was *"it cannot be done as a **hook** mod - here
+is why, and here is the override route instead"*. What was said opened with the
+unqualified **"it can't be done as a mod"**, with the scope arriving later in the
+paragraph. Weeks on, what came back was *"you said it couldn't be done that
+way"*, and the option that had in fact been offered was gone from the record.
+
+**Lead with the scope, not with the negative.** "Not through X, but Y works" is
+the same claim as "you can't do X, though Y works" and it survives retelling,
+because there is no point in the sentence at which it reads as a flat no.
+
 ## List the evidence behind a flag, or it cannot be checked
 
 **"60 archives are unlisted" is unfalsifiable. A flag that names the 60 is

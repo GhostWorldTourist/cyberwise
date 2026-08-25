@@ -49,15 +49,29 @@ Somebody tries the REDmod build, then the default one, and both remain. Neither
 manager nor game complains, because from each domain's point of view nothing is
 wrong.
 
-## An archive with no `modlist.txt` entry sorts last and loses
+## Two mods can deploy into one REDmod folder, and the loser is silent
 
-Order is by list position, and an unlisted archive is not at the end of the list
-by intent - it is outside it. It loses every file it contests, quietly, until
-somebody notices.
+REDmod content lands in `mods\<name>\`, keyed by that folder name - so two
+variants of one mod, or two mods an author shipped under the same name, deploy
+**into the same folder**. The later deployment overwrites the earlier one file by
+file, and the earlier mod contributes nothing while still appearing installed and
+enabled.
 
-This matters for a case that looks like a bug: **some archives are written at
-runtime.** At least one known mod generates its `.archive` from a native plugin
-at game start, so the file appears and vanishes between sessions. Because the
-mod ships no archive of its own, any check comparing deployed archives against
-installed copies reports it as an orphan. Never prune its entry as stale - it
-still needs a permanent slot in the list, for exactly the reason above.
+Nothing warns, because from the manager's point of view two mods wrote two sets
+of files. The tell is in the REDmod deploy's own list: **the same folder name
+appearing twice**. Where the two builds ship a same-named script of different
+sizes, the size on disk says which one survived.
+
+## Ordering within each domain
+
+An archive with no `modlist.txt` entry is outside the ordering rather than at the
+end of it, and loses every file it contests - including the case that looks like
+a bug, an archive generated at runtime by a native plugin. Both halves of that,
+with what to prune and what to keep, are in
+[a modlist entry with no archive is usually not a fault](/conflicts/an-entry-and-a-file-can-disagree).
+
+## Related
+
+- [A modlist entry with no archive is usually not a fault; an archive with no entry always is](/conflicts/an-entry-and-a-file-can-disagree)
+- [An archive can be installed, enabled, and contributing nothing](/conflicts/an-archive-that-contributes-nothing) - the loose-archive version of the silent loser above
+- [Earlier in modlist.txt wins, and nothing in the game writes that file](/conflicts/earlier-wins-and-nothing-in-the-game-writes-the-list)

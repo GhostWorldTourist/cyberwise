@@ -69,3 +69,4 @@ the dump instead, and several of them contradict the popular answer.
 - [What the CET console can and cannot do](/authoring/the-cet-console-is-a-sandbox)
 - [Cyberware capacity is the "Humanity" stat family internally](/gameplay/cyberware-capacity-is-the-humanity-stat)
 - [Bleed has no resistance axis at all - only binary immunity](/gameplay/bleed-has-no-resistance-only-immunity)
+- [A third-party program's menus cannot be recalled](/process/a-third-party-ui-cannot-be-recalled) - the same rule applied to somebody else's software rather than to the game

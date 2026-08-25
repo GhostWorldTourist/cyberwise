@@ -16,11 +16,14 @@ ways each layer fails **without saying anything at all**.
 - [One indentation error disables every record in a TweakXL file](/authoring/a-yaml-error-disables-the-whole-file) - `yaml-cpp` rejects the document, so the blast radius is the file
 - [Never guess a TweakDB record ID - the game writes the real list](/authoring/finding-the-real-record-id) - the string table TweakXL emits, and why CDPR's naming defeats every guess
 - [Vendor stock and item pricing are both arrays of records, not values](/authoring/vendor-stock-and-pricing) - tier gates, inline slots, and price components that nothing reads
+- [Two TweakXL errors that are not "unknown record", and what each one is telling you](/authoring/tweakxl-error-signatures) - "Ambiguous definition" is a typo in the ID; "cannot clone" means you named a class rather than a record
 
 ## ArchiveXL
 
 - [Deleting a world node with ArchiveXL - the type must come from the sector, and one bad entry voids the whole file](/authoring/archivexl-node-deletions) - `debugName` lies about `$type`, and a companion `.xl` edits another mod's sector without repacking it
 - [A mod adds journal entries, phone messages and quests by declaring resources in its `.xl`](/authoring/mod-declared-journal-and-quest-resources) - `journal:`, `quest: phases:` and the per-locale text, and how to name the mod behind a phone thread
+- [Resource patching runs on the new-game path only](/engine/archivexl-resource-patching) - in `/engine`: what `resource: patch:` does, the dependency it hides, and the framework rollback that silenced it
+- [Two mods can rewrite the same quest node, and no conflict scan sees it](/conflicts/quest-graph-interceptions) - in `/conflicts`: what an `intercept: true` operation does to the vanilla quest graph
 
 ## CET and Lua
 

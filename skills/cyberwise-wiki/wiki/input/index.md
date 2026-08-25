@@ -14,3 +14,4 @@ article here is a different way of not finding one.
 - [A binding store can lose its contents, and an empty store looks exactly like the wrong store](/input/a-binding-store-can-empty-itself) - the bound-to-total ratio, and the wrong inference it prevents
 - [A binding can be stored as a packed integer instead of a key name](/input/packed-key-codes) - CET's 16-bit slots, `0` for unbound, and the VK 255 chord that can never match
 - [An input context is not a category, and a shared key is usually not a fault](/input/input-contexts-are-not-categories) - why a dialogue tool gets filed under "Vehicle"
+- [A bind dialog reading "unknown+key" is a device on the machine, not a mod](/input/a-phantom-input-device-poisons-the-bind-dialog) - the extended-key split that names the layer, and the software theories eliminated first, at length *(draft: one machine, one event)*

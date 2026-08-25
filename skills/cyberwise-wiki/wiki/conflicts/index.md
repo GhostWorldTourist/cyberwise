@@ -17,6 +17,11 @@ here only as examples.
 - [Three conflicts look identical in a report and only one is fixable by order](/conflicts/what-reordering-can-and-cannot-fix) - lost fight, coverage gap, and the request that is not satisfiable
 - [Making one mod win can kill a third mod nobody mentioned](/conflicts/a-precedence-change-creates-casualties)
 - [Not every visual mismatch is a conflict, and the scanner agreeing with you is not evidence](/conflicts/visual-bugs-that-are-not-conflicts)
+- [A missing character-creation option is usually a stale list, not a lost conflict](/conflicts/a-missing-creator-option-is-a-stale-list) - rebuild the list before touching precedence, and test appearance mods on a new character *(draft: one install, one mod family)*
+
+## The conflicts nothing scans for
+
+- [Two mods can rewrite the same quest node, and no conflict scan sees it](/conflicts/quest-graph-interceptions) - an interception is a rewrite of the vanilla quest graph rather than a file override, so neither a hash scan nor a manager can see two mods claiming one socket *(draft: the order dependence is derived, not A/B tested)*
 
 ## Inside an .archive
 

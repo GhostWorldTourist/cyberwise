@@ -27,3 +27,4 @@ run, and could the evidence have come out any other way?
 - [Documenting a large mod list without producing a report nobody can trust](/process/running-a-documentation-pass) - partitioning writers, repairing a collision, and the four ways a confident article turns out to be wrong
 - [Ask for the viewport rather than detecting the display](/process/asking-for-the-viewport) - six layers between a panel and the real space, and why the answer is an input rather than a gate
 - [A fit measurement can be true and useless](/process/a-fit-measurement-can-be-true-and-useless) - a height with the viewport as its floor, and two faults only a rendering shows
+- [A third-party program's menus cannot be recalled](/process/a-third-party-ui-cannot-be-recalled) - five programs, five fabricated menu paths, five corrections; and why the cost lands on everything true you say afterwards
