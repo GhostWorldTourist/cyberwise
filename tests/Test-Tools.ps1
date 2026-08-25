@@ -1263,8 +1263,20 @@ $padBad = @(
     }
     # Drawn once. A key on the pad must not also appear as a list row.
     if ($padText -match '<span class="pbtn">G1</span>') { 'a key drawn on the pad is listed a second time underneath it' }
-    # An action on no button has no seat, so it still needs the list.
-    if ($padText -notmatch 'on no button, and nothing binds the key either') { 'an action assigned to no button vanished once a pad was drawn' }
+    # AN ACTION ON NO BUTTON IS NOT LISTED AT ALL, and this assertion was
+    # inverted on purpose rather than deleted.
+    #
+    # It used to require the opposite: the fallback list existed partly so an
+    # action the user had left unassigned in iCUE still appeared somewhere. On
+    # a real profile that turned out to be three rows of "-" occupying a
+    # quarter of the mouse panel to report that nothing happens, and the sheet's
+    # owner asked for them gone. An entry that cannot be pressed is not a
+    # control, and the sheet is a thing you glance at mid-fight.
+    #
+    # The check stays, pointing the other way, so the rows cannot drift back in.
+    if ($padText -match 'on no button, and nothing binds the key either') { 'an action assigned to no button is being listed; it should be omitted entirely' }
+    if ($padText -match '<span class="pbtn">&mdash;</span>')              { 'an unassigned row (em-dash button) is still drawn' }
+    if ($padText -match 'Off the pad - no arrangement to draw')           { 'the off-pad caption is back; the remaining buttons belong to the mouse panel without one' }
 )
 $padBad += @(
     if ($flatText -match 'class="pad"')                 { 'a pad was drawn for a device nothing in the bundle describes' }

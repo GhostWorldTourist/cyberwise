@@ -34,7 +34,7 @@ param(
     # instance 'mods' folder passed explicitly.
     [string] $StagingRoot,
 
-    [string] $Html = (Join-Path (Get-Location) 'mod-dossier.html'),
+    [string] $Html = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\mod-dossier.html",
     [switch] $NoHtml,
 
     # The same dossier as markdown. This is the report most likely to be pasted

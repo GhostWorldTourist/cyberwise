@@ -29,7 +29,7 @@ param(
     [string] $StagingRoot,
     [string] $Game = 'cyberpunk2077',
 
-    [string] $Html = (Join-Path (Get-Location) 'mod-credits.html'),
+    [string] $Html = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\mod-credits.html",
 
     # Every HTML report here can also be markdown - for a forum post, a readme,
     # or a Discord message where a web page is useless.

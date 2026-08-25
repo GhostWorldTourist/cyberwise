@@ -71,7 +71,7 @@ param(
     # live in a shared or read-only skill folder, and a manifest is a listing of
     # somebody's install - it belongs where they ran the command, not in the
     # tool's own directory where it can end up committed by accident.
-    [string] $Out         = 'mod-manifest.md',
+    [string] $Out         = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\mod-manifest.md",
     [string] $CachePath,
     [string] $OverridePath,
     [string] $HtmlOut,

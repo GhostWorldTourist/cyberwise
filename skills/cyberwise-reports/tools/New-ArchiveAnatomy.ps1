@@ -31,7 +31,7 @@
 param(
     [string] $GameRoot,
 
-    [string] $Html = (Join-Path (Get-Location) 'archive-anatomy.html'),
+    [string] $Html = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\archive-anatomy.html",
 
     # The same anatomy as markdown, for a forum post or a wiki.
     [string] $Md,

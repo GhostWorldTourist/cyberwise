@@ -19,7 +19,7 @@ param(
     # records, then their default folders) and errors if it cannot.
     [string] $GameRoot,
     [string] $Notes,
-    [string] $Out = "$env:USERPROFILE\Downloads\cp2077_hotkeys_cheatsheet.html",
+    [string] $Out = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\cp2077_hotkeys_cheatsheet.html",
 
     # The same sheet as markdown, for a forum post, a wiki, or a Discord message
     # where a local HTML file is useless to whoever you are talking to.
@@ -702,25 +702,26 @@ if ($mouseRows.Count) {
         } else { $onPad = @{} }
     }
 
-    # ---- everything not on the pad, as the list it always was --------------
+    # ---- the buttons a grid cannot seat, beside the pad --------------------
     #
-    # With no geometry that is every row, which IS the old sheet. With geometry
-    # it is what a grid cannot hold: the DPI toggle, the sniper button, and
-    # actions the user left assigned to no button at all.
-    $listRows = @($mouseRows | Where-Object { -not $onPad.ContainsKey($_.Button) })
+    # With no geometry this is every row, which IS the old sheet. With geometry
+    # it is the buttons that have no seat on the pad - the DPI toggle, the
+    # sniper button - and it sits next to the pad as part of the same mouse
+    # panel rather than under a heading of its own.
+    #
+    # ACTIONS ASSIGNED TO NO BUTTON ARE NOT LISTED. They sit in the profile
+    # doing nothing, and they cannot be pressed: on the measured profile they
+    # were three rows of "&mdash;" occupying a quarter of the panel to report
+    # that nothing happens. They were once kept so a user would not wonder where
+    # a label they remembered creating had gone, but that is a question asked
+    # once, in iCUE, and it does not earn permanent space on a sheet where every
+    # millimetre competes with a keycap.
+    $listRows = @($mouseRows | Where-Object { -not $onPad.ContainsKey($_.Button) -and $_.Assigned })
     $items = foreach ($m in $listRows) {
-        # An action left on no button is not a control. It sits in the profile
-        # doing nothing, and is listed only so the user is not left wondering
-        # where a label they remember creating went.
         $cls = @()
-        if (-not $m.Assigned)   { $cls += 'unassigned' }
-        elseif (-not $m.Hits.Count) { $cls += 'dead' }
-        $btn = if ($m.Assigned) { esc $m.Button } else { '&mdash;' }
-        $h = if ($m.Assigned) {
-            New-Hid -Kind 'button' -Fields @($m.Button) -Label "$($m.Button) &middot; $($m.Key)" -Dead:(-not $m.Hits.Count)
-        } else {
-            New-Hid -Kind 'action' -Fields @($m.Label) -Label "$($m.Label) &middot; $($m.Key)"
-        }
+        if (-not $m.Hits.Count) { $cls += 'dead' }
+        $btn = esc $m.Button
+        $h = New-Hid -Kind 'button' -Fields @($m.Button) -Label "$($m.Button) &middot; $($m.Key)" -Dead:(-not $m.Hits.Count)
         @"
       <div class="prow$(if ($cls) { ' ' + ($cls -join ' ') })$($h.Cls)"$($h.Attr)>
         <span class="pbtn">$btn</span>
@@ -730,9 +731,11 @@ if ($mouseRows.Count) {
       </div>
 "@
     }
+    # No caption. "Off the pad - no arrangement to draw" explained the layout
+    # engine's problem rather than telling the reader anything about their
+    # mouse, and it announced a section for what is usually a single row.
     $listHtml = if ($items) {
-        $cap = if ($padGeom) { '<p class="padcap">Off the pad - no arrangement to draw</p>' } else { '' }
-        "<div class=""plist"">$cap<div class=""pgrid"">$($items -join '')</div></div>"
+        "<div class=""plist""><div class=""pgrid"">$($items -join '')</div></div>"
     } else { '' }
 
     # NO PROSE ABOVE THE GRID, AND NO GOOD NEWS AT ALL.

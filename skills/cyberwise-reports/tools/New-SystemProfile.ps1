@@ -63,8 +63,8 @@
 [CmdletBinding()]
 param(
     [string] $GameRoot,
-    [string] $Md   = "$env:USERPROFILE\Downloads\cp2077-system-profile.md",
-    [string] $Html = "$env:USERPROFILE\Downloads\cp2077-system-profile.html",
+    [string] $Md   = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\cp2077-system-profile.md",
+    [string] $Html = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\cp2077-system-profile.html",
     [switch] $NoHtml,
 
     # Also write the OKF machine-profile article into the user's wiki bundle.

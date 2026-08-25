@@ -54,7 +54,7 @@ param(
     # The cyberwise checkout, so the report can name a version.
     [string] $RepoRoot,
 
-    [string] $Out = (Join-Path (Get-Location) 'problem-report.md'),
+    [string] $Out = "$env:USERPROFILE\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\reports\problem-report.md",
 
     # Paths and the account name are stripped by default. This report is going to
     # a stranger on the internet, by design.

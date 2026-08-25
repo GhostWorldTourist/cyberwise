@@ -92,7 +92,18 @@ Full account: `/install/how-the-install-is-assembled`.
     changes.md                the CHANGE REGISTER: approved local edits to files Cyberwise ships
     changes\<id>.mine         a copy of each modified file, to re-derive the change from after an update
     wiki\                     the per-user knowledge bundle, which NEVER ships
+    reports\                  every generated HTML or Markdown report
+    endpoint.token            the loopback endpoint's shared secret
+    endpoint.log              every endpoint request, refusals included
 ```
+
+**Generated reports go in `reports\`, and nowhere else.** They used to default
+to `%USERPROFILE%\Downloads` or, worse, to `Get-Location` - which is whatever
+directory the caller happened to be standing in, so an agent run from a clone
+wrote reports into the repo. Neither is a place anybody goes looking a week
+later, and Downloads is a folder people empty. A report is a record of this
+install and belongs with the other records; `-Out`, `-Html` and `-Md` still
+override it for a one-off.
 
 Beside the game's own data, in a namespace folder of ours - the same shape mod
 authors use for their data there. Three reasons, and the third is why it is not
