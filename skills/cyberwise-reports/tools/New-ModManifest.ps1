@@ -79,6 +79,14 @@ param(
     [int]    $ThrottleMs  = 120
 )
 
+# --- upstream guard ---------------------------------------------------------
+# Advisory, and only that: silent while this copy matches what shipped, one
+# short line when it does not, and it never blocks or changes an exit code.
+# Rationale, and why it is deliberately not a PreToolUse hook: UpstreamGuard.ps1.
+$cwGuard = Join-Path $PSScriptRoot '..\..\cyberwise\tools\UpstreamGuard.ps1'
+if (Test-Path -LiteralPath $cwGuard) { try { . $cwGuard; Invoke-CwStartupGuard } catch { } }
+
+
 # ---------------------------------------------------------------- discovery --
 
 # The Nexus API cache is per-user data, not part of the tool, so it defaults to

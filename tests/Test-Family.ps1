@@ -216,6 +216,105 @@ Check 'every skill carries a Codex manifest with the three interface fields' {
     }
 }
 
+# --------------------------------------------------------- upstream guard --
+
+# THE SHIP GATE for the upstream guard.
+#
+# Cyberwise ships tools and instructions, and an agent mid-problem will sometimes
+# edit one of those tools rather than use the affordance the family already has
+# for the job. Nothing reports it, and the next session inherits a tool that no
+# longer behaves the way its own documentation says.
+#
+# The check is deliberately NOT a verdict on the change. It fails only on a
+# difference nobody wrote down, and there are two remedies - which one is right
+# is a judgement no test can make:
+#
+#   the change IS the new upstream     -> New-UpstreamManifest.ps1 -Write
+#   the change belongs to this install -> Register-CwChange, and it stops failing
+#
+# The first is also what you run after any legitimate edit to a shipped file,
+# exactly as you rerun Get-ToolIndex.ps1 -Write after adding a tool. That is what
+# keeps the manifest current instead of slowly becoming a fossil.
+Check 'every shipped file matches the upstream manifest, or is in the change register' {
+    $guard = Join-Path $skillsRoot 'cyberwise\tools\UpstreamGuard.ps1'
+    if (-not (Test-Path -LiteralPath $guard)) { 'skills/cyberwise/tools/UpstreamGuard.ps1 is missing'; return }
+    . $guard
+
+    $r = Test-CwUpstream -Root $Root
+    if ($r.Reason -eq 'nolayout')   { 'the guard could not find a skills\ directory to check'; return }
+    if ($r.Reason -eq 'nomanifest') {
+        # Deleting the manifest is the cheapest way to make every other
+        # difference invisible, so its absence is a failure in its own right
+        # rather than a reason to skip the check.
+        "no upstream manifest at $($r.ManifestPath) - rebuild it with skills\cyberwise\tools\New-UpstreamManifest.ps1 -Write"
+        return
+    }
+
+    foreach ($f in ($r.Findings | Where-Object { $_.State -eq 'UNREGISTERED' })) {
+        "$($f.Path) differs from upstream and nothing is recorded about it"
+    }
+    foreach ($f in ($r.Findings | Where-Object { $_.State -eq 'MISSING' })) {
+        "$($f.Path) is in the manifest but not on disk"
+    }
+    foreach ($f in ($r.Findings | Where-Object { $_.State -eq 'NEW' -and -not $_.Entry })) {
+        "$($f.Path) is a new file in a guarded location and is not in the manifest"
+    }
+    if (@($r.Findings | Where-Object { $_.State -ne 'OK' -and $_.State -ne 'REGISTERED' }).Count) {
+        'fix: New-UpstreamManifest.ps1 -Write if these ARE the new upstream, or Register-CwChange if they belong to this install'
+    }
+}
+
+# Every tool notices on startup, because a check nobody runs is worth nothing and
+# the agent most likely to edit a tool is the least likely to run this suite. A
+# tool that never dot-sources the guard is a hole in the net, and it is an
+# invisible one: the tool works perfectly, it simply never looks.
+Check 'every family tool runs the upstream guard at startup' {
+    # The guard itself, and the two scripts whose whole job is to report on it -
+    # they would print the one-line advisory and then print the real report.
+    $exempt = @('UpstreamGuard.ps1', 'Test-Upstream.ps1', 'New-UpstreamManifest.ps1')
+
+    # OUTSTANDING, NOT EXEMPT. cyberwise-hotkeys was being edited by somebody
+    # else when the guard was rolled out, so its tools have not had the two-line
+    # snippet added yet. They are still covered by the MANIFEST - a change to one
+    # is still caught by the ship gate above - they just do not carry the
+    # startup advisory that makes a change noticeable without running the suite.
+    #
+    # This list is a debt, and it is printed on every run so that it stays
+    # visible. Do not add anything to it to make a failure go away; add the
+    # snippet instead. It is two lines, and the pattern is in any other tool.
+    $pending = @(
+        'cyberwise-hotkeys/tools/DeviceGeometry.ps1'
+        'cyberwise-hotkeys/tools/Get-Hotkeys.ps1'
+        'cyberwise-hotkeys/tools/Get-MouseProfile.ps1'
+        'cyberwise-hotkeys/tools/KeyIdentity.ps1'
+        'cyberwise-hotkeys/tools/New-HotkeySheet.ps1'
+    )
+    $stillPending = @()
+
+    foreach ($s in $skills) {
+        $toolsDir = Join-Path $s.FullName 'tools'
+        if (-not (Test-Path -LiteralPath $toolsDir)) { continue }
+        foreach ($t in (Get-ChildItem -LiteralPath $toolsDir -Filter *.ps1 -File)) {
+            if ($exempt -contains $t.Name) { continue }
+            $rel  = "$($s.Name)/tools/$($t.Name)"
+            $text = Get-Content -LiteralPath $t.FullName -Raw
+            if ($text -match 'Invoke-CwStartupGuard') { continue }
+            if ($pending -contains $rel) { $stillPending += $rel; continue }
+            "$rel never runs the upstream guard"
+        }
+    }
+
+    if ($stillPending.Count) {
+        Write-Host "      OUTSTANDING: $($stillPending.Count) tool(s) still need the startup guard snippet:" -ForegroundColor Yellow
+        $stillPending | ForEach-Object { Write-Host "        $_" -ForegroundColor DarkYellow }
+    }
+    # A name that has been dealt with must come off the list, or the list becomes
+    # a place where things go to be forgotten.
+    foreach ($p in $pending) {
+        if ($stillPending -notcontains $p) { "$p now runs the guard - take it off the pending list in this test" }
+    }
+}
+
 # --------------------------------------------------------------- safe edits --
 
 # A skill that tells the model to write into a user's install must name the

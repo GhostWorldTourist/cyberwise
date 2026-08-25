@@ -39,6 +39,14 @@ param(
     [string] $ShotPath
 )
 
+# --- upstream guard ---------------------------------------------------------
+# Advisory, and only that: silent while this copy matches what shipped, one
+# short line when it does not, and it never blocks or changes an exit code.
+# Rationale, and why it is deliberately not a PreToolUse hook: UpstreamGuard.ps1.
+$cwGuard = Join-Path $PSScriptRoot '..\..\cyberwise\tools\UpstreamGuard.ps1'
+if (Test-Path -LiteralPath $cwGuard) { try { . $cwGuard; Invoke-CwStartupGuard } catch { } }
+
+
 # NOTE: --window-size takes a comma-separated pair, and PowerShell parses a bare
 # `--window-size=$W,$H` as an ARRAY - passing two separate arguments, so the flag
 # is silently ignored and the browser reports its 800x600 default. Quote it.

@@ -107,6 +107,8 @@ $script:KeyNames = @{
     'MinusAndUnderscore'   = '-'
     'EqualsAndPlus'        = '='
     'GraveAccentAndTilde'  = '`'
+    'SemicolonAndColon'    = ';'
+    'ApostropheAndDoubleQuote' = "'"
     'KeypadPlus'           = 'Numpad +'
     'Mouse3'               = 'Middle Mouse'
 }

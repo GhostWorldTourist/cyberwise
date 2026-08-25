@@ -10,6 +10,13 @@
 # has no dependencies and the entry is visible to `cmdkey /list` like any other.
 # Stored as a generic credential under the target name below.
 
+# --- upstream guard ---------------------------------------------------------
+# Advisory, and only that: silent while this copy matches what shipped, one
+# short line when it does not, and it never blocks or changes an exit code.
+# Rationale, and why it is deliberately not a PreToolUse hook: UpstreamGuard.ps1.
+$cwGuard = Join-Path $PSScriptRoot '..\..\cyberwise\tools\UpstreamGuard.ps1'
+if (Test-Path -LiteralPath $cwGuard) { try { . $cwGuard; Invoke-CwStartupGuard } catch { } }
+
 $script:NexusCredTarget = 'cyberwise:nexus-api'
 
 if (-not ('CredMan' -as [type])) {

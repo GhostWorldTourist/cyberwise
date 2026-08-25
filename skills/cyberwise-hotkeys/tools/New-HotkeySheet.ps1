@@ -70,7 +70,21 @@ param(
 
     # Where iCUE keeps its profiles, for a machine that puts them somewhere
     # else - and for proving the graceful path against an empty folder.
-    [string] $MouseProfileRoot
+    [string] $MouseProfileRoot,
+
+    # ---- where a device's PHYSICAL layout comes from -----------------------
+    #
+    # Not from a table in this tool. A registry of every peripheral, shipped
+    # with the code, is a database that rots - it needs an edit every time
+    # anybody buys a mouse, and the one device it will not know is the one the
+    # person asking owns. A device's geometry is a fact about ONE PERSON'S DESK,
+    # so it lives in that person's wiki bundle beside their machine profile,
+    # where adding a device is a wiki edit rather than a release.
+    #
+    # Format: /input/describing-a-device-physical-geometry in the base wiki.
+    # Absent, unreadable or unmatched, the buttons render as the flat list they
+    # always did - most people own no programmable device at all.
+    [string] $WikiBundle = (Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\wiki')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -135,6 +149,11 @@ foreach ($e in $n.extra) {
 # apart afterwards, with each copy internally consistent. There is now one
 # identity function and both tools fold through it.
 . (Join-Path $PSScriptRoot 'KeyIdentity.ps1')
+
+# Where the buttons physically ARE. Same argument as the identity table above -
+# one place, read by whoever needs it - except that this one's DATA is not here
+# at all, only the reader for it. See the header of DeviceGeometry.ps1.
+. (Join-Path $PSScriptRoot 'DeviceGeometry.ps1')
 
 # Sort the pad the way it is laid out under the thumb, not the way cereal
 # happened to serialise it: G1..G12 numerically, then the named buttons, then
@@ -330,13 +349,117 @@ $catHtml = foreach ($c in $order) {
 
 # ---- mouse-profile panel (the join) ----
 #
-# Three columns, in the order the causation runs: the button you press, the key
-# it sends, what the game does with that key. Read left to right it is a
-# sentence; read as a table it is checkable.
-$mpHtml = ''
+# Three facts, in the order the causation runs: the button you press, the key it
+# sends, what the game does with that key. Read left to right it is a sentence;
+# read as a table it is checkable.
+#
+# WHERE THOSE FACTS SIT IS THE OTHER HALF OF THE ANSWER. A thumb pad is an
+# ARRANGEMENT, and a flat list of twelve rows throws away the one property that
+# makes it usable without looking: where the button is under your thumb. "G7
+# sends ]" is a fact you have to read; "the middle key of the third column sends
+# ]" is a fact you can feel. So when the user's wiki bundle describes the
+# device's geometry, the pad is drawn; when it does not - no bundle, no article,
+# an unknown device, which is most people - the same rows render as the list
+# they always did. Nothing here fails over the brand of somebody's mouse.
+$mpHtml  = ''
+$padGeom = $null
+if ($mouseRows.Count) {
+    # $mouseDev can name several devices in one profile; the pad belongs to the
+    # first of them that has geometry written down.
+    foreach ($d in @($mouseDev -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+        $padGeom = Get-DeviceGeometry -Name $d -Bundle $WikiBundle
+        if ($padGeom) { break }
+    }
+    if ($padGeom) {
+        Write-Host ("      physical layout from the wiki bundle: $($padGeom.Name)" +
+                    $(if ($padGeom.Surface) { " $($padGeom.Surface)" }) +
+                    " - $($padGeom.Columns)x$($padGeom.Rows), $(@($padGeom.Cells).Count) keys ($($padGeom.Source))") -ForegroundColor Cyan
+    } else {
+        Write-Host "      no geometry for this device in $WikiBundle - the buttons render as a list" -ForegroundColor DarkGray
+    }
+}
+
+# What a keystroke actually does, in the one markup both a grid key and a list
+# row use. Written once because the two must never disagree about whether a
+# button is dead - that disagreement would be the finding contradicting itself.
+function Get-DoesHtml {
+    param($M, [switch]$Compact)
+    if ($M.Hits.Count) {
+        return (($M.Hits | Sort-Object Mod, Action | ForEach-Object {
+            "<span class=""pd"">$(esc $_.Action)<em>$(esc $_.Mod)</em></span>"
+        }) -join '')
+    }
+    if ($M.Assigned) {
+        if ($Compact) { return '<span class="pd pnone">nothing binds this key<em>does nothing in game</em></span>' }
+        return '<span class="pd pnone">nothing on disk binds this key<em>this button does nothing in game</em></span>'
+    }
+    return '<span class="pd pnone">on no button, and nothing binds the key either<em>inert both ways</em></span>'
+}
+
 if ($mouseRows.Count) {
     $deadRows = @($mouseRows | Where-Object { $_.Assigned -and -not $_.Hits.Count })
-    $items = foreach ($m in $mouseRows) {
+
+    # ---- the pad, drawn where the keys are --------------------------------
+    $padHtml = ''
+    $onPad   = @{}
+    if ($padGeom) {
+        $byButton = @{}
+        foreach ($m in $mouseRows) {
+            if ($m.Assigned -and -not $byButton.ContainsKey($m.Button)) { $byButton[$m.Button] = $m }
+        }
+        $sorted  = @($padGeom.Cells | Sort-Object Row, Col)
+        $keys = foreach ($c in $sorted) {
+            # grid-row / grid-column are stated per key rather than left to
+            # source order. The order cells happen to be emitted in is not
+            # information; the coordinates are.
+            $pos = "grid-row:$($c.Row + 1);grid-column:$($c.Col + 1)"
+            if (-not $byButton.ContainsKey($c.Label)) {
+                # A key the device has and the profile does not use. Drawn
+                # rather than omitted: an empty seat in the grid is exactly what
+                # a physical layout is good at showing - it is where the spare
+                # button is, and you can feel where that is.
+                @"
+        <div class="pk free" style="$pos">
+          <span class="pkb">$(esc $c.Label)</span>
+          <span class="pkfree">not assigned</span>
+        </div>
+"@
+                continue
+            }
+            $m = $byButton[$c.Label]
+            $onPad[$m.Button] = $true
+            $cls = if (-not $m.Hits.Count) { ' dead' } else { '' }
+            @"
+        <div class="pk$cls" style="$pos">
+          <span class="pkb">$(esc $c.Label)</span>
+          <kbd class="k">$(esc $m.Key)</kbd>
+          <span class="pkd">$(Get-DoesHtml $m -Compact)</span>
+          <span class="pkl">$(esc $m.Label)</span>
+        </div>
+"@
+        }
+        # The orientation, in words. If the geometry in the bundle is wrong,
+        # this line beside the grid is how somebody holding the device sees it.
+        # By COORDINATE, not by position in a sort order: the first element of
+        # a Row,Col sort is the top-left corner, which is neither of the two
+        # corners this sentence is about, and the mistake reads as correct.
+        $blCell = @($padGeom.Cells | Sort-Object @{e={$_.Row}; d=$true}, Col)[0]
+        $trCell = @($padGeom.Cells | Sort-Object Row, @{e={$_.Col}; d=$true})[0]
+        $padHtml = @"
+    <div class="padwrap">
+      <div class="pad" style="--pc:$($padGeom.Columns);--pr:$($padGeom.Rows)">$($keys -join '')</div>
+      <p class="padcap"><b>$(esc $padGeom.Name)</b>$(if ($padGeom.Surface) { ' &middot; ' + (esc $padGeom.Surface) }) &middot; drawn as it sits under your hand - $(esc $blCell.Label) bottom-left, $(esc $trCell.Label) top-right. The arrangement comes from your wiki bundle, not from this tool.</p>
+    </div>
+"@
+    }
+
+    # ---- everything not on the pad, as the list it always was --------------
+    #
+    # With no geometry that is every row, which IS the old sheet. With geometry
+    # it is what a grid cannot hold: the DPI toggle, the sniper button, and
+    # actions the user left assigned to no button at all.
+    $listRows = @($mouseRows | Where-Object { -not $onPad.ContainsKey($_.Button) })
+    $items = foreach ($m in $listRows) {
         # An action left on no button is not a control. It sits in the profile
         # doing nothing, and is listed only so the user is not left wondering
         # where a label they remember creating went.
@@ -344,25 +467,19 @@ if ($mouseRows.Count) {
         if (-not $m.Assigned)   { $cls += 'unassigned' }
         elseif (-not $m.Hits.Count) { $cls += 'dead' }
         $btn = if ($m.Assigned) { esc $m.Button } else { '&mdash;' }
-
-        $does = if ($m.Hits.Count) {
-            (($m.Hits | Sort-Object Mod, Action | ForEach-Object {
-                "<span class=""pd"">$(esc $_.Action)<em>$(esc $_.Mod)</em></span>"
-            }) -join '')
-        } elseif ($m.Assigned) {
-            '<span class="pd pnone">nothing on disk binds this key<em>this button does nothing in game</em></span>'
-        } else {
-            '<span class="pd pnone">on no button, and nothing binds the key either<em>inert both ways</em></span>'
-        }
         @"
       <div class="prow$(if ($cls) { ' ' + ($cls -join ' ') })">
         <span class="pbtn">$btn</span>
         <kbd class="k">$(esc $m.Key)</kbd>
-        <span class="pdoes">$does</span>
+        <span class="pdoes">$(Get-DoesHtml $m)</span>
         <span class="plbl">$(esc $m.Label)</span>
       </div>
 "@
     }
+    $listHtml = if ($items) {
+        $cap = if ($padGeom) { '<p class="padcap">Off the pad - no arrangement to draw</p>' } else { '' }
+        "<div class=""plist"">$cap<div class=""pgrid"">$($items -join '')</div></div>"
+    } else { '' }
 
     # Lead with the finding, per the house rule. A dead button is invisible in
     # iCUE - it looks exactly like a working one - so if there is one, it is the
@@ -373,7 +490,10 @@ if ($mouseRows.Count) {
         (($deadRows | ForEach-Object { "$(esc $_.Button) sends <kbd class=""k"">$(esc $_.Key)</kbd>" }) -join ', ') +
         '. Rebind the mod to the key the mouse sends, or the mouse to the key the mod listens for.</p>'
     } else {
-        '<p class="foot ok">Every assigned button lands on something the game or a mod is listening for.</p>'
+        ''
+    }
+    $okLine = if ($deadRows.Count) { '' } else {
+        ' <b class="ok">Every assigned button lands on something the game or a mod is listening for.</b>'
     }
 
     $otherLine = if ($mouseOther.Count) {
@@ -393,8 +513,8 @@ if ($mouseRows.Count) {
       elseif ($mouseAllCount -gt 1) { " &middot; $mouseAllCount profiles here, none linked to the game - this one has the most remaps" }
     )</b></h2>
     $deadLine
-    <p class="foot">The mouse never performs a game action - it sends a <b>keystroke</b>, and the game or a mod decides what that means. So each row is the join: the button, the key it sends, and what is bound to that key on this install right now. The small grey line is your own label for the button in iCUE, which is the one thing here that can go stale.</p>
-    <div class="pgrid">$($items -join '')</div>
+    <p class="foot">The mouse performs no game action - it sends a <b>keystroke</b>, and the game or a mod decides what that means. Each key is that join: the button, what it sends, what is bound to it here <i>now</i>. The small grey line is your own iCUE label, the one thing on this sheet that can go stale.$okLine</p>
+    <div class="pwrap">$padHtml$listHtml</div>
     $otherLine
   </section>
 "@
@@ -551,6 +671,51 @@ if ($Md) {
 }
 
 
+# ------------------------------------------------- the regeneration prompt --
+#
+# WHY THIS IS A CLIPBOARD BUTTON AND NOT A LINK, AND NOT A LAUNCHER.
+#
+# A page opened from file:// is sandboxed. No filesystem, no process launch, no
+# way to reach an agent session running on this machine - the sheet cannot start
+# its own regeneration however the button is dressed up.
+#
+# A https://claude.ai/new?q=... deep link DOES open a chat and looks like the
+# answer, which is exactly why it is not one: it lands in a web session with no
+# access to this disk, so the single thing the button exists to do is the one
+# thing that session cannot do. A control that looks like it works and does not
+# is worse than no control.
+#
+# What is left, and what is honest, is to hand over a ready-made prompt. It
+# names the skill, names where the device geometry lives - a regeneration that
+# forgets the wiki bundle silently loses the pad and nobody would know why - and
+# carries the exact invocation THIS sheet was built with, reconstructed from the
+# arguments rather than remembered, so the flags cannot drift from the file.
+#
+# The raw text is printed on the page as well as copied, because the clipboard
+# API is frequently unavailable on file:// and a button whose whole function is
+# invisible when it fails is the same failure again.
+$qa = { param([string]$s) "'" + (([string]$s) -replace "'", "''") + "'" }
+$cmdParts = @("& $(& $qa $PSCommandPath)")
+foreach ($nm in @('GameRoot', 'Notes', 'MouseProfile', 'MouseProfileRoot', 'WikiBundle')) {
+    if ($PSBoundParameters.ContainsKey($nm)) { $cmdParts += "-$nm $(& $qa ([string]$PSBoundParameters[$nm]))" }
+}
+foreach ($nm in @('IncludeBaseGame', 'ShowMousePad', 'ShowSharedKeys', 'NoMouseProfile')) {
+    if ($PSBoundParameters.ContainsKey($nm) -and $PSBoundParameters[$nm]) { $cmdParts += "-$nm" }
+}
+if ($PSBoundParameters.ContainsKey('Scale')) { $cmdParts += "-Scale $Scale" }
+if ($Md) { $cmdParts += "-Md $(& $qa $Md)" }
+# -Out is emitted even when it was defaulted: regenerating somewhere else would
+# leave this file sitting here looking current.
+$cmdParts += "-Out $(& $qa $Out)"
+$regenCmd = $cmdParts -join ' '
+
+$regenPrompt = @"
+Regenerate my Cyberpunk 2077 hotkey cheatsheet from what is on disk right now. Load the cyberwise-hotkeys skill. The physical layout of my input devices lives in my Cyberwise wiki bundle at $WikiBundle (devices.md) - read it for the geometry, and update it there if a device changed. Then run exactly:
+
+$regenCmd
+"@
+
+
 $html = @"
 <!doctype html>
 <html lang="en">
@@ -581,9 +746,9 @@ body{
 /* No max-width. This is meant to be parked on a second monitor, so a centred
    column on an ultrawide wastes the whole point - spreading wide buys more
    columns, which buys a shorter page, which is what "at a glance" means. */
-.wrap{margin:0 auto;padding:0 22px 10px}
+.wrap{margin:0 auto;padding:0 22px 8px}
 
-header{position:relative;padding:12px 0 9px;overflow:hidden;border-bottom:1px solid var(--line)}
+header{position:relative;padding:10px 0 8px;overflow:hidden;border-bottom:1px solid var(--line)}
 /* Scanlines are confined to the masthead. Over a page you actually read from,
    they fight the text; over a title block they just set the tone. */
 header::after{content:'';position:absolute;inset:0;pointer-events:none;
@@ -594,7 +759,7 @@ h1{font-family:var(--mono);font-size:calc(var(--fs)*1.7);font-weight:700;margin:
 h1 span{color:var(--text);text-shadow:none}
 .sub{font-family:var(--mono);font-size:calc(var(--fs)*.56);letter-spacing:.15em;color:var(--dim);margin-top:6px}
 
-.bar{position:sticky;top:0;z-index:9;padding:8px 0;
+.bar{position:sticky;top:0;z-index:9;padding:7px 0;
   background:linear-gradient(180deg,var(--bg) 76%,transparent);display:flex;gap:12px;align-items:center}
 #q{flex:1 1 auto;background:var(--panel);color:var(--text);border:1px solid var(--line);
   border-left:3px solid var(--yellow);padding:13px 16px;font-family:var(--mono);
@@ -609,7 +774,7 @@ h1 span{color:var(--text);text-shadow:none}
 .pill.on{background:var(--yellow);color:#07070a;border-color:var(--yellow);font-weight:700}
 /* Hiding the mod name drops every row to a single line - the densest the sheet
    gets, for when you know your mods and only want the keys. */
-body.nomods .act em{display:none}
+body.nomods .act em,body.nomods .pd em{display:none}
 
 /* Flex rather than CSS multi-column. Multicol balances content across a count
    it derives itself, and on a wide monitor it decided two columns were enough
@@ -620,14 +785,14 @@ body.nomods .act em{display:none}
 .panel{background:var(--panel);border:1px solid var(--line);padding:11px 16px 14px;
   flex:1 1 400px; min-width:0;
   clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
-.panel.wide{flex-basis:100%;margin-top:14px}
+.panel.wide{flex-basis:100%;margin-top:12px}
 /* A tall panel splits internally and takes proportionally more width, so no
    single category dictates the height of the page. */
 .panel.big{flex-grow:2;flex-basis:820px}
 .panel.big .rows{columns:2;column-gap:22px}
 .rows .row{break-inside:avoid}
 h2{font-family:var(--mono);font-size:calc(var(--fs)*.6);letter-spacing:.2em;text-transform:uppercase;
-  margin:0 0 6px;padding-bottom:6px;border-bottom:1px solid var(--line);
+  margin:0 0 5px;padding-bottom:5px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:10px;color:var(--text)}
 h2 b{margin-left:auto;color:var(--dim);font-weight:400;font-size:calc(var(--fs)*.52);letter-spacing:.12em}
 .dot{width:10px;height:10px;flex:0 0 10px;transform:rotate(45deg)}
@@ -644,7 +809,7 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
    action, which doubled the height of the entire sheet for information you
    only want when you go to change something. Inline and dimmed, it costs
    nothing and the row stays scannable. */
-.row{display:flex;align-items:baseline;gap:12px;padding:4px 2px;border-bottom:1px solid #191926}
+.row{display:flex;align-items:baseline;gap:12px;padding:3px 2px;border-bottom:1px solid #191926}
 .row:last-child{border-bottom:0}
 /* min-width:0 + overflow-wrap let the label give way. Without them the action
    text's longest word sets a floor on the row width, and inside a narrow
@@ -659,7 +824,7 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
    "Character Customization Anywhere" set a hard floor on the row width and
    pushed the keycap off the page. */
 .act em{display:block;font-style:normal;font-size:calc(var(--fs)*.5);color:#6a6a80;
-  font-family:var(--mono);letter-spacing:.03em;margin-top:3px;line-height:1.2}
+  font-family:var(--mono);letter-spacing:.03em;margin-top:1px;line-height:1.14}
 .def{color:#4c4c60;margin-left:5px;font-size:calc(var(--fs)*.42);vertical-align:1px}
 .keys{white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:6px}
 .keys i{color:#4c4c60;font-style:normal;padding:0 2px;font-size:calc(var(--fs)*.62)}
@@ -712,15 +877,16 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
 /* This panel is the last thing added to a sheet that already fitted one screen,
    so it pays for itself in millimetres: tighter prose margins here rather than
    a smaller --fs everywhere, which would shrink the keys people actually read. */
-.panel.mp{padding-bottom:11px;margin-top:11px}
-.panel.mp .foot{margin:7px 0 6px}
+.panel.mp{padding-bottom:10px;margin-top:9px}
+.panel.mp .foot{margin:6px 0 5px}
+.panel.mp .foot+.foot{margin-top:-1px}
 .pbtn{font-family:var(--mono);font-size:calc(var(--fs)*.62);font-weight:700;color:var(--yellow);
   background:rgba(252,238,10,.1);border:1px solid rgba(252,238,10,.45);border-radius:3px;
   padding:3px 8px;min-width:3.1em;text-align:center;white-space:nowrap}
 .pdoes{display:flex;flex-direction:column;gap:4px;min-width:0}
 .pd{font-size:calc(var(--fs)*.7);line-height:1.25;overflow-wrap:anywhere}
-.pd em{display:block;font-style:normal;font-family:var(--mono);font-size:calc(var(--fs)*.47);
-  color:#6a6a80;letter-spacing:.03em;margin-top:2px}
+.pd em{display:inline;font-style:normal;font-family:var(--mono);font-size:calc(var(--fs)*.47);
+  color:#6a6a80;letter-spacing:.03em;margin-left:.5em;white-space:nowrap}
 /* The user's own name for the button, from iCUE. Deliberately the quietest
    thing in the row: it is a note they typed, not something read from the game,
    and it is the only cell on this sheet that can be out of date. */
@@ -734,8 +900,62 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
 .pnone{color:var(--red)}
 .prow.unassigned .pnone{color:var(--dim)}
 .foot.warn{color:#ffb3c4} .foot.warn b{color:var(--red)}
-.foot.ok b,.foot.ok{color:var(--green)}
+.foot.ok b,.foot.ok,.foot b.ok{color:var(--green)}
+.foot b.ok{font-weight:400}
 .foot kbd.k{padding:2px 7px;font-size:calc(var(--fs)*.62)}
+
+/* ---- the pad: the buttons where they physically are ---- */
+/* The pad and the leftover list sit side by side. The pad is the thing you look
+   at; the list is only what a grid cannot hold. Side by side rather than
+   stacked because this panel was already the last thing added to a sheet that
+   fitted one screen, and two rows here cost more height than the pad is worth. */
+.pwrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.padwrap{flex:0 1 auto;min-width:0}
+.plist{flex:1 1 430px;min-width:0}
+/* Fixed-width tracks, in em so they scale with --fs like everything else. A
+   1fr track would let one long binding name stretch its whole column and the
+   pad would stop looking like the device. minmax(0,..) keeps it shrinkable on
+   a narrow window instead of pushing the page sideways. */
+.pad{display:grid;grid-template-columns:repeat(var(--pc),minmax(0,13.8em));
+  grid-auto-rows:auto;gap:7px}
+/* Two-column inner grid: button and keycap share the top line, everything else
+   spans both. Saves a whole line per key over a plain stack, twelve times. */
+.pk{display:grid;grid-template-columns:auto auto 1fr;gap:2px 9px;align-content:start;
+  background:#15151f;border:1px solid #2b2b40;border-left:3px solid var(--yellow);
+  padding:5px 10px 6px;min-width:0}
+.pkb{grid-row:1;grid-column:1;font-family:var(--mono);font-size:calc(var(--fs)*.62);
+  font-weight:700;color:var(--yellow);letter-spacing:.04em;align-self:center}
+.pk kbd.k{grid-row:1;grid-column:2;justify-self:start;font-size:calc(var(--fs)*.66);padding:3px 9px}
+.pkfree,.pk .pkd{margin-top:2px}
+.pkd{grid-row:2;grid-column:1/-1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.pkd .pd{font-size:calc(var(--fs)*.63);line-height:1.2}
+.pkl{grid-row:1;grid-column:3;align-self:center;justify-self:end;font-family:var(--mono);font-size:calc(var(--fs)*.44);
+  color:#5a5a70;letter-spacing:.08em;text-transform:uppercase;line-height:1.15;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* A DEAD button looks identical to a working one in iCUE. In a physical layout
+   it must be the thing your eye lands on first - the useful fact is not "G8 is
+   dead", it is "the one your thumb rests on is". */
+.pk.dead{border-left-color:var(--red);border-color:#4a1024;background:#1a1016}
+.pk.dead kbd.k{color:var(--red);border-color:#4a1024}
+/* A key the device has and the profile does not use. Present, because where the
+   spare button is is something you can feel. */
+.pk.free{border-left-color:#3a3a52;border-color:#3a3a52;border-style:dashed;background:#0d0d15}
+.pkfree{grid-row:1;grid-column:2/-1;font-family:var(--mono);font-size:calc(var(--fs)*.5);color:#6a6a80;
+  letter-spacing:.06em;align-self:center}
+.padcap{font-family:var(--mono);font-size:calc(var(--fs)*.45);color:#5a5a70;letter-spacing:.05em;
+  line-height:1.45;margin:6px 0 0;overflow-wrap:anywhere}
+.padcap b{color:#8a8aa2;font-weight:400}
+.plist .padcap{margin:0 0 7px;text-transform:uppercase;letter-spacing:.14em}
+
+/* ---- regenerate: a utility, kept quiet ---- */
+/* A page from file:// cannot regenerate itself - no filesystem, no process. All
+   this does is hand over the prompt, so it gets the weight of a footnote. */
+.regen{display:flex;gap:14px;align-items:flex-start;margin-top:11px;padding-top:9px;
+  border-top:1px solid var(--line)}
+#regen{flex:0 0 auto}
+#regenprompt{flex:1 1 auto;min-width:0;margin:0;font-family:var(--mono);
+  font-size:calc(var(--fs)*.44);line-height:1.55;color:#5a5a70;white-space:pre-wrap;
+  overflow-wrap:anywhere;user-select:all}
 
 /* ---- collisions ---- */
 .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px}
@@ -749,7 +969,7 @@ kbd.k{font-family:var(--mono);font-size:calc(var(--fs)*.79);font-weight:700;colo
 
 /* Spread across the full width instead of stacking into a cramped block in the
    corner - there is a whole empty page width down here to use. */
-footer{margin-top:14px;padding-top:9px;border-top:1px solid var(--line);
+footer{margin-top:11px;padding-top:8px;border-top:1px solid var(--line);
   font-family:var(--mono);font-size:calc(var(--fs)*.5);color:#4c4c60;line-height:1.5;
   display:flex;flex-wrap:wrap;gap:10px 34px;align-items:baseline}
 footer span:last-child{margin-left:auto}
@@ -761,7 +981,11 @@ footer span:last-child{margin-left:auto}
   h1{color:#000;text-shadow:none}
   .panel{border:1px solid #999;background:#fff;clip-path:none;break-inside:avoid;flex-basis:45%}
   kbd.k{color:#000;background:#eee;border-color:#999}
-  .act em,.mvia,.foot{color:#555}
+  .act em,.mvia,.foot,.pkl,.padcap{color:#555}
+  .pk{background:#fff;border:1px solid #999;break-inside:avoid}
+  .pk.dead{background:#fff;border-color:#000;border-left-width:3px}
+  .pkb{color:#000}
+  .regen{display:none}
 }
 </style>
 </head>
@@ -788,9 +1012,15 @@ $mpHtml
 $gestHtml
 $colHtml
 
+<section class="regen">
+  <button id="regen" class="pill" title="copy a prompt that regenerates this sheet with the same flags">copy regen prompt</button>
+  <pre id="regenprompt">$(esc $regenPrompt)</pre>
+</section>
+
 <footer>
   <span>Keys read from r6\input\*.xml &middot; r6\cache\inputUserMappings.xml &middot; red4ext\plugins\mod_settings\user.ini &middot; cyber_engine_tweaks\bindings.json &middot; cyber_engine_tweaks\mods\*\*.json</span>
   $(if ($mouseName) { "<span>Mouse buttons read from %APPDATA%\Corsair\CUE5\profiles &middot; profile &ldquo;$(esc $mouseName)&rdquo;</span>" })
+  $(if ($padGeom) { "<span>Physical arrangement from your wiki bundle &middot; $(esc $WikiBundle)</span>" })
   <span>&#9679; mod default you have not rebound</span>
   <span>Generated $stamp // CYBERWISE</span>
 </footer>
@@ -832,6 +1062,43 @@ let modsOn = false;
 try { modsOn = localStorage.getItem('cw_modnames') === '1'; } catch (e) {}
 setMods(modsOn);
 mt.addEventListener('click', () => setMods(document.body.classList.contains('nomods')));
+
+// Copy the regeneration prompt. THE PAGE CANNOT REGENERATE ITSELF - file:// has
+// no filesystem and no way to reach a local agent - so this hands over the text
+// and says plainly whether it managed to.
+//
+// The clipboard API is frequently unavailable or refused on file://, which is
+// where this sheet lives, so there are two attempts and then an admission. The
+// prompt is printed on the page for exactly this reason: when both fail it is
+// still selectable, which is the whole difference between a degraded control
+// and a broken one.
+const rg = document.getElementById('regen'), rp = document.getElementById('regenprompt');
+const rgLabel = rg.textContent;
+function rgSay(t, ok){
+  rg.textContent = t;
+  rg.classList.toggle('on', !!ok);
+  setTimeout(() => { rg.textContent = rgLabel; rg.classList.remove('on'); }, 2800);
+}
+rg.addEventListener('click', async () => {
+  const text = rp.textContent;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      rgSay('copied', true); return;
+    }
+  } catch (e) { /* fall through to the selection copy */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) { rgSay('copied', true); return; }
+  } catch (e) { /* fall through to saying so */ }
+  rgSay('copy unavailable - select the text', false);
+});
 </script>
 </body>
 </html>

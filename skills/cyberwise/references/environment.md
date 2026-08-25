@@ -88,6 +88,9 @@ Full account: `/install/how-the-install-is-assembled`.
 %USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\
     patches.json              every patch and override, with the upstream hash it was made against
     upstream\<name>.upstream  a copy of the author's file as it was when you patched it
+    preferences.json          what the user has said about being recommended things
+    changes.md                the CHANGE REGISTER: approved local edits to files Cyberwise ships
+    changes\<id>.mine         a copy of each modified file, to re-derive the change from after an update
     wiki\                     the per-user knowledge bundle, which NEVER ships
 ```
 
@@ -149,6 +152,152 @@ unregistered override is exactly the thing that quietly reimposes old behaviour
 for months. A registered one is a line of output after an update.
 
 Whatever you edit, snapshot it first with the front door's `ModFileBackup.ps1`.
+
+## Changing Cyberwise itself: the upstream guard and the change register
+
+Everything above is about other people's mods. This is about *this family's own
+files*, and the failure is the same one in a mirror: a fresh agent, halfway
+through a problem, edits a Cyberwise tool to solve something the family already
+solves another way, and nothing reports it. The next session inherits a tool that
+no longer behaves the way its own documentation says, and cannot tell. The same
+absence of a record is also how deliberately hostile behaviour would hide - a
+modified tool is invisible precisely because nobody ever compares.
+
+**Deviation is not a fault.** The check reports "differs from upstream", never
+"corrupted" and never "tampered". Plenty of people want their copy changed and
+they are right to. **The finding is the UNLOGGED change, not the change** - a
+check that scolds people for legitimate customization gets switched off, and then
+it protects nobody at all.
+
+### Two halves, in two places, on purpose
+
+| half | what it is | where | why there |
+|---|---|---|---|
+| **truth** | `upstream.manifest` - sha256 of every behaviour-bearing file | `skills\cyberwise\` **in the repo** | ships with the family, so a fresh clone carries its own idea of what it should look like. It is inside a skill because `install.ps1` links `skills\*` and nothing above them - anything at the repo root is unreachable from an installed copy |
+| **intent** | `changes.md` - the change register | `<records>\Cyberwise\` **never in the repo** | it has to survive a fresh clone, a hard reset, and an update that overwrites the working tree. A record of local changes kept in the repo is destroyed by the exact event it exists for |
+
+**Guarded:** `skills\**\tools\*.ps1`, every `SKILL.md`, `tests\*.ps1`,
+`install.ps1`. **Not guarded: wiki articles.** They are *meant* to grow -
+`Initialize-UserWiki` writes one stub per deployed mod and every documentation
+pass deepens more of them. Guarding them would put the register into double
+figures within a day, and a noisy register is an ignored register.
+
+Hashes are taken over content with CRLF collapsed to LF and any UTF-8 BOM
+dropped. This repo has no `.gitattributes`, so without that normalisation a
+manifest generated on one machine disagrees with a fresh clone on another for
+every single file - and a check that fires on everything is a check nobody reads.
+
+### Where it fires
+
+- **Every tool, at startup.** A check nobody runs is worth nothing, and the agent
+  most likely to hack a tool is the least likely to run the test suite - so the
+  provocation is the tool itself. Silent when clean; one short line when not. It
+  costs about 80 ms on a run that already takes ~350 ms.
+- **`tests\Test-Family.ps1`,** as a ship gate.
+- **By hand,** `tools\Test-Upstream.ps1`, at the start of any Cyberwise task.
+
+**It never blocks anything, and it is deliberately NOT a `PreToolUse` hook.** A
+failing `PreToolUse` hook fails *closed* and blocks every `Edit` in every session
+on the machine - including the edit that would fix the hook. That has already
+bitten this setup once. The guard is advisory by design, and every entry point is
+wrapped so a fault in it costs a line of output and nothing else.
+
+`CYBERWISE_NO_GUARD=1` silences the startup advisory (the test suites set it for
+deterministic output). `CYBERWISE_RECORDS` overrides the records root.
+
+### What it prints
+
+| state | means | what to do |
+|---|---|---|
+| `OK` | matches the manifest | nothing |
+| `REGISTERED` | differs, and the register describes the bytes on disk | nothing - a known local customization |
+| `UNREGISTERED` | differs with nothing recorded, **or** a register entry that no longer matches because the file changed again | register it, or regenerate the manifest, or restore the file |
+| `MISSING` | in the manifest, not on disk | find out what removed it |
+| `NEW` | on disk in a guarded location, absent from the manifest | a new tool needs the manifest regenerating |
+
+An **absent manifest** is reported in its own right rather than skipped - deleting
+one file is the cheapest way to make every other difference invisible.
+
+An installed copy has no `tests\` and no `install.ps1`; those entries are counted
+as out of scope, not as `MISSING`.
+
+### The register format
+
+Markdown, because two audiences have to read it and neither can be sacrificed: a
+**person**, a year later, deciding whether they still want a customization; and
+the **update flow**, which pulls upstream, re-applies what is registered, and
+lists it at the bottom of a changelog. Prose for the first, fields for the second.
+It is parsed by hand, for the reason `Test-Wiki.ps1` hand-rolls its own parsing -
+there is no YAML parser in Windows PowerShell and adding one would break the rule
+that this family needs nothing installed.
+
+```markdown
+## 2026-08-25-cyberwise-tools-test-installready
+
+- file: skills/cyberwise/tools/Test-InstallReady.ps1
+- status: active
+- sha256: 9F3C...        <- the file as registered; if it no longer matches, the entry is out of date
+- upstream: 41AB...      <- what the manifest said at the time
+- copy: changes/2026-08-25-cyberwise-tools-test-installready.mine
+- reapply: re-derive
+- approved-by: tohuw
+- recorded: 2026-08-25T09:14:00-04:00
+
+**What changed.** Raised the archive-count warning threshold from 200 to 600.
+
+**Why.** This install runs 425 archives, so the warning fired on every run and
+stopped being read.
+```
+
+Hand-editing is expected and safe: an entry missing a field parses with that
+field empty rather than being rejected, because a register that refuses to load
+after somebody fixes a typo is a register that gets deleted. Re-registering the
+same file marks the older entry `superseded` and appends a new one, so nobody's
+prose is destroyed by a tool.
+
+**`copy` is for re-deriving, never for replaying.** Re-applying an old edit
+mechanically to a file that has since moved either fails - which is fine - or
+succeeds in the wrong place, which is silent and worse. Same rule, and the same
+reason, as `Show-ModPatchDrift`.
+
+### Adding an entry, and the question to ask first
+
+```powershell
+. tools\UpstreamGuard.ps1
+Register-CwChange -File '<path>' -What '<what changed>' -Why '<why>' -ApprovedBy '<who said yes>'
+```
+
+`-ApprovedBy` is mandatory and has no default. A change nobody approved is the
+thing this guards against, so it cannot be omitted.
+
+**Before registering anything, check the change was necessary.** The commonest
+version of this failure is patching a tool to do something the family already has
+an affordance for:
+
+| about to | do this instead |
+|---|---|
+| hard-code a path, name or threshold into a tool | put it in the user bundle, where it describes this install |
+| edit another author's mod file | ship an override mod, and `Register-ModPatch` it |
+| change what a tool reports so a warning stops firing | fix the cause, or record why the warning is wrong here |
+| teach a tool a fact | write a wiki article - the tools read the bundle |
+
+### Regenerating the manifest
+
+```powershell
+tools\New-UpstreamManifest.ps1           # dry run - what WOULD become upstream
+tools\New-UpstreamManifest.ps1 -Write
+```
+
+**Deliberately a separate script from the check, and it must stay one.** If
+checking could also regenerate, the first thing anybody would do on seeing a
+finding is run the fix, and the guard would silently bless whatever it found -
+including the edit nobody meant to keep.
+
+Run it after any deliberate change to a shipped file, exactly as you rerun
+`Get-ToolIndex.ps1 -Write` after adding a tool. That is what keeps the manifest
+current instead of a fossil. **If the change belongs to this install rather than
+to Cyberwise, register it instead** - regenerating erases the only evidence it
+exists, and the next update takes it away with nothing to notice.
 
 ## The mod's own settings UI writes on exit
 

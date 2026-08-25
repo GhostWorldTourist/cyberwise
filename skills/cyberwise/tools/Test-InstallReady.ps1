@@ -36,6 +36,14 @@ param(
     [string] $Json
 )
 
+# --- upstream guard ---------------------------------------------------------
+# Advisory, and only that: silent while this copy matches what shipped, one
+# short line when it does not, and it never blocks or changes an exit code.
+# Rationale, and why it is deliberately not a PreToolUse hook: UpstreamGuard.ps1.
+$cwGuard = Join-Path $PSScriptRoot 'UpstreamGuard.ps1'
+if (Test-Path -LiteralPath $cwGuard) { try { . $cwGuard; Invoke-CwStartupGuard } catch { } }
+
+
 $ErrorActionPreference = 'Stop'
 
 if (-not (Test-Path -LiteralPath (Join-Path $GameRoot 'bin\x64\Cyberpunk2077.exe'))) {

@@ -156,6 +156,28 @@ Show-ModPatchDrift -Name 'x'    # what THEY changed, when it says CHANGED
 
 **Re-deriving a tweak on an updated mod is judgement work; it's never automated.** Replaying an old edit against a refactored file either fails, or worse, succeeds in the wrong place. The tool shows you what changed; it does not guess.
 
+### And Cyberwise watches itself
+
+Same problem, one level up. An agent halfway through a problem sometimes edits a Cyberwise *tool* to solve something the family already handles another way, and nobody ever finds out. The same absence of a record is how deliberately hostile behaviour would hide: a modified tool is invisible precisely because nobody compares.
+
+`skills\cyberwise\upstream.manifest` ships with the repo and carries a sha256 of every behaviour-bearing file - tools, `SKILL.md`s, tests, the installer. Wiki articles are excluded on purpose; they are meant to grow. Every tool checks at startup, so a change is noticed by *using* the thing rather than by remembering to look.
+
+```powershell
+tools\Test-Upstream.ps1                # what differs, and whether it is written down
+tools\New-UpstreamManifest.ps1 -Write  # a deliberate, separate action
+```
+
+**Changing your own copy is fine, and the check is built to stay usable when you do.** It reports "differs from upstream" - never "corrupted", never "tampered". **The finding is the *unlogged* change, not the change.** Record one and it stops being a finding:
+
+```powershell
+. tools\UpstreamGuard.ps1
+Register-CwChange -File '<path>' -What '<what>' -Why '<why>' -ApprovedBy '<who>'
+```
+
+That register lives in your records folder beside the game's saves, **not in the repo** - so it survives a fresh clone, a hard reset, and an update that overwrites the working tree. It is plain Markdown, one block per change, meant to be read and edited by hand a year later.
+
+**It is advisory and it never blocks anything.** Deliberately not a `PreToolUse` hook: one of those fails *closed* and blocks every `Edit` in every session on the machine, including the edit that would fix it. `CYBERWISE_NO_GUARD=1` turns the startup line off entirely.
+
 ## Included tools
 
 Tools live with the skill that uses them: `cyberwise/tools/` (the backup helper above, which is cross-cutting), `cyberwise-hotkeys/tools/`, `cyberwise-conflicts/tools/`, `cyberwise-crashes/tools/`, `cyberwise-reports/tools/`, `cyberwise-saves/tools/`, `cyberwise-feedback/tools/`, `cyberwise-sitebuilder/tools/` and `cyberwise-recommends/tools/`. `cyberwise/SKILL.md` carries a generated index of every one of them - read it before writing a new tool.
@@ -224,6 +246,8 @@ It checks many things, including that every reference and tool a `SKILL.md` name
 The GitHub issue forms are checked the same way, and for the same reason: a malformed one doesn't error, it just quietly stops appearing in the chooser, and nobody opens issues against their own repo to find out.
 
 One of those is about drift: a **Verified** stamp must name a comparable version number, *or* the file must say in as many words that nothing in it depends on a game patch. "Verified: recently" is not a stamp, and the distinction between "not patch-dependent" and "nobody wrote down which patch" is the whole point.
+
+Another is the ship gate for the upstream guard: every shipped file must match `upstream.manifest`, or be in the change register. It fails only on a difference *nobody wrote down*, and there are two remedies - `New-UpstreamManifest.ps1 -Write` if the change **is** the new upstream (rerun it after any deliberate edit, exactly as you rerun `Get-ToolIndex.ps1 -Write` after adding a tool), or `Register-CwChange` if it belongs to one install. Which is right is a judgement no test can make, so the failure names both.
 
 `Test-Validator.ps1` exists because a validator that has only ever returned green is indistinguishable from one that returns green unconditionally. It copies the family to a temp directory, injects one real fault at a time - a moved reference, a renamed skill, a `.ps1` that no longer parses - and asserts that *the check which owns that fault* is the one that reports, then that the tree comes back clean afterwards. It found two bugs in the validator it tests.
 

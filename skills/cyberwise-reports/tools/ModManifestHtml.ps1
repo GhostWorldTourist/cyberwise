@@ -9,6 +9,13 @@
 # search instant on a large load order - a few hundred to a few thousand entries
 # filter without the page having been re-generated.
 
+# --- upstream guard ---------------------------------------------------------
+# Advisory, and only that: silent while this copy matches what shipped, one
+# short line when it does not, and it never blocks or changes an exit code.
+# Rationale, and why it is deliberately not a PreToolUse hook: UpstreamGuard.ps1.
+$cwGuard = Join-Path $PSScriptRoot '..\..\cyberwise\tools\UpstreamGuard.ps1'
+if (Test-Path -LiteralPath $cwGuard) { try { . $cwGuard; Invoke-CwStartupGuard } catch { } }
+
 function Get-RedactedStagingPath {
     <#
     .SYNOPSIS

@@ -42,6 +42,13 @@
 #      agent's memory is invisible to the next one and is lost on a switch.
 #
 # NEVER put install records in the repo: they describe one person's machine.
+# --- upstream guard ---------------------------------------------------------
+# Advisory, and only that: silent while this copy matches what shipped, one
+# short line when it does not, and it never blocks or changes an exit code.
+# Rationale, and why it is deliberately not a PreToolUse hook: UpstreamGuard.ps1.
+$cwGuard = Join-Path $PSScriptRoot 'UpstreamGuard.ps1'
+if (Test-Path -LiteralPath $cwGuard) { try { . $cwGuard; Invoke-CwStartupGuard } catch { } }
+
 $script:PatchStore = Join-Path $env:USERPROFILE 'Saved Games\CD Projekt Red\Cyberpunk 2077\Cyberwise\patches.json'
 
 function Get-ModPatchStorePath { $script:PatchStore }

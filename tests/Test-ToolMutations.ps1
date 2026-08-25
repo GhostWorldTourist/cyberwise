@@ -469,6 +469,31 @@ Assert-Detects 'a decline that never binds' $prefRel `
     'return $true' `
     'a decline binds to one item and persists'
 
+# --- the upstream guard ------------------------------------------------------
+#
+# A guard that always says "fine" is worse than no guard, because it is trusted.
+# Both mutations below leave every tool working perfectly and every other test in
+# the suite passing. The only thing that changes is that nothing is watched any
+# more, and there is no symptom of that at all.
+
+$guardRel = 'skills\cyberwise\tools\UpstreamGuard.ps1'
+
+# The decorative version: differences are still classified, but nothing ever
+# concludes that anything is wrong - so the advisory in every tool goes
+# permanently silent and the ship gate never fires.
+Assert-Detects 'an upstream check that is never not-ok' $guardRel `
+    'Ok           = (($unlogged + $missing + $new) -eq 0)' `
+    'Ok           = $true' `
+    'the startup guard says exactly one line when it is not clean'
+
+# The hole somebody would actually use. If merely HAVING an entry for a path
+# counts as cover, one honest registration blesses every later edit to that file
+# for ever, and the register stops describing what is on disk.
+Assert-Detects 'a stale register entry that blesses every later edit' $guardRel `
+    'if ($entry -and $entry.Sha -eq $h.Sha) {' `
+    'if ($entry) {' `
+    'an entry that no longer matches the file stops covering it'
+
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''

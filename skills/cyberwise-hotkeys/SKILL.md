@@ -211,6 +211,73 @@ neither the `.` a mod row carries nor the `Period` a base-game row does. The
 sheet folds both sides through `Get-KeyIdentity` first; a hand-rolled comparison
 of any two vocabularies finds nothing.
 
+## A pad is an ARRANGEMENT, and the arrangement lives in the user's wiki
+
+The join above says *what* each button does. It does not say **where the button
+is**, and on a thumb pad that is the property that makes the thing usable without
+looking down. "G7 sends `]`" is a fact you have to read. "the middle key of the
+third column sends `]`" is a fact you can feel.
+
+Vendor software does not export the arrangement - iCUE says `MouseG7` and stops.
+So the geometry has to come from somewhere, and **it is not a table inside the
+tool.** A registry of every peripheral, shipped with the code, is a database that
+rots: it needs an edit whenever anybody buys a mouse, it is permanently behind,
+and the one device it is guaranteed not to know is the one the person asking
+owns.
+
+A device's geometry is a fact about **one person's desk**, like the machine
+profile already sitting beside it. So it lives in that person's **user wiki
+bundle**, conventionally `<records>\Cyberwise\wiki\devices.md`, and adding a
+device is a wiki edit rather than a release.
+
+````markdown
+```device
+match: SCIMITAR RGB ELITE     <- regex against the reported device name
+name: Corsair Scimitar RGB Elite Wireless
+surface: side keypad
+columns: 4
+rows: 3
+origin: bottom-left           <- which corner holds the FIRST key
+flow: column                  <- up a column, then to the next column
+first: 1
+prefix: G                     <- label = prefix + number, giving `G1`
+count: 12                     <- when fewer keys than columns x rows
+```
+````
+
+**A corner plus a flow is the whole of "which way does the numbering run".**
+Bottom-left + `column` means up, then rightwards; top-right + `row` means
+leftwards, then down. Nothing else is needed and nothing else should be added.
+
+**Irregular surfaces draw themselves** with `map:` instead - one text row per
+grid row, top row first, `.` for a hole, a bare number taking `prefix`. Where
+both forms are present `map` wins, because a reader holding the device can check
+a picture and cannot check `origin: bottom-left`.
+
+**Nothing in the schema is mouse-shaped, deliberately.** A Stream Deck, a macro
+pad and a thumb pad are one abstraction - a grid of physical keys, each mapped to
+an action - and a schema that only describes thumb pads has to be redesigned the
+first time somebody plugs in something else.
+
+To add a device: write a block, run the sheet, look at the pad it draws. Nothing
+is rebuilt and no code changes.
+
+**Unknown devices degrade to the flat list**, and that is the normal case. No
+bundle, no article, no matching block, or a block that will not parse each yield
+no geometry and the same list the sheet has always produced - most people own no
+programmable peripheral at all. Only a block that is *present and wrong* warns,
+because that is the one case where somebody is waiting for a grid.
+
+`tools\DeviceGeometry.ps1` is the reader (`Get-DeviceGeometry -Name '<device>'`);
+the format is documented for everybody in the base wiki at
+`/input/describing-a-device-physical-geometry`.
+
+Two things every rendered key must carry, or the grid is just the vendor's
+configurator redrawn: **the keystroke, and what that keystroke is bound to**.
+That is also the only way a grid can show a **dead** button - and a physical
+layout is the best possible place to show one, because the useful fact is not
+"G8 is dead", it is "the one your thumb rests on is".
+
 ## Tools
 
 ```powershell
@@ -280,6 +347,7 @@ produces rounds of "still too small".
 
 | file | covers |
 |---|---|
-| base wiki `/input/*` | the knowledge: five stores, vanilla mappings a mod repurposes, key-name vocabularies, packed VK codes, a store that emptied itself, why contexts are not categories |
+| base wiki `/input/*` | the knowledge: five stores, vanilla mappings a mod repurposes, key-name vocabularies, packed VK codes, a store that emptied itself, why contexts are not categories, and the device-geometry format |
 | `references/input-bindings.md` | an index of those, plus the procedure for generating and **measuring** a sheet |
 | `tools/KeyIdentity.ps1` | the one key-identity table, and the reasoning in its header - read it before adding a store |
+| `tools/DeviceGeometry.ps1` | the geometry reader, and why the data is in the user's bundle rather than in here - read it before adding a device or a vendor |

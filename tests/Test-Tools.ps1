@@ -36,6 +36,17 @@ param(
     [switch] $Quick
 )
 
+# EVERY TOOL RUNS THE UPSTREAM GUARD AT STARTUP, and it prints a line when the
+# tree differs from the shipped manifest. Test-ToolMutations.ps1 deliberately
+# edits shipped tools, so leaving the guard on would prepend an advisory to every
+# captured console assertion under the mutation harness - real output, in the
+# wrong place, failing tests for a reason that has nothing to do with them.
+#
+# It is switched OFF here for determinism and switched back ON, against a
+# synthetic family in the sandbox, by the guard's own tests at the bottom. Those
+# are the only place its output is asserted on.
+$env:CYBERWISE_NO_GUARD = '1'
+
 $script:pass = 0
 $script:fail = 0
 function Ok  { param($m) $script:pass++; Write-Host "ok    $m" -ForegroundColor DarkGreen }
@@ -1050,6 +1061,190 @@ $joinBad = @(
 )
 if ($joinBad) { Bad 'mouse: the button -> key -> binding join resolves, and names dead buttons' ($joinBad -join "`n") }
 else          { Ok  'mouse: the button -> key -> binding join resolves, and names dead buttons' }
+
+# ------------------------------------------- where the buttons physically are
+#
+# A pad is an ARRANGEMENT. A flat list of twelve rows throws away the one
+# property that makes it usable without looking - where the button is under the
+# thumb - so the sheet draws the grid when it knows the geometry.
+#
+# The geometry does NOT live in the tool. A registry of every peripheral shipped
+# with the code is a database that rots, and the device it is guaranteed not to
+# know is the one the person asking owns. It lives in that person's wiki bundle,
+# which makes two things worth testing rather than one: that a described device
+# resolves to the right cells, and that an UNDESCRIBED one degrades to exactly
+# the list the sheet produced before any of this existed. The second is the
+# common case - most people own no programmable device at all - and it is the
+# one that would fail silently.
+
+. (Join-Path $Root 'skills\cyberwise-hotkeys\tools\DeviceGeometry.ps1')
+
+function Get-CellAt { param($G, [int]$R, [int]$C)
+    $h = @($G.Cells | Where-Object { $_.Row -eq $R -and $_.Col -eq $C })
+    if ($h.Count -eq 1) { $h[0].Label } elseif ($h.Count) { "AMBIGUOUS($($h.Count))" } else { '' }
+}
+
+# The owner's own device, described exactly as their bundle describes it:
+# 1 bottom-left, 2 above 1, 4 to the right of 1 - four columns of three.
+$scimitar = Resolve-DeviceLayout @{
+    name = 'Fixture Scimitar'; surface = 'side keypad'
+    columns = '4'; rows = '3'; origin = 'bottom-left'; flow = 'column'
+    first = '1'; prefix = 'G'; count = '12'
+}
+$geoBad = @(
+    if (-not $scimitar)                     { 'a fully specified device did not resolve at all' }
+    else {
+        if (@($scimitar.Cells).Count -ne 12) { "expected 12 keys, got $(@($scimitar.Cells).Count)" }
+        # The three placements the owner actually stated, and the corner that
+        # falls out of them. Getting `flow` backwards still produces a tidy
+        # 4x3 grid, which is why the CORNERS have to be asserted and not the
+        # dimensions.
+        if ((Get-CellAt $scimitar 2 0) -ne 'G1')  { "bottom-left is $(Get-CellAt $scimitar 2 0), not G1" }
+        if ((Get-CellAt $scimitar 1 0) -ne 'G2')  { "the key above G1 is $(Get-CellAt $scimitar 1 0), not G2" }
+        if ((Get-CellAt $scimitar 2 1) -ne 'G4')  { "the key right of G1 is $(Get-CellAt $scimitar 2 1), not G4" }
+        if ((Get-CellAt $scimitar 0 3) -ne 'G12') { "top-right is $(Get-CellAt $scimitar 0 3), not G12" }
+    }
+)
+# Nothing in the schema may be mouse-shaped: a Stream Deck is the same
+# abstraction and must need no second format.
+$deck = Resolve-DeviceLayout @{ name = 'Fixture Deck'; columns = '5'; rows = '3'; origin = 'top-left'; flow = 'row' }
+$geoBad += @(
+    if (-not $deck) { 'a row-flow grid numbered from the top left did not resolve' }
+    else {
+        if ((Get-CellAt $deck 0 0) -ne '1')  { "deck top-left is '$(Get-CellAt $deck 0 0)', not 1" }
+        if ((Get-CellAt $deck 0 4) -ne '5')  { "deck top-right is '$(Get-CellAt $deck 0 4)', not 5" }
+        if ((Get-CellAt $deck 2 0) -ne '11') { "deck bottom-left is '$(Get-CellAt $deck 2 0)', not 11" }
+    }
+)
+# An irregular surface draws itself rather than growing the schema a
+# hole-punching field, and a hole is an ABSENT key, not a key called '.'.
+$holey = Resolve-DeviceLayout @{ name = 'Holey'; prefix = 'G'; map = "7 8 9`n4 . 6`n1 2 3" }
+$geoBad += @(
+    if (-not $holey) { 'a map-described surface did not resolve' }
+    else {
+        if (@($holey.Cells).Count -ne 8)      { "the map has 8 keys and a hole; got $(@($holey.Cells).Count) keys" }
+        if ((Get-CellAt $holey 1 1) -ne '')   { "the hole came back as a key: '$(Get-CellAt $holey 1 1)'" }
+        if ((Get-CellAt $holey 2 0) -ne 'G1') { "map bottom-left is '$(Get-CellAt $holey 2 0)', not G1" }
+        if ((Get-CellAt $holey 0 2) -ne 'G9') { "map top-right is '$(Get-CellAt $holey 0 2)', not G9" }
+    }
+)
+if ($geoBad) { Bad 'geometry: a described device resolves to keys in the right corners' (($geoBad | Where-Object { $_ }) -join "`n") }
+else         { Ok  'geometry: a described device resolves to keys in the right corners' }
+
+# DEGRADING IS THE NORMAL CASE and every one of these must be a null, never an
+# error and never a guessed grid.
+$geoRoot = Join-Path $sandbox 'devwiki'
+New-Item -ItemType Directory -Path $geoRoot -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $geoRoot 'devices.md') @"
+---
+type: Environment
+title: Fixture devices
+---
+
+``````device
+match: FIXTURE MOUSE
+name: Fixture Pad
+surface: side keypad
+columns: 2
+rows: 3
+origin: bottom-left
+flow: column
+first: 1
+prefix: G
+count: 6
+``````
+
+``````device
+match: HALF A DEVICE
+name: Not enough to draw
+origin: bottom-left
+``````
+"@
+
+$degradeGeo = @()
+foreach ($case in @(
+        @{ n = 'a bundle that does not exist'; b = (Join-Path $sandbox 'no-such-wiki'); d = 'FIXTURE MOUSE' }
+        @{ n = 'a bundle with no device article'; b = $cueEmpty;  d = 'FIXTURE MOUSE' }
+        @{ n = 'a device no block matches';      b = $geoRoot;    d = 'SOME OTHER BRAND' }
+        @{ n = 'an empty device name';           b = $geoRoot;    d = '' }
+        @{ n = 'a block with no dimensions';     b = $geoRoot;    d = 'HALF A DEVICE' })) {
+    try {
+        $g = Get-DeviceGeometry -Name $case.d -Bundle $case.b -WarningAction SilentlyContinue
+        if ($null -ne $g) { $degradeGeo += "$($case.n): returned a layout instead of nothing" }
+    } catch {
+        $degradeGeo += "$($case.n): THREW '$($_.Exception.Message)' instead of returning nothing"
+    }
+}
+if ($degradeGeo) { Bad 'geometry: an undescribed device degrades to nothing, never an error' ($degradeGeo -join "`n") }
+else             { Ok  'geometry: an undescribed device degrades to nothing, never an error' }
+
+# End to end: the same fixture profile, once with geometry and once without.
+# The pad must carry the JOIN and mark the dead key, and must not ALSO list the
+# keys it drew - the flat list existed to substitute for the grid, not to sit
+# under it. Without geometry the sheet has to be the list it always was.
+$padHtmlPath  = Join-Path $sandbox 'hotkeys-pad.html'
+$flatHtmlPath = Join-Path $sandbox 'hotkeys-flat.html'
+$null = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $padHtmlPath  -MouseProfileRoot $cueRoot -WikiBundle $geoRoot }
+$null = Get-AllOutput { & $sheetTool -GameRoot $hk -Out $flatHtmlPath -MouseProfileRoot $cueRoot -WikiBundle $cueEmpty }
+$padText  = Get-Content -LiteralPath $padHtmlPath  -Raw
+$flatText = Get-Content -LiteralPath $flatHtmlPath -Raw
+
+$padBad = @(
+    if ($padText -notmatch 'class="pad"') { 'no pad was drawn for a device the bundle describes' }
+    # G1 bottom-left of a 2x3, G3 top-left, G4 bottom-right - stated as
+    # coordinates in the markup rather than left to source order.
+    if ($padText -notmatch '(?s)grid-row:3;grid-column:1"[^>]*>\s*<span class="pkb">G1<') { 'G1 is not in the bottom-left cell' }
+    if ($padText -notmatch '(?s)grid-row:1;grid-column:1"[^>]*>\s*<span class="pkb">G3<') { 'G3 is not in the top-left cell' }
+    if ($padText -notmatch '(?s)grid-row:3;grid-column:2"[^>]*>\s*<span class="pkb">G4<') { 'G4 is not in the bottom-right cell' }
+    # The seats the device has and the profile does not use. Drawn, because
+    # where the spare button is is something you can feel.
+    if ($padText -notmatch 'class="pk free"')  { 'a key the profile never assigns was omitted instead of drawn empty' }
+    # THE FINDING. G3 sends Numpad + and nothing on this install binds it.
+    if ($padText -notmatch '(?s)class="pk dead"[^>]*>\s*<span class="pkb">G3<') { 'the dead key is not marked dead in the grid' }
+    # Read the G1 CELL, not the whole document: `.*?` across a page will happily
+    # find the right words in the wrong cell and call the join proven.
+    $g1 = [regex]::Match($padText, '(?s)<div class="pk"[^>]*>\s*<span class="pkb">G1<.*?</div>').Value
+    if (-not $g1)                                { 'no G1 cell in the pad at all' }
+    elseif ($g1 -notmatch 'F7')                  { 'the pad does not carry the keystroke each button sends' }
+    # ...and what that keystroke is bound to. Without this the grid is just the
+    # vendor's configurator redrawn.
+    # "Do The Thing" is the iCUE LABEL, which is a note the user typed - asserting
+    # on it would prove the sheet can echo the profile back. What has to be in
+    # the cell is a resolved BINDING, so: a `pd` that is not the `pnone` that
+    # means nothing binds this key.
+    elseif ($g1 -notmatch 'class="pd">' -or $g1 -match 'pnone') {
+        'the pad does not carry what the keystroke is actually bound to'
+    }
+    # Drawn once. A key on the pad must not also appear as a list row.
+    if ($padText -match '<span class="pbtn">G1</span>') { 'a key drawn on the pad is listed a second time underneath it' }
+    # An action on no button has no seat, so it still needs the list.
+    if ($padText -notmatch 'on no button, and nothing binds the key either') { 'an action assigned to no button vanished once a pad was drawn' }
+)
+$padBad += @(
+    if ($flatText -match 'class="pad"')                 { 'a pad was drawn for a device nothing in the bundle describes' }
+    if ($flatText -notmatch '<span class="pbtn">G1</span>') { 'with no geometry the buttons are not listed either - the fallback lost them' }
+)
+if ($padBad) { Bad 'geometry: the pad draws the join and marks a dead key, and falls back to a list' ($padBad -join "`n") }
+else         { Ok  'geometry: the pad draws the join and marks a dead key, and falls back to a list' }
+
+# The regeneration prompt is reconstructed from the arguments rather than
+# remembered, so it cannot drift from the file it sits in. It has to name the
+# skill, name where the geometry lives, and carry the flags actually used - a
+# regeneration that forgets the bundle silently loses the pad.
+$regenBad = @(
+    if ($padText -notmatch 'id="regenprompt"')       { 'the sheet carries no regeneration prompt' }
+    if ($padText -notmatch 'cyberwise-hotkeys')      { 'the prompt does not name the skill to load' }
+    if ($padText -notmatch 'New-HotkeySheet\.ps1')   { 'the prompt does not name the tool to run' }
+    if ($padText -notmatch [regex]::Escape($geoRoot)){ 'the prompt does not say where the device geometry lives' }
+    if ($padText -notmatch [regex]::Escape($padHtmlPath)) { 'the prompt does not carry -Out, so a rerun would write somewhere else' }
+    if ($padText -match '-IncludeBaseGame')          { 'the prompt claims a switch this run did not use' }
+    # It is a clipboard control, not a link: a file:// page can reach no agent,
+    # and a deep link into a web session would land somewhere with no access to
+    # this disk - a button that looks like it works and does not.
+    if ($padText -match 'claude\.ai/new')            { 'the sheet offers a deep link that cannot reach the filesystem' }
+)
+if ($regenBad) { Bad 'sheet: the regeneration prompt names the skill, the bundle and the real flags' ($regenBad -join "`n") }
+else           { Ok  'sheet: the regeneration prompt names the skill, the bundle and the real flags' }
 
 # ------------------------------------------------------ one key, one identity
 #
@@ -3234,6 +3429,313 @@ $anMdBad = @(
 )
 if ($anMdBad) { Bad 'anatomy: the markdown variant carries the same numbers' ($anMdBad -join "`n") }
 else          { Ok  'anatomy: the markdown variant carries the same numbers' }
+
+# ============================================================ upstream guard =
+#
+# The guard has to be right about FOUR states and it has to be quiet in the
+# fifth, and every one of them is easy to get subtly wrong in a way that looks
+# like it works:
+#
+#   a clean tree                 -> silence. A guard that talks on a clean tree
+#                                   gets switched off within a week.
+#   modified AND registered      -> a known local customization, NOT a finding.
+#                                   Getting this wrong is what makes people who
+#                                   legitimately customise their copy disable it.
+#   modified and NOT registered  -> the finding. This is the whole point.
+#   a missing manifest           -> say so. Deleting the manifest is the cheapest
+#                                   way to make every other difference invisible,
+#                                   so silence here would be the worst answer.
+#
+# Everything runs against a synthetic family in the sandbox, with an explicit
+# -Root and -RecordsRoot, so nothing here reads or writes the real repo, the
+# real records folder, or the real manifest.
+
+. (Join-Path $Root 'skills\cyberwise\tools\UpstreamGuard.ps1')
+
+function New-FixtureFamily {
+    param([string]$Name)
+    $f = Join-Path $sandbox $Name
+    foreach ($d in 'skills\cyberwise\tools', 'skills\cyberwise-demo\tools', 'tests') {
+        New-Item -ItemType Directory -Path (Join-Path $f $d) -Force | Out-Null
+    }
+    Set-Content -LiteralPath (Join-Path $f 'install.ps1') "# install.ps1 -- fixture.`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $f 'tests\Test-Fixture.ps1') "# Test-Fixture.ps1 -- fixture.`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $f 'skills\cyberwise\SKILL.md') "# fixture front door`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $f 'skills\cyberwise-demo\SKILL.md') "# fixture topic skill`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $f 'skills\cyberwise\tools\Alpha.ps1') "# Alpha.ps1 -- fixture tool.`nWrite-Host 'alpha'`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $f 'skills\cyberwise-demo\tools\Beta.ps1') "# Beta.ps1 -- fixture tool.`nWrite-Host 'beta'`n" -NoNewline
+    return $f
+}
+
+$ugRoot    = New-FixtureFamily -Name 'guard-family'
+$ugRecords = Join-Path $sandbox 'guard-records'
+$ugAlpha   = Join-Path $ugRoot 'skills\cyberwise\tools\Alpha.ps1'
+$ugBeta    = Join-Path $ugRoot 'skills\cyberwise-demo\tools\Beta.ps1'
+
+Write-CwManifest -Root $ugRoot | Out-Null
+
+function Get-UgState {
+    param([string]$Rel)
+    $res = Test-CwUpstream -Root $ugRoot -RecordsRoot $ugRecords
+    $hit = @($res.Findings | Where-Object { $_.Path -eq $Rel })
+    if (-not $hit.Count) { return $null }
+    return $hit[0]
+}
+
+# --- 1. a clean tree ---------------------------------------------------------
+
+$ugClean = Test-CwUpstream -Root $ugRoot -RecordsRoot $ugRecords
+$ugCleanBad = @(
+    if (-not $ugClean.Ok)          { 'a freshly generated manifest did not agree with the files it was generated from' }
+    if ($ugClean.Checked -ne 6)    { "checked $($ugClean.Checked) files, expected 6 (2 SKILL.md, 2 tools, 1 test, install.ps1)" }
+    if ($ugClean.Unregistered)     { "$($ugClean.Unregistered) unregistered on a clean tree" }
+    if ($ugClean.Missing)          { "$($ugClean.Missing) missing on a clean tree" }
+    if ($ugClean.New)              { "$($ugClean.New) new on a clean tree" }
+)
+if ($ugCleanBad) { Bad 'upstream: a clean tree reports nothing' ($ugCleanBad -join "`n") }
+else             { Ok  'upstream: a clean tree reports nothing' }
+
+# The startup advisory is the thing that actually fires, on every tool run, and
+# it has to be SILENT here. One stray line and it gets removed from the tools.
+$env:CYBERWISE_NO_GUARD = ''
+Remove-Variable -Name CwStartupGuardRan -Scope Global -ErrorAction SilentlyContinue
+$ugQuiet = Get-AllOutput { Invoke-CwStartupGuard -Root $ugRoot -RecordsRoot $ugRecords }
+if ($ugQuiet.Trim()) { Bad 'upstream: the startup guard is silent on a clean tree' "it printed:`n$ugQuiet" }
+else                 { Ok  'upstream: the startup guard is silent on a clean tree' }
+
+# --- 2. modified and NOT registered -----------------------------------------
+
+Add-Content -LiteralPath $ugAlpha -Value "Write-Host 'an edit nobody wrote down'`n" -NoNewline
+
+$ugUnreg = Get-UgState 'skills/cyberwise/tools/Alpha.ps1'
+$ugUnregBad = @(
+    if (-not $ugUnreg)                        { 'a modified file was not reported at all' }
+    elseif ($ugUnreg.State -ne 'UNREGISTERED'){ "reported $($ugUnreg.State), expected UNREGISTERED" }
+    # THE TONE IS PART OF THE DESIGN. Plenty of people legitimately want their
+    # copy changed; a check that calls them a criminal for it gets disabled, and
+    # then it protects nobody. It reports a difference, never an accusation.
+    elseif ($ugUnreg.Detail -match '(?i)corrupt|tamper|malicious|attack') {
+        "the wording accuses rather than reports: $($ugUnreg.Detail)"
+    }
+)
+if ($ugUnregBad) { Bad 'upstream: an unregistered modification is the finding' ($ugUnregBad -join "`n") }
+else             { Ok  'upstream: an unregistered modification is the finding' }
+
+Remove-Variable -Name CwStartupGuardRan -Scope Global -ErrorAction SilentlyContinue
+$ugLoud = Get-AllOutput { Invoke-CwStartupGuard -Root $ugRoot -RecordsRoot $ugRecords }
+# Count the MESSAGES, not the rendered lines. Out-String wraps at the console
+# width, so a single Write-Host arrives as two lines in a narrow terminal and an
+# assertion on line count fails for the width of the window it ran in.
+$ugLoudBad = @(
+    if (-not $ugLoud.Trim())                    { 'the startup guard said nothing about an unregistered change' }
+    $n = ([regex]::Matches($ugLoud, 'cyberwise:')).Count
+    if ($n -gt 1)                               { "the startup guard emitted $n messages; it must be one" }
+    if ($ugLoud.Trim().Length -gt 220)          { "the advisory is $($ugLoud.Trim().Length) chars - it has stopped being one short line" }
+    if ($ugLoud -notmatch 'Test-Upstream\.ps1') { 'the advisory does not say where to look for the detail' }
+    if ($ugLoud -match '(?i)corrupt|tamper|malicious') { 'the advisory accuses rather than reports' }
+)
+if ($ugLoudBad) { Bad 'upstream: the startup guard says exactly one line when it is not clean' ($ugLoudBad -join "`n") }
+else            { Ok  'upstream: the startup guard says exactly one line when it is not clean' }
+
+# --- 3. modified AND registered ----------------------------------------------
+
+Register-CwChange -Root $ugRoot -RecordsRoot $ugRecords `
+    -File 'skills/cyberwise/tools/Alpha.ps1' `
+    -What 'added a line' -Why 'the fixture needed one' -ApprovedBy 'the test suite' *>$null
+
+$ugReg = Get-UgState 'skills/cyberwise/tools/Alpha.ps1'
+$ugRegBad = @(
+    if (-not $ugReg)                       { 'the registered file vanished from the report' }
+    elseif ($ugReg.State -ne 'REGISTERED') { "reported $($ugReg.State), expected REGISTERED" }
+)
+$ugAfter = Test-CwUpstream -Root $ugRoot -RecordsRoot $ugRecords
+$ugRegBad += @(
+    # A registered change must not count as a finding. This is the assertion that
+    # keeps the check usable by anybody who has customised their copy on purpose.
+    if (-not $ugAfter.Ok)        { 'a registered customization still counted as a finding' }
+    if ($ugAfter.Registered -ne 1) { "reported $($ugAfter.Registered) registered, expected 1" }
+)
+if ($ugRegBad) { Bad 'upstream: a registered modification is a known customization, not a finding' ($ugRegBad -join "`n") }
+else           { Ok  'upstream: a registered modification is a known customization, not a finding' }
+
+Remove-Variable -Name CwStartupGuardRan -Scope Global -ErrorAction SilentlyContinue
+$ugRegQuiet = Get-AllOutput { Invoke-CwStartupGuard -Root $ugRoot -RecordsRoot $ugRecords }
+if ($ugRegQuiet.Trim()) { Bad 'upstream: the startup guard is silent once a change is registered' "it printed:`n$ugRegQuiet" }
+else                    { Ok  'upstream: the startup guard is silent once a change is registered' }
+
+# The register has two readers and both have to work: a person a year later, and
+# the update flow that re-applies customizations after pulling upstream. So the
+# entry has to carry the prose AND the fields, and a copy of the file to
+# re-derive from.
+$ugEntries = (Get-CwChangeRegister -RecordsRoot $ugRecords).Entries
+$ugE = @($ugEntries | Where-Object { $_.File -eq 'skills/cyberwise/tools/Alpha.ps1' -and $_.Status -eq 'active' })
+$ugFmtBad = @(
+    if ($ugE.Count -ne 1)                      { "found $($ugE.Count) active entries for Alpha.ps1, expected 1" }
+    else {
+        $e = $ugE[0]
+        if ($e.What -notmatch 'added a line')       { 'the entry lost what changed' }
+        if ($e.Why  -notmatch 'fixture needed one') { 'the entry lost why' }
+        if ($e.ApprovedBy -ne 'the test suite')     { 'the entry lost who approved it' }
+        if (-not $e.Recorded)                       { 'the entry has no timestamp' }
+        # An explicit UTC offset, not a bare local time. Half the crash reasoning
+        # in this family once went wrong on exactly that.
+        if ($e.Recorded -notmatch '[+-]\d{2}:\d{2}$') { "the timestamp carries no UTC offset: $($e.Recorded)" }
+        if (-not $e.Upstream)                       { 'the entry does not say which upstream version it was made against' }
+        if (-not $e.Copy)                           { 'the entry points at no copy of the modified file' }
+        else {
+            $cp = Join-Path $ugRecords $e.Copy
+            if (-not (Test-Path -LiteralPath $cp))  { "the copy the entry names is not there: $cp" }
+            elseif ((Get-CwContentHash -Path $cp).Sha -ne $e.Sha) { 'the stored copy is not the file that was registered' }
+        }
+    }
+)
+if ($ugFmtBad) { Bad 'upstream: a register entry carries what, why, who, and a copy to re-derive from' ($ugFmtBad -join "`n") }
+else           { Ok  'upstream: a register entry carries what, why, who, and a copy to re-derive from' }
+
+# --- 3b. registered, then changed AGAIN --------------------------------------
+#
+# The subtle one. An entry that no longer describes the file is not a record of
+# the file - it is a record of something the file used to be. Treating it as
+# cover would mean one registration blesses every later edit to that path, which
+# is exactly the hole somebody would use.
+
+Add-Content -LiteralPath $ugAlpha -Value "Write-Host 'and another, after registering'`n" -NoNewline
+$ugStale = Get-UgState 'skills/cyberwise/tools/Alpha.ps1'
+$ugStaleBad = @(
+    if (-not $ugStale)                         { 'the file vanished from the report' }
+    elseif ($ugStale.State -ne 'UNREGISTERED') { "reported $($ugStale.State) - a stale entry was treated as cover for a later edit" }
+    elseif ($ugStale.Detail -notmatch '(?i)again') { 'the report does not say the entry is now out of date' }
+)
+if ($ugStaleBad) { Bad 'upstream: an entry that no longer matches the file stops covering it' ($ugStaleBad -join "`n") }
+else             { Ok  'upstream: an entry that no longer matches the file stops covering it' }
+
+# --- 4. missing, and new -----------------------------------------------------
+#
+# Reported DISTINCTLY. "Something is different" is not actionable; a file that is
+# gone and a file that has appeared need opposite responses.
+
+Remove-Item -LiteralPath $ugBeta -Force
+$ugNewTool = Join-Path $ugRoot 'skills\cyberwise-demo\tools\Gamma.ps1'
+Set-Content -LiteralPath $ugNewTool -Value "# Gamma.ps1 -- arrived from nowhere.`n" -NoNewline
+
+$ugMix = Test-CwUpstream -Root $ugRoot -RecordsRoot $ugRecords
+$ugMixBad = @(
+    if ($ugMix.Missing -ne 1) { "reported $($ugMix.Missing) missing, expected 1 (Beta.ps1)" }
+    if ($ugMix.New -ne 1)     { "reported $($ugMix.New) new, expected 1 (Gamma.ps1)" }
+    if (@($ugMix.Findings | Where-Object { $_.State -eq 'MISSING' -and $_.Path -eq 'skills/cyberwise-demo/tools/Beta.ps1' }).Count -ne 1) {
+        'the deleted file was not reported as MISSING by name'
+    }
+    if (@($ugMix.Findings | Where-Object { $_.State -eq 'NEW' -and $_.Path -eq 'skills/cyberwise-demo/tools/Gamma.ps1' }).Count -ne 1) {
+        'the added file was not reported as NEW by name'
+    }
+)
+if ($ugMixBad) { Bad 'upstream: a missing file and a new one are reported distinctly' ($ugMixBad -join "`n") }
+else           { Ok  'upstream: a missing file and a new one are reported distinctly' }
+
+# --- 5. no manifest ----------------------------------------------------------
+
+$ugManifest = Get-CwManifestPath -Root $ugRoot
+Remove-Item -LiteralPath $ugManifest -Force
+$ugNone = Test-CwUpstream -Root $ugRoot -RecordsRoot $ugRecords
+$ugNoneBad = @(
+    if ($ugNone.Reason -ne 'nomanifest') { "reported '$($ugNone.Reason)', expected 'nomanifest'" }
+    if ($ugNone.Ok)                      { 'a missing manifest reported as OK - every difference would be invisible' }
+)
+Remove-Variable -Name CwStartupGuardRan -Scope Global -ErrorAction SilentlyContinue
+$ugNoneOut = Get-AllOutput { Invoke-CwStartupGuard -Root $ugRoot -RecordsRoot $ugRecords }
+$ugNoneBad += @(
+    # Silence here would make deleting one file the way to switch the whole guard
+    # off, which is precisely the move worth noticing.
+    if (-not $ugNoneOut.Trim())                     { 'the startup guard said nothing about a missing manifest' }
+    if ($ugNoneOut -notmatch 'New-UpstreamManifest') { 'it does not say how to rebuild the manifest' }
+)
+if ($ugNoneBad) { Bad 'upstream: a missing manifest is reported, not silently passed' ($ugNoneBad -join "`n") }
+else            { Ok  'upstream: a missing manifest is reported, not silently passed' }
+
+# --- 6. the generator is separate from the check -----------------------------
+#
+# If checking could also regenerate, the first thing anybody would do on seeing a
+# finding is run the fix, and the guard would bless whatever it found. The two
+# actions live in two files for that reason, and neither of them may grow the
+# other's behaviour.
+
+$ugCheckTool = Join-Path $Root 'skills\cyberwise\tools\Test-Upstream.ps1'
+$ugCheckText = Get-Content -LiteralPath $ugCheckTool -Raw
+$ugSepBad = @(
+    if ($ugCheckText -match '(?m)^\s*\[switch\]\s*\$(Fix|Write|Regenerate|Update|Bless)\b') {
+        'the checker has grown a switch that rewrites the manifest'
+    }
+    if ($ugCheckText -match 'Write-CwManifest') { 'the checker calls Write-CwManifest' }
+)
+# And the generator must not write by default, or "let me just look" writes.
+$ugGenText = Get-Content -LiteralPath (Join-Path $Root 'skills\cyberwise\tools\New-UpstreamManifest.ps1') -Raw
+$ugSepBad += @(
+    if ($ugGenText -notmatch '(?m)^\s*\[switch\]\s*\$Write\b') { 'the generator has no -Write switch, so it must write by default' }
+)
+$ugFresh = New-FixtureFamily -Name 'guard-noauto'
+& (Join-Path $Root 'skills\cyberwise\tools\New-UpstreamManifest.ps1') -Root $ugFresh *>$null
+$ugSepBad += @(
+    if (Test-Path -LiteralPath (Get-CwManifestPath -Root $ugFresh)) {
+        'running the generator with no -Write created a manifest anyway'
+    }
+)
+if ($ugSepBad) { Bad 'upstream: blessing a change is a separate, deliberate action' ($ugSepBad -join "`n") }
+else           { Ok  'upstream: blessing a change is a separate, deliberate action' }
+
+# --- 7. the guard never blocks anything --------------------------------------
+#
+# It is advisory BY DESIGN and it is deliberately not a PreToolUse hook: one of
+# those fails closed and blocks every Edit in every session on the machine,
+# including the edit that would fix it. That has bitten this setup before. So a
+# guard that is broken, or looking at a tree it cannot make sense of, must cost a
+# line of output and nothing else.
+
+Remove-Variable -Name CwStartupGuardRan -Scope Global -ErrorAction SilentlyContinue
+$ugBrokenRoot = Join-Path $sandbox 'guard-nothing-here'
+New-Item -ItemType Directory -Path $ugBrokenRoot -Force | Out-Null
+$global:LASTEXITCODE = 0
+$ugSafe = Get-AllOutput { Invoke-CwStartupGuard -Root $ugBrokenRoot -RecordsRoot $ugRecords }
+$ugSafeBad = @(
+    if ($ugSafe -match 'Exception|at <ScriptBlock>') { "the guard threw instead of staying quiet:`n$ugSafe" }
+    if ($LASTEXITCODE -ne 0)                         { "the guard set an exit code ($LASTEXITCODE)" }
+)
+if ($ugSafeBad) { Bad 'upstream: a guard with nothing to check costs a line, not a failure' ($ugSafeBad -join "`n") }
+else            { Ok  'upstream: a guard with nothing to check costs a line, not a failure' }
+
+$env:CYBERWISE_NO_GUARD = '1'
+
+# --- 8. it does not slow a tool down -----------------------------------------
+#
+# A guard that makes every tool feel sluggish gets ripped out, and then none of
+# the above matters. Two cold processes each way; the guard has to stay a small
+# fraction of what the interpreter costs to start at all.
+if ($Quick) {
+    Skip 'upstream: the startup guard does not noticeably slow a tool' 'timing needs cold processes; -Quick is for the mutation harness'
+} else {
+    $ugTimeTool = Join-Path $Root 'skills\cyberwise\tools\Get-ToolIndex.ps1'
+    function Measure-Cold {
+        param([string]$NoGuard)
+        $best = [double]::MaxValue
+        1..2 | ForEach-Object {
+            $ms = (Measure-Command {
+                pwsh -NoProfile -NonInteractive -Command "`$env:CYBERWISE_NO_GUARD='$NoGuard'; & '$ugTimeTool' -Root '$Root' -Check" *>$null
+            }).TotalMilliseconds
+            if ($ms -lt $best) { $best = $ms }
+        }
+        return $best
+    }
+    $ugOn  = Measure-Cold -NoGuard ''
+    $ugOff = Measure-Cold -NoGuard '1'
+    $ugCost = [int]($ugOn - $ugOff)
+    # 250 ms is the ceiling, not the target - it measures at about a third of
+    # that. A real regression here is an accidental O(files x files) or a reach
+    # for Get-ChildItem, and either blows straight past this.
+    if ($ugCost -gt 250) {
+        Bad 'upstream: the startup guard does not noticeably slow a tool' "the guard added ${ugCost} ms to a tool run ($([int]$ugOff) ms -> $([int]$ugOn) ms)"
+    } else {
+        Ok "upstream: the startup guard does not noticeably slow a tool (+${ugCost} ms on a $([int]$ugOff) ms run)"
+    }
+}
 
 # =================================================================== report ==
 

@@ -234,14 +234,27 @@ namespace Cyberwise
 
             if (string.IsNullOrWhiteSpace(Watcher))
             {
-                // Beside the exe first (the installed layout), then the repo
-                // layout, so a developer running from source also works.
+                // PREFER THE COPY INSIDE THE SKILLS TREE, in every layout.
+                //
+                // Watch-Crashes.ps1 resolves its siblings from $PSScriptRoot -
+                // New-InstallSnapshot.ps1 for the session-start snapshot, and
+                // UpstreamGuard.ps1 two directories up. Run from a flat copy
+                // beside the exe, neither path exists: the snapshot silently
+                // never happens, so "what changed since it last worked" - the
+                // first question a crash asks - has nothing to answer with.
+                //
+                // The installed layout puts the tree at {app}\skills, which was
+                // missing from this list entirely, so an install could only ever
+                // find the flat copy. Both installed and repo layouts are listed
+                // below, tree first, and the flat copy is kept last as a
+                // fallback for an older install that has one.
                 var exeDir = AppDomain.CurrentDomain.BaseDirectory;
                 foreach (var candidate in new[]
                 {
-                    System.IO.Path.Combine(exeDir, "Watch-Crashes.ps1"),
+                    System.IO.Path.Combine(exeDir, @"skills\cyberwise-crashes\tools\Watch-Crashes.ps1"),
                     System.IO.Path.Combine(exeDir, @"..\skills\cyberwise-crashes\tools\Watch-Crashes.ps1"),
                     System.IO.Path.Combine(exeDir, @"..\..\skills\cyberwise-crashes\tools\Watch-Crashes.ps1"),
+                    System.IO.Path.Combine(exeDir, "Watch-Crashes.ps1"),
                 })
                 {
                     if (File.Exists(candidate)) { Watcher = System.IO.Path.GetFullPath(candidate); break; }

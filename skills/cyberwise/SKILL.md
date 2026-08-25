@@ -137,6 +137,42 @@ word is not proof either, but it is a strong signal that a label was trusted or
 a layer was never opened. Check again at the authoritative source before either
 defending the reading or folding to the claim.
 
+**Check for drift at the start, and never edit a shipped tool quietly.** One
+command, and it is the first thing to run on any Cyberwise task:
+
+```powershell
+tools\Test-Upstream.ps1        # ~0.1s. Silent-ish when clean; names anything unlogged.
+```
+
+Then the behavioural half, which is the part a check cannot do for you. **If you
+are about to edit a file Cyberwise ships - any tool, any `SKILL.md`, a test, the
+installer - say so to the user before you do it, say why, and record it in the
+change register.** Not because changing it is wrong; because an unrecorded
+change is invisible to the next session, to the other agent, and to the person
+who has to decide a year from now whether they still want it.
+
+**And check first that the change is necessary at all.** The commonest version
+of this failure is an agent patching a tool to solve something the family
+already has an affordance for:
+
+| you were about to | do this instead |
+|---|---|
+| hard-code a path, a name or a threshold into a tool | put it in the user bundle, where it describes this install |
+| edit another author's mod file | build an override mod, and `Register-ModPatch` it |
+| change what a tool reports so a warning stops firing | fix the cause, or record why the warning is wrong here |
+| add a fact a tool needs to know | write a wiki article; the tools read the bundle |
+
+Editing a shipped tool is the last option, not the first. When it *is* the right
+answer, one command records it:
+
+```powershell
+. tools\UpstreamGuard.ps1
+Register-CwChange -File '<path>' -What '<what changed>' -Why '<why>' -ApprovedBy '<who said yes>'
+```
+
+Full rationale, the two file formats, and what the check prints in each state:
+`references/environment.md`.
+
 ## Ask the running game - CETMonkey is a prerequisite
 
 Everything else here reads an install **at rest**. Live state - what is actually
@@ -265,6 +301,11 @@ agent's memory is invisible to the next and lost the moment the user switches -
 and an unrecorded override is an invisible one. Rationale and the full layout:
 `references/environment.md`.
 
+**The change register lives there too, and that is why.** It records approved
+local modifications to files Cyberwise itself ships, so it has to survive a fresh
+clone, a hard reset, and an update that overwrites the working tree. A record of
+local changes kept in the repo is destroyed by exactly the event it exists for.
+
 ## Know where each kind of mod lives
 
 Not everything deploys to `archive\pc\mod`. A mod "missing" from there may simply
@@ -301,6 +342,38 @@ because an unlisted archive sorts last and loses.
 | `tools/ModPatchWatch.ps1` | register every patch and override, then sweep for the ones whose upstream file has changed |
 | `tools/Test-ScriptsLive.ps1` | is a `.reds` mod's code actually in the compiled bundle the game loads |
 | `tools/Test-InstallReady.ps1` | before you press Play: what is wrong, and which half launching will fix |
+| `tools/Test-Upstream.ps1` | does this copy of Cyberwise still match what shipped, and is every difference written down |
+| `tools/UpstreamGuard.ps1` | the shared helper behind that: `Register-CwChange`, and the advisory every tool runs at startup |
+| `tools/New-UpstreamManifest.ps1` | declare what upstream looks like now. Deliberately separate from checking |
+
+**Cyberwise watches itself, and it is advisory on purpose.**
+`skills\cyberwise\upstream.manifest` carries a sha256 of every behaviour-bearing
+file the family ships - tools, `SKILL.md`s, tests, the installer. Wiki articles
+are deliberately excluded: they are meant to grow, and guarding them would fill
+the register with noise inside a day.
+
+Every tool checks on startup, so a change gets noticed by the act of using the
+thing rather than by somebody remembering to look. It is silent when clean and
+one short line when not. **It never blocks anything, and it is deliberately not
+a `PreToolUse` hook** - one of those fails closed and blocks every `Edit` in
+every session on the machine, including the edit that would fix it.
+
+Two words about tone, because they decide whether it survives: it reports
+**"differs from upstream"**, never "corrupted" or "tampered". Plenty of people
+legitimately want their copy changed. **The finding is the unlogged change, not
+the change.**
+
+```powershell
+tools\Test-Upstream.ps1              # the report; -All to include the files that match
+tools\New-UpstreamManifest.ps1       # dry run: what WOULD become the new upstream
+tools\New-UpstreamManifest.ps1 -Write
+```
+
+Rerun the generator after any deliberate change to a shipped file, the same way
+you rerun `Get-ToolIndex.ps1 -Write` after adding a tool - that is what keeps the
+manifest current rather than a fossil. If the change belongs to *this install*
+rather than to Cyberwise, register it instead; regenerating would erase the only
+evidence it exists, and the next update would take it away with nothing noticing.
 
 **Before a launch, ask what state the install is in.**
 
@@ -369,9 +442,12 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Get-ToolIndex.ps1` | `cyberwise` | every tool in the family, in one table. |
 | `ModFileBackup.ps1` | `cyberwise` | take back the ability to undo. |
 | `ModPatchWatch.ps1` | `cyberwise` | notice when a mod you patched or overrode has changed. |
+| `New-UpstreamManifest.ps1` | `cyberwise` | declare what upstream looks like, right now. |
 | `Test-InstallReady.ps1` | `cyberwise` | if you launched right now, what would be wrong? |
 | `Test-ModPresent.ps1` | `cyberwise` | is this mod actually installed right now? |
 | `Test-ScriptsLive.ps1` | `cyberwise` | is a script mod's code actually in the compiled bundle? |
+| `Test-Upstream.ps1` | `cyberwise` | does this copy still match what shipped, and is every difference written down? |
+| `UpstreamGuard.ps1` | `cyberwise` | the upstream check every tool runs at startup, and the change register behind it. |
 | `Find-QuestConflicts.ps1` | `cyberwise-conflicts` | which mods touch a quest, and which of them win. |
 | `Repair-LoadOrder.ps1` | `cyberwise-conflicts` | Check (and optionally repair) the Cyberpunk 2077 archive load order. |
 | `Resolve-ResourcePath.ps1` | `cyberwise-conflicts` | turn archive hashes into file paths, and back. |
@@ -382,6 +458,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Save-CrashSnapshot.ps1` | `cyberwise-crashes` | preserve what a relaunch destroys, then state the facts. |
 | `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
+| `DeviceGeometry.ps1` | `cyberwise-hotkeys` | where a device's buttons physically ARE, read from the user's own wiki bundle rather than from a table shipped inside the tool. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
 | `Get-MouseProfile.ps1` | `cyberwise-hotkeys` | read the key remaps a Corsair iCUE profile puts on a programmable mouse, so they can be joined to what the game does with them. |
 | `KeyIdentity.ps1` | `cyberwise-hotkeys` | one key, one identity, whatever vocabulary named it. |

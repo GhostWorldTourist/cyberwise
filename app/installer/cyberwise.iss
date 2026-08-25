@@ -59,7 +59,13 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "..\bin\CyberwiseTray.exe";  DestDir: "{app}"; Flags: ignoreversion
-; Beside the exe on purpose - the tray looks here first for the watcher.
+; A FALLBACK copy, not the one that should run. Watch-Crashes.ps1 resolves its
+; siblings from $PSScriptRoot - New-InstallSnapshot.ps1 for the session-start
+; snapshot, UpstreamGuard.ps1 two levels up - and neither exists from {app}. Run
+; flat, the watcher works but silently takes no install snapshot, so "what
+; changed since this last worked" has nothing to answer with. The tray now
+; prefers {app}\skills\cyberwise-crashes\tools\ (shipped below) and falls back
+; here only for an older install. See the candidate list in CyberwiseTray.cs.
 Source: "..\..\skills\cyberwise-crashes\tools\Watch-Crashes.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\install.ps1";         DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\skills\*";            DestDir: "{app}\skills"; Flags: ignoreversion recursesubdirs createallsubdirs
