@@ -491,6 +491,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `New-InstallSnapshot.ps1` | `cyberwise-crashes` | record what the install looks like right now. |
 | `Register-CrashWatch.ps1` | `cyberwise-crashes` | keep the crash watcher alive without a terminal. |
 | `Save-CrashSnapshot.ps1` | `cyberwise-crashes` | preserve what a relaunch destroys, then state the facts. |
+| `Watch-CrashDump.ps1` | `cyberwise-crashes` | catch the exception the game swallows, and name the module. |
 | `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
 | `DeviceGeometry.ps1` | `cyberwise-hotkeys` | where a device's buttons physically ARE, read from the user's own wiki bundle rather than from a table shipped inside the tool. |

@@ -196,6 +196,45 @@ When halving has named the mod but not what it is doing, write a **guard** - a
 throwaway one-function mod that logs the value separating your hypotheses, in CET
 rather than redscript. `/diagnosis/writing-a-guard-mod`.
 
+## The game swallows its own crash - so attach a debugger
+
+`%LOCALAPPDATA%\CrashDumps` on a modded machine will hold dumps for every other
+application and **none for this game**. That is not a misconfiguration. The game
+installs its own unhandled-exception filter: it catches the fault, writes
+`CrashInfo.json`, and exits cleanly, so Windows never sees a crash and Windows
+Error Reporting has nothing to report. Turning on WER LocalDumps does not fix
+it - the game's handler runs first.
+
+**A debugger sees the exception first.** That is the whole trick:
+
+```powershell
+winget install --id Microsoft.WinDbg          # once; provides cdb.exe
+.\tools\Watch-CrashDump.ps1                   # then start the game
+```
+
+It waits for the game, attaches `cdb`, and on an access violation records the
+faulting module, the stack, `!analyze -v` and a small minidump - then hands the
+fault straight back with `gn`, so the game dies exactly as it would have and
+still writes its own `CrashInfo.json`. Nothing is prevented; we only read on the
+way past. `FAILURE_BUCKET_ID` in the log names the module.
+
+Three things that are easy to get wrong here:
+
+- **Do not take a full dump.** `.dump /ma` writes the process's whole private
+  working set, measured at 27-30 GB on one install. A minidump is ~170 KB and
+  `!analyze` gives the same answer.
+- **Paths inside cdb's `-c "..."` string need FORWARD SLASHES.** Backslash is an
+  escape there, so a Windows path arrives mangled - the first attempt here wrote
+  `C:Users<TAB>ohuw...` and failed with Win32 error 123.
+- **`gn`, never `gh`.** "Go, not handled" passes the fault back to the game.
+  `gh` would swallow it and change what the game does, which is lying to the
+  thing you are measuring.
+
+**Limits, and say them out loud:** it catches access violations only - a
+fail-fast or an abort will not trip it, and the log saying "no access violation"
+is itself a finding. Attaching a debugger also changes timing, so a race-shaped
+crash can move or vanish; that is not the same as fixed.
+
 ## A missing log is not a silent log
 
 None of REDscript, RED4ext, CET, ArchiveXL or TweakXL ship with the game. An
@@ -227,6 +266,7 @@ and why Windows Error Reporting never fires for it.
 | `tools/New-InstallSnapshot.ps1` | records archives, load order, loose files and framework versions |
 | `tools/Compare-InstallSnapshot.ps1` | diffs two snapshots - what changed, including order changes invisible on disk |
 | `tools/Invoke-BisectRound.ps1` | parks a named set, records the round, and launches the game for the tester |
+| `tools/Watch-CrashDump.ps1` | attaches a debugger so the exception the game swallows is recorded, with the faulting module named |
 
 ```powershell
 .\tools\Register-CrashWatch.ps1 -Dir "<somewhere writable>" -GameRoot "<game>"
