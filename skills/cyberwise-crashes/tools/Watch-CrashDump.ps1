@@ -52,6 +52,12 @@ param(
     # to catch anything is a capture path nobody should trust.
     [string] $ProcessName = 'Cyberpunk2077',
 
+    # Keep going after the game exits, waiting for the next launch. A capture
+    # tool that has to be remembered before every session is a capture tool that
+    # is not running on the day it was needed - which is exactly what happened:
+    # the crash this was built for arrived while nothing was attached.
+    [switch] $Loop,
+
     [switch] $Status
 )
 
@@ -114,6 +120,9 @@ New-Item -ItemType Directory -Path $SymbolCache -Force | Out-Null
 
 # ------------------------------------------------------------------ wait for it --
 
+# One pass = wait for the game, attach, capture until it exits. With -Loop this
+# repeats for ever, so the debugger is armed for every session rather than for
+# the one somebody remembered to arm it for.
 function Get-GamePid {
     $p = @(Get-Process -Name $ProcessName -ErrorAction SilentlyContinue)
     if ($p.Count) { return $p[0].Id }
@@ -183,6 +192,9 @@ Write-Host "  the game is handed every fault back untouched - it will still cras
 & $cdb -p $gamePid -g -G -logo $log -cf $cmdFile
 
 Write-Host ''
+if ($Loop) {
+    Write-Host 'game exited - waiting for the next launch (Ctrl+C to stop watching)' -ForegroundColor Cyan
+}
 if (Test-Path -LiteralPath $log) {
     $txt = Get-Content -LiteralPath $log -Raw
     if ($txt -match '==CW_AV==') {

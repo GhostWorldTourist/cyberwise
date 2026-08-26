@@ -120,6 +120,59 @@ function Save-PostMortem {
             "session=$([int]$pm.sessionLength)s at ($([math]::Round($pm.location.X)),$([math]::Round($pm.location.Y)))")
 }
 
+# --- preserve, then say so ---------------------------------------------------
+#
+# THE RACE THIS CLOSES. The crash skill's step 0 is "preserve before anything
+# else, including thinking", because relaunching destroys the evidence:
+# redscript_rCURRENT.log is replaced at every launch and CET truncates its own
+# logs. On 2026-08-23 a crash was looked at twenty minutes later and every one
+# of those had already been rewritten. Asking a human to remember a command
+# between dying and pressing Play is asking them to lose the evidence.
+#
+# So the watcher runs the snapshot itself, and then TOASTS - because the only
+# thing standing between the player and a relaunch is knowing it is safe to.
+function Invoke-AutoPreserve {
+    param([string] $Summary)
+
+    $tool = Join-Path $PSScriptRoot 'Save-CrashSnapshot.ps1'
+    if (-not (Test-Path -LiteralPath $tool)) {
+        Write-Host "  cannot auto-preserve: Save-CrashSnapshot.ps1 is not beside this script" -ForegroundColor Yellow
+        return $null
+    }
+
+    $dest = $null
+    try {
+        $out = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tool `
+                    -GameRoot $GameRoot -Note "auto-preserved by the crash watcher: $Summary" 2>&1 | Out-String
+        $m = [regex]::Match($out, 'snapshot:\s*(\S.*)')
+        if ($m.Success) { $dest = $m.Groups[1].Value.Trim() }
+    } catch {
+        Write-Host "  auto-preserve failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        return $null
+    }
+    return $dest
+}
+
+# A balloon from a throwaway NotifyIcon. Deliberately not BurntToast or a WinRT
+# toast: both want something installed or an AppID registered, and a
+# notification that only works on the developer's machine is worse than none.
+function Show-CrashToast {
+    param([string] $Title, [string] $Message)
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $ni = New-Object System.Windows.Forms.NotifyIcon
+        $ni.Icon = [System.Drawing.SystemIcons]::Information
+        $ni.Visible = $true
+        $ni.BalloonTipTitle = $Title
+        $ni.BalloonTipText = $Message
+        $ni.ShowBalloonTip(15000)
+        Start-Sleep -Seconds 8
+        $ni.Visible = $false
+        $ni.Dispose()
+    } catch { }
+}
+
 $sessions = 0
 while ($true) {
 
@@ -153,7 +206,27 @@ while ($true) {
             "{0},{1},PROCESS_GONE,,,,,," -f (Get-Date -Format 'HH:mm:ss'),
                 [math]::Round(((Get-Date) - $start).TotalMinutes, 1) | Add-Content -LiteralPath $csv
             Start-Sleep -Seconds 3   # the game writes its post-mortem as it goes
-            "{0},,{1},,,,,," -f (Get-Date -Format 'HH:mm:ss'), (Save-PostMortem) | Add-Content -LiteralPath $csv
+            $verdict = Save-PostMortem
+            "{0},,{1},,,,,," -f (Get-Date -Format 'HH:mm:ss'), $verdict | Add-Content -LiteralPath $csv
+
+            # ONLY ON A REAL CRASH. Save-PostMortem returns a "clean exit" line
+            # when the post-mortem it found was already on file - the game
+            # overwrites CrashInfo.json per crash but never deletes it, so every
+            # normal quit re-presents the last crash. Preserving on that would
+            # fill the vault with copies of one event and toast somebody who
+            # simply stopped playing.
+            if ($verdict -like 'CRASH *') {
+                Write-Host "  preserving evidence before anything can overwrite it..." -ForegroundColor Cyan
+                $dest = Invoke-AutoPreserve -Summary $verdict
+                if ($dest) {
+                    Write-Host "  preserved: $dest" -ForegroundColor Green
+                    Show-CrashToast -Title 'Cyberwise - crash preserved' `
+                        -Message "Logs and deployed list are saved. Safe to relaunch.`n$verdict"
+                } else {
+                    Show-CrashToast -Title 'Cyberwise - crash detected' `
+                        -Message "Could not auto-preserve. Do NOT relaunch until the logs are saved."
+                }
+            }
             break
         }
 
