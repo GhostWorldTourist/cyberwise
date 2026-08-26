@@ -16,3 +16,4 @@ search, not about any particular mod. Mods appear only as examples.
 - [When halving stops paying, write a guard](/diagnosis/writing-a-guard-mod) - a throwaway one-function mod that logs the value separating two hypotheses
 - [A hang and a crash are different faults, and only one of them lets you interrogate the process](/diagnosis/a-hang-and-a-crash-are-different-faults) - live sampling, native spin versus script loop, and the watchdog kill that is invisible in the crash reporter
 - [A data-layer log is noisy by design, and the count is not a health metric](/diagnosis/reading-a-noisy-tweak-log) - hundreds of benign record warnings, a failing set that changes between launches, and the one question that separates noise from a broken feature
+- [The game swallows its own crash, so Windows never sees one](/diagnosis/the-game-swallows-its-own-crash) - why WER never fires, why LocalDumps is empty, and how a debugger names the faulting module

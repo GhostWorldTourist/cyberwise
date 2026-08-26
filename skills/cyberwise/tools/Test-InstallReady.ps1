@@ -128,10 +128,24 @@ if ($bundle -and (Test-Path -LiteralPath $bundle)) {
         # What does move is everything the manager writes at deploy time: the
         # folder itself and its marker file. So look at every entry, not one
         # extension.
+        $folders = @()
         $newer = @(Get-ChildItem -LiteralPath $scriptDir -Recurse -ErrorAction SilentlyContinue |
                    Where-Object { $_.LastWriteTime -gt $built })
         if ($newer.Count) {
             $folders = @($newer | ForEach-Object { ($_.FullName.Substring($scriptDir.Length + 1) -split [regex]::Escape([string][char]92))[0] } | Select-Object -Unique)
+
+            # A REMOVED MOD LEAVES A FRESH, EMPTY FOLDER. Vortex purges the
+            # .reds files but leaves the directory and its own marker behind,
+            # both stamped at deploy time - so an uninstalled mod looks exactly
+            # like a newly installed one to the check above, and gets reported
+            # as "not running yet" when there is nothing left to run. Observed
+            # with BetterNetrunning and Limited Slip Differential on one
+            # install. Keep the permissive scan; drop folders holding no script.
+            $folders = @($folders | Where-Object {
+                @(Get-ChildItem -LiteralPath (Join-Path $scriptDir $_) -Filter *.reds -Recurse -ErrorAction SilentlyContinue).Count -gt 0
+            })
+        }
+        if ($folders.Count) {
             Add-Finding 'script bundle' 'onlaunch' "$($folders.Count) script mod(s) are newer than the compiled bundle, so their code is not running yet. Launching compiles them in: $(($folders | Select-Object -First 4) -join ', ')$(if ($folders.Count -gt 4) { ', ...' })"
         } else {
             Add-Finding 'script bundle' 'ready' 'Every .reds file predates the compiled bundle.'
