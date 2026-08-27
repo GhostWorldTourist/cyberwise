@@ -219,3 +219,21 @@ The tells, in order of cost:
 `scanCode == 0x2A && (flags & LLKHF_EXTENDED)`, or `VKey == 0xFF` on makecode
 0x2A under `WM_INPUT`.
 
+## Confirmed by controlled test
+
+**NumLock OFF: the Delete bind works. NumLock ON: it breaks.** Toggled both
+ways, reproduces both ways, on a machine where the overlay had been "randomly"
+dead across weeks.
+
+So the diagnostic order is:
+
+1. **Is NumLock on?** Toggle it and press the bind. Five seconds, and it
+   reproduces in both directions.
+2. **Does the same bind work on a letter or numpad key?** Confirms the extended
+   block is the variable.
+3. Only then enumerate devices.
+
+Device enumeration, vendor software restarts, overlay-injector theories and
+reading the host application's source are all *below* those two steps, and on
+one occurrence they consumed about four hours that step 1 would have closed.
+
