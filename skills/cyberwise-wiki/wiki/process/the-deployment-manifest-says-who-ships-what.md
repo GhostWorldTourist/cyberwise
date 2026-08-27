@@ -54,6 +54,33 @@ The "superseded duplicate" carries **145 files nothing else provides**. Removing
 it as redundant would have deleted content, on the strength of a version number
 in a filename.
 
+## A class list is not searchable by appearance
+
+The same failure in a different register, from the same day.
+
+A rooftop satellite dish offered no way to jack in. The game's compiled bundle
+declares 136 device controller classes, so the list was pulled and searched for
+`dish`, `antenna`, `satellite`, `relay`. Nothing matched, and the conclusion
+drawn was **"the dish is scenery, not a device"** - which was wrong, and which
+would have closed off the entire feature.
+
+Asking the running game produced:
+
+```
+class        BasicDistractionDevice
+displayName  Gameplay-Devices-DisplayNames-PlateAntenna
+ps class     BasicDistractionDeviceControllerPS
+```
+
+**`BasicDistractionDeviceControllerPS` was in the list the whole time.** The
+class is named for what the device DOES - create a distraction - not for what it
+looks like. No amount of searching by appearance would ever have found it.
+
+An absent keyword is not an absent thing. When a list search comes back empty and
+the conclusion would be "this does not exist", ask the running game instead:
+CET's `GetLookAtObject` plus `GetDevicePS()` names the class of whatever is under
+the crosshair in one line, and it cannot be fooled by vocabulary.
+
 ## The rule
 
 Filenames and timestamps are **labels applied by humans**, often years apart,

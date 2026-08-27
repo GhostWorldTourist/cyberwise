@@ -1,9 +1,9 @@
 ---
 type: Diagnostic Method
-title: A bind dialog reading "unknown+key" is a device on the machine, not a mod
-description: An overlay stopped opening on the key it had always used, and its bind dialog started showing a phantom modifier in front of every extended key. Everything on the software side was eliminated first - a full mod purge included. The cause was a wireless keyboard that was switched off and still plugged into a dock.
+title: An overlay that stops opening on its key is a half-enumerated HID device, not a mod
+description: Twice now, on two different keyboards. An overlay stops opening on the key it has always used and the bind dialog shows a phantom modifier before every extended key. Both times the cause was a HID composite that was half-enumerated - healthy as a keyboard, broken on its other interfaces - and both times the software suspects were wrong.
 tags: [cet, hotkeys, hid, input, overlay, hardware, wrong-theory, diagnosis]
-status: draft
+status: stable
 generated: { by: "claude", at: "2026-08-25T11:20:00-04:00" }
 ---
 
@@ -20,6 +20,62 @@ nothing else on the machine reported.
 
 Between those two sentences sat a multi-day investigation, and the reason it
 took that long is that every plausible suspect is in the game.
+
+## It has now happened twice, on different hardware
+
+**2026-08-22** - an Apple Magic Keyboard, switched off, cabled to a Thunderbolt
+dock. Five hours. The bind dialog captured `Unknown + Delete` and CET *stored*
+the chord, so the binding was dead until rewritten by hand.
+
+**2026-08-26** - a **Corsair K100**, plugged directly into the machine, not on a
+dock. Fixed in minutes once the right query was run, and **fixed by physically
+unplugging and replugging the keyboard**.
+
+The second occurrence is what makes the rule usable, because it kills the
+specific theory the first one suggested. It was not the Apple keyboard, not the
+dock, and not "off but still cabled". Both devices had one thing in common:
+
+> **A HID composite device can be healthy on one interface and broken on the
+> others.** The keyboard interface works - you type normally, everywhere - while
+> its sibling interfaces fail to start and contribute garbage to whatever reads
+> raw HID.
+
+## The query that names it in one line
+
+This is the first thing to run, before any of the elimination list below:
+
+```powershell
+Get-PnpDevice | Where-Object Status -eq 'Error' | ForEach-Object {
+  $p = (Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
+  '{0,-8} {1,-30} problem {2}  {3}' -f $_.Status, $_.FriendlyName, $p, $_.InstanceId
+}
+```
+
+On the 2026-08-26 occurrence:
+
+```
+Error  USB Input Device  problem 10  USB\VID_1B1C&PID_1BC5&MI_01\...
+Error  USB Input Device  problem 10  USB\VID_1B1C&PID_1BC5&MI_02\...
+Error  USB Input Device  problem 10  USB\VID_1B1C&PID_1BC5&MI_03\...
+```
+
+**Problem code 10 is "this device cannot start."** Three of the keyboard's four
+interfaces were dead while `MI_00` - the one that types - was `OK`. Compare a
+healthy composite: every interface reports `OK`.
+
+`Status` alone is not enough. A device can sit at `Unknown` for benign reasons;
+`Error` plus a problem code is the discriminator, and the interface breakdown of
+one composite is what makes it obvious.
+
+## The fix is physical, and it is cheap
+
+**Unplug the device and plug it back in.** Not "disable in Device Manager", not
+"remove the node" - the failing interfaces have to re-enumerate. On 2026-08-26
+that alone restored the overlay, with no restart of the game and no rebinding.
+
+Removing the phantom node from the device tree is a *different* action and does
+not fix this: it was done first on 2026-08-26, correctly cleared a stale ghost,
+and changed nothing.
 
 ## The fingerprint that names the layer
 
@@ -55,6 +111,39 @@ Recorded because each of these is where the next person will also start:
 Every one of those is a software theory, and the fault was not in software at
 all.
 
+## What was chased AGAIN on the second occurrence, and should not be a third time
+
+Every one of these is written in this article and in the project memory, and
+every one was proposed anyway before the right query was run:
+
+- **RTSS / MSI Afterburner.** Named as the likely culprit despite having run on
+  this machine with this game for over a year, and despite being on the
+  2026-08-22 elimination list. A component that has been present for a year
+  without causing a fault is not a discriminator - see [proximity is not
+  evidence](/process/proximity-is-not-evidence-without-a-base-rate) for the same
+  error in a different costume.
+- **Rebinding to another key.** Proposed as a "fix", which this article's own
+  *Do not settle for another key* section forbids, for the reason given there.
+- **A CET renderer failure.** `D3D12::Initialize()` was missing from the current
+  session's log, which looked decisive and was not: the log is written during
+  startup and reading it mid-launch shows a session that has not got there yet.
+  **Check whether a log is still being written before concluding something is
+  missing from it.**
+- **A stuck-modifier sweep**, reinvented from scratch in a worse form than the
+  one already recorded in memory (which correctly scopes to VK 16-165 and, more
+  importantly, *releases* what it finds). It came back clean, which proves
+  nothing: a virtual HID endpoint injects below that layer.
+
+## Look at the topology before advising about it
+
+The 2026-08-26 advice included "re-seat it on a different port, ideally not
+through the dock" - on a machine where the keyboard was **not connected to the
+dock at all**. Enumerating the USB tree would have shown that in one query.
+
+**Do not give physical-layout advice you have not enumerated.** It is cheap to
+check and it costs credibility every time it is wrong, which is exactly the
+currency an investigation like this runs on.
+
 ## The rule this produces
 
 **Inventory the physical input devices before touching the game.** Docks and
@@ -76,10 +165,16 @@ slots and the filler value.
 
 ## What was not verified
 
-One machine, one dock, one event. The mechanism - a second HID contributing to
-what the game reads - is standard input handling; the specific device class and
-the extended-key split are one observation. The elimination list is the durable
-part.
+Two occurrences on one machine, with two different keyboards - one on a dock,
+one direct. The mechanism (a half-enumerated HID composite contributing to what
+the game reads) now has two data points and a problem code to grep for, which is
+what promoted this from draft.
+
+Still unverified: **why** the interfaces fail to start. Both devices were fine
+for months beforehand and fine again afterwards, so this is a transient
+enumeration fault rather than a broken device. Whether it correlates with sleep,
+a hub power event, or a driver update is unknown - if it recurs, note what the
+machine did in the hour before.
 
 ## Do not settle for another key
 
