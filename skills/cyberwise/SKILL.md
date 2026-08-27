@@ -207,6 +207,47 @@ that was written to a file.
 Full contract - helpers, LuaJIT limits, the out-param return-slot trap, and the
 `uiData` / `resolves` columns: `references/cetmonkey.md`.
 
+## NEVER claim what the base game does or does not contain
+
+The base game is a **file on disk**. Read it before saying what is in it.
+
+```powershell
+# what shipped with the game        vs        what is live with mods loaded
+r6\cacheinal.redscripts                     r6\cacheinal.redscripts.modded
+```
+
+Check the mtimes and sizes first. `r6\cache\moddedinal.redscripts` is a
+DIFFERENT and often **stale** file - on one install it was four days old and
+16 MB while the live modded bundle beside it was 40 MB and rewritten at every
+launch. Claims sourced from it were claims about a snapshot nobody was running.
+
+**A symbol in a bundle is not a feature in the game.** `RemoteBreach` greps
+clean out of the vanilla bundle; remote breach on devices is nevertheless
+supplied by CustomHackingSystem plus a mod that configures it. The class was
+compiled. That says nothing about whether a player can ever reach it. Symbol
+presence rules things OUT, never in.
+
+**To establish that a feature exists in play**, one of these - not a grep:
+
+| question | what answers it |
+|---|---|
+| does this device offer the action? | log the action list the running game hands you |
+| why is it greyed out? | the action's own `IsInactive()` and `GetInactiveReason()` |
+| which mod supplies it? | `vortex.deployment.json`, then that mod's own source |
+| is it vanilla behaviour? | the vanilla bundle **and** an install with the mod disabled |
+
+**Why this earns its own rule.** On 2026-08-26 a satellite dish that could not
+be breached was investigated for two days across four releases on the strength
+of guesses about backdoors, access points and cyberware prerequisites. The user
+had *already stated* that remote breach is not vanilla, and was contradicted
+from a stale bundle. One log line listing the device's offered actions settled
+in a second what the guessing had not: the action was present, the mod
+permitted it, and the mod that supplies its minigame had crashed during setup
+that morning. Every hour of that was avoidable by reading a file first.
+
+Related: `wiki/process/the-deployment-manifest-says-who-ships-what.md`,
+`wiki/process/proximity-is-not-evidence-without-a-base-rate.md`.
+
 ## NEVER name a mod you have not confirmed is installed
 
 ```powershell
