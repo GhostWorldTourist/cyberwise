@@ -264,3 +264,27 @@ account name in an output whose purpose is to be pasted in public. Offer a
 
 A mod list is personal data too - it discloses interests. Write generated
 reports outside any repo, and never commit them.
+
+## Never hand someone a grep
+
+**"Grep the log for X"** is not an instruction to a modder. Most people running
+800 mods are not developers, have never opened a terminal, and will read a
+pipeline of `Select-String` and `Group-Object` as a reason to stop asking. The
+answer arrives looking like homework.
+
+The tool has the log. **Read it and say what it says.**
+
+| instead of | say |
+|---|---|
+| "grep scripting.log for `NetSec] GAP`" | "you hit 259 spots with no access point - here they are" |
+| "tally them with `Group-Object`" | "no-access-point is 40% of them, so run strict" |
+| "check the log for the class name" | "it is a plate antenna, filed under distraction devices" |
+
+Where a command genuinely has to be run by hand - an elevated action, something
+that must happen with the game closed - **give one complete line that can be
+pasted**, say plainly what it will do, and never make its output the user's
+problem to interpret. Asking somebody to run a query AND read its results is two
+jobs handed over; doing the reading is the part that was being asked for.
+
+This applies hardest when a diagnostic was written for the occasion. A tool that
+emits a tagged line and then requires a regex to be useful is half a tool.

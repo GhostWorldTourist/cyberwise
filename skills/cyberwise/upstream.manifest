@@ -15,7 +15,7 @@
 # A local customization you want to keep goes in the register instead:
 #     . skills\cyberwise\tools\UpstreamGuard.ps1; Register-CwChange ...
 #
-# generated: 2026-08-26T21:27:29Z
+# generated: 2026-08-27T00:28:56Z
 # files: 65
 #
 # <sha256> <TAB> <normalised bytes> <TAB> <path, relative to the repo root>
