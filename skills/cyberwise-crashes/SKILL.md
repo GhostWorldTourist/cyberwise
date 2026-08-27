@@ -266,6 +266,8 @@ and why Windows Error Reporting never fires for it.
 | `tools/New-InstallSnapshot.ps1` | records archives, load order, loose files and framework versions |
 | `tools/Compare-InstallSnapshot.ps1` | diffs two snapshots - what changed, including order changes invisible on disk |
 | `tools/Invoke-BisectRound.ps1` | parks a named set, records the round, and launches the game for the tester |
+| `tools/New-InputSnapshot.ps1` | records keyboards, mice and HID nodes, the decoded CET overlay bind, and a one-shot held-key sample |
+| `tools/Compare-InputSnapshot.ps1` | diffs two input snapshots - answers "is that ghost device NEW, or has it always been there?" |
 | `tools/Watch-CrashDump.ps1` | attaches a debugger so the exception the game swallows is recorded, with the faulting module named |
 
 ```powershell
@@ -364,6 +366,38 @@ and from an ordinary PowerShell window - so treat the scheduled task as the nice
 case, not the expected one. `Register-CrashWatch.ps1` falls back to a per-user
 `HKCU\...\Run` entry, which needs no elevation, and says plainly what that costs:
 the watcher starts at logon but nothing restarts it if it dies.
+
+## "The overlay stopped working" - snapshot the input stack
+
+A CET overlay fault has twice traced to the HID layer, not to CET. **The fix
+that worked was a USB re-enumeration, and that is the single biggest clue
+available**: it places the fault below CET entirely, which makes reading CET's
+bindings, widgets or source a waste of an evening. Read what fixed it last time
+before reading anything else.
+
+```powershell
+tools\New-InputSnapshot.ps1 -Label 'working'     # take this while it WORKS
+tools\New-InputSnapshot.ps1 -Label 'broken'
+tools\Compare-InputSnapshot.ps1                  # newest two
+```
+
+**Take the working one first.** Without it every not-OK device node looks
+guilty and none can be dated. Measured on one machine: 29 nodes were not `OK`
+and 26 were simply unplugged peripherals - an Apple trackpad, an HP headset.
+
+`Status -eq 'Error'` is the wrong probe. It catches an interface that failed to
+START and misses a device whose delivery is broken while its driver runs fine.
+The shape worth finding is a **half-enumerated composite**: a node that is not
+OK while another node sharing its instance-ID stem IS present and OK. A wholly
+absent device is one you unplugged; one that is half here failed partway
+through enumerating.
+
+**A held-key sweep only sees PHYSICAL key state.** CET keeps its own copy from
+window messages, so a stale key state inside CET - which is what makes an
+overlay open and then refuse to close - is invisible to any external tool. That
+state lives in the process, so no device-level fix can rescue a session already
+stuck: **restart the game before judging whether a fix worked**, or the test
+proves nothing either way.
 
 ## Reference material
 
