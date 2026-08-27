@@ -189,3 +189,33 @@ the software -
 - [Five separate stores hold key bindings](/input/five-binding-stores)
 - [A binding store can lose its contents, and an empty store looks exactly like the wrong store](/input/a-binding-store-can-empty-itself) - the other way a binding goes bad without a mod
 - [A CET mod folder without init.lua is not a mod](/engine/cet-mod-loading) - the log line that says whether the overlay's render layer started at all
+
+## Correction: the "phantom device" is usually Windows' own injected shift
+
+This article was written around a half-enumerated HID composite, and that was
+one real occurrence. The recurring fault is simpler and is documented behaviour.
+
+Windows injects **synthetic Shift events** around the extended editing block -
+Delete, Insert, Home, End, PgUp, PgDn, arrows - because Shift acts as a
+temporary NumLock inverter and has to be suppressed for those keys. The injected
+event carries **scan code 0x2A with the E0 extended bit and VKey 0x00FF**, which
+a real left shift can never produce.
+
+`0x00FF` is **255**. A bind recorded as `255, 46, 0, 0` is therefore not a
+corrupt device entry - it is *injected-shift + Delete*, and it is why a bind
+dialog reads `unknown + Delete`. An application that does not filter these sees a
+two-key chord where the user pressed one key, so a stored single-key bind never
+matches.
+
+The tells, in order of cost:
+
+1. **Does the same bind work on a letter or a numpad key?** If yes, the key
+   itself is fine and the extended block is the variable. This one test settles
+   it and costs seconds.
+2. **Is NumLock on?** That is what makes the suppression necessary.
+3. Only then look at devices.
+
+**Filter, for anyone fixing this in code:** drop shift events where
+`scanCode == 0x2A && (flags & LLKHF_EXTENDED)`, or `VKey == 0xFF` on makecode
+0x2A under `WM_INPUT`.
+
