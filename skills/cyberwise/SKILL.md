@@ -207,6 +207,53 @@ that was written to a file.
 Full contract - helpers, LuaJIT limits, the out-param return-slot trap, and the
 `uiData` / `resolves` columns: `references/cetmonkey.md`.
 
+## Do the work rather than proposing it
+
+**When the research converges on one path, build it.** Strike the options that
+are impossible and merge the ones that are steps of the same plan; if one
+remains, that is not a choice to offer - it is the job. Ship it, then say in two
+lines what it does and what you were unsure about.
+
+A proposal is the right output only for genuinely different paths with different
+consequences, for outward-facing or hard-to-reverse actions (publishing, filing,
+deleting, spending), and for design questions that are the user's by right.
+Everything else gets built.
+
+Wrong work costs one message to redirect. Stopping to ask costs a round trip
+every single time, and reads as withholding something already asked for.
+`wiki/process/do-the-work-do-not-propose-it.md`.
+
+## To find out whether a mod took effect, READ THE LOGS
+
+Not the deployed file list. Not `archive\pc\mod\`. Not what is on disk when you
+happen to look. **The framework that loaded it writes down what it did**, and
+that record covers the moment the user actually ran the game:
+
+| framework | log | says |
+|---|---|---|
+| ArchiveXL | `red4ext\plugins\ArchiveXL\ArchiveXL-*.log` | every `.xl` loaded, `[WorldStreaming]` sector patches, and load failures |
+| TweakXL | `red4ext\plugins\TweakXL\TweakXL-*.log` | every YAML read, and records it refused |
+| RED4ext | `red4ext\logsed4ext-*.log` | every plugin loaded, with version |
+| redscript | `r6\logsedscript_rCURRENT.log` | compile result, and which mod failed |
+| CET | `bind\plugins\cyber_engine_tweaks\scripting.log` | per-mod Lua output and errors |
+
+**A file listing describes this instant; a log describes the run.** A mod that
+was installed, tested, found wanting and uninstalled leaves an empty folder and
+a full log. Reading the folder and concluding "it was never installed" is a
+statement about the USER, made from evidence that cannot support it - and it
+lands as calling them careless. On 2026-08-28 that is exactly what happened, to
+a modder of thirty years, over a mod they had installed, tested and removed
+before the folder was ever looked at.
+
+The logs were sitting there the whole time, with an explicit
+`[WorldStreaming] Patching sector` line naming what ArchiveXL did and did not
+apply.
+
+**So: never infer from absence on disk. Open the log for the run in question,
+find the entry for the mod by name, and quote it.** If there is no entry, say
+the log has no entry for it - which is a fact about the log, not about the
+person.
+
 ## NEVER claim what the base game does or does not contain
 
 The base game is a **file on disk**. Read it before saying what is in it.
