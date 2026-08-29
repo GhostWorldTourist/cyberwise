@@ -35,14 +35,24 @@ jobs:
           fetch-depth: 0
 
       # A package that fails its own suite should never reach a download button.
+      # ONLY Test-Tools.ps1 takes -Quick. Passing it to the others is a hard
+      # parameter-binding error in PowerShell, not something ignored - the first
+      # run of this workflow died on the first suite, having never been
+      # exercised before the tag that triggered it. Each suite is now invoked
+      # with the arguments it actually accepts.
       - name: Test
         shell: pwsh
         run: |
+          $suites = @(
+            @{ name = 'Test-Family.ps1';    args = @() },
+            @{ name = 'Test-Validator.ps1'; args = @() },
+            @{ name = 'Test-Tools.ps1';     args = @('-Quick') }
+          )
           $failed = @()
-          foreach ($t in 'Test-Family.ps1', 'Test-Validator.ps1', 'Test-Tools.ps1') {
-            Write-Host "--- $t"
-            & ".\tests\$t" -Quick
-            if ($LASTEXITCODE -ne 0) { $failed += $t }
+          foreach ($s in $suites) {
+            Write-Host "--- $($s.name)"
+            & ".\tests\$($s.name)" @($s.args)
+            if ($LASTEXITCODE -ne 0) { $failed += $s.name }
           }
           if ($failed) { throw "failing suite(s): $($failed -join ', ')" }
 
