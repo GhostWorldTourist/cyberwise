@@ -1,5 +1,5 @@
 # ============================================================================
-# Compare-InputSnapshot.ps1 - diff two input snapshots
+# Compare-InputSnapshot.ps1 -- diff two input snapshots
 # ============================================================================
 #
 # The point of the pair is a single question: is that ghost node NEW, or has it

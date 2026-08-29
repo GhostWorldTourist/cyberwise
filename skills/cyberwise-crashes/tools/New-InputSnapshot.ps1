@@ -1,5 +1,5 @@
 # ============================================================================
-# New-InputSnapshot.ps1 - record the input stack, so "is that normal?" has an answer
+# New-InputSnapshot.ps1 -- record the input stack, so "is that normal?" has an answer
 # ============================================================================
 #
 # WHY THIS EXISTS

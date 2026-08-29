@@ -90,6 +90,7 @@ The fix offered was a small companion mod setting those friction values, loading
 | `cyberwise-hotkeys` | what a key is bound to; generating a cheatsheet |
 | `cyberwise-reports` | mod inventory, system profile, any HTML/markdown deliverable |
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua, finding game text |
+| `cyberwise-netsec` | NetSec logged coverage gaps; turning its diagnostic into places you can teleport to |
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
 | `cyberwise-backstory` | building a character: V's history, voice, roleplay decisions, a dossier |
 | `cyberwise-feedback` | Cyberwise itself got something wrong, or you want to reach the author |
@@ -180,7 +181,7 @@ That register lives in your records folder beside the game's saves, **not in the
 
 ## Included tools
 
-Tools live with the skill that uses them: `cyberwise/tools/` (the backup helper above, which is cross-cutting), `cyberwise-hotkeys/tools/`, `cyberwise-conflicts/tools/`, `cyberwise-crashes/tools/`, `cyberwise-reports/tools/`, `cyberwise-saves/tools/`, `cyberwise-feedback/tools/`, `cyberwise-sitebuilder/tools/` and `cyberwise-recommends/tools/`. `cyberwise/SKILL.md` carries a generated index of every one of them - read it before writing a new tool.
+Tools live with the skill that uses them: `cyberwise/tools/` (the backup helper above, which is cross-cutting), `cyberwise-hotkeys/tools/`, `cyberwise-conflicts/tools/`, `cyberwise-crashes/tools/`, `cyberwise-reports/tools/`, `cyberwise-saves/tools/`, `cyberwise-feedback/tools/`, `cyberwise-sitebuilder/tools/`, `cyberwise-recommends/tools/` and `cyberwise-netsec/tools/`. `cyberwise/SKILL.md` carries a generated index of every one of them - read it before writing a new tool.
 
 `New-ModManifest.ps1` builds a readable inventory of an installed load order: every mod, what it deploys, its Nexus link and install date, and - with an API key - a one-line description of what it actually does. `-HideNSFW` omits adult content.
 

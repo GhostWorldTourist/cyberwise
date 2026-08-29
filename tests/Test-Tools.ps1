@@ -2041,6 +2041,89 @@ $corrupt = Test-RecommendAllowed -Item 'AMM' -RecordsRoot $prefRoot -WarningActi
 if (-not $corrupt) { Ok 'recommends: an unreadable preferences file fails closed' }
 else { Bad 'recommends: an unreadable preferences file fails closed' 'a corrupt file re-enabled recommendations' }
 
+# ============================================== netsec gap waypoints ======
+#
+# Both bugs this tool shipped with FAILED SILENTLY, which is why it is tested
+# against intent rather than against its own implementation:
+#
+#   -notlike '*[NetSec] GAP*' found zero hits in a log holding hundreds. In a
+#   wildcard pattern [NetSec] is a character class, so the test quietly asked a
+#   different question and answered it correctly.
+#
+#   The Steam library unescape was a no-op, so paths came out with doubled
+#   separators - and still worked, because Windows tolerates them.
+#
+# The contract is: GAP lines in, waypoints out, and NOTHING that was already in
+# locations.lua is lost. That last one is the promise made to AMM, which owns
+# that file, and it is the only one whose breakage would cost somebody data.
+
+$gapTool = Join-Path $Root 'skills\cyberwise-netsec\tools\New-GapWaypoints.ps1'
+$gapDir  = Join-Path $sandbox 'netsec'
+$gapGame = Join-Path $gapDir 'game'
+$gapCet  = Join-Path $gapGame 'bin\x64\plugins\cyber_engine_tweaks'
+$gapMon  = Join-Path $gapCet 'mods\cetmonkey'
+New-Item -ItemType Directory -Force -Path $gapMon | Out-Null
+
+# Two tight clusters and one lone hit, written the way NetSec writes them -
+# timestamp, thread id, then the tag.
+$gapLog = Join-Path $gapCet 'scripting.log'
+$gapLines = @()
+foreach ($i in 1..6) { $gapLines += "[2026-08-29 12:00:0$i UTC-04:00] [1234] [NetSec] GAP device no-access-point at=-1000.$i,2000.$i,10.0" }
+foreach ($i in 1..4) { $gapLines += "[2026-08-29 12:01:0$i UTC-04:00] [1234] [NetSec] GAP people no-network at=-3000.$i,4000.$i,20.0" }
+$gapLines += "[2026-08-29 12:02:00 UTC-04:00] [1234] [NetSec] GAP device no-access-point at=-9000.0,9000.0,90.0"
+$gapLines += "[2026-08-29 12:02:01 UTC-04:00] [1234] [NetSec] LOCKED device reason=UNBREACHED ring=0 at=-1.0,1.0,1.0"
+Set-Content -LiteralPath $gapLog -Value $gapLines -Encoding UTF8
+
+# A pre-existing list, as AMM would have generated it.
+$gapLoc = Join-Path $gapMon 'locations.lua'
+Set-Content -LiteralPath $gapLoc -Encoding UTF8 -Value @(
+    '-- locations.lua -- generated from AMM''s User\Locations folder.',
+    'return {',
+    '  {name="BL FT Big Rock", x=4346.65, y=-718.13, z=147.98, w=1, yaw=-179.9},',
+    '  {name="Someone Elses Spot", x=1.0, y=2.0, z=3.0, w=1, yaw=0},',
+    '}')
+
+& $gapTool -GameRoot $gapGame -LocationsPath $gapLoc -Write 2>&1 | Out-Null
+$gapText = Get-Content -LiteralPath $gapLoc -Raw
+
+# ASSERTED ON THE ARTEFACT, NOT ON THE TOOL'S CHATTER. The first version of this
+# matched "GAP lines found: 11" in captured output, which can never work: that
+# line goes out through Write-Host, and Write-Host does not flow into the
+# pipeline. The test failed while the tool was completely correct - a test that
+# fails for a reason unrelated to the behaviour it names is worse than none.
+#
+# The parse is proved by a coordinate from the log surviving into the file. If
+# the bracketed-tag match ever silently stops matching again, no row carries
+# -1000.3 and this fails for the right reason.
+if ($gapText -match 'NETSEC-GAP[^"]*",\s*x=-1000\.3') { Ok 'netsec: GAP lines are parsed, and a [bracketed] tag does not silently match nothing' }
+else { Bad 'netsec: GAP lines are parsed, and a [bracketed] tag does not silently match nothing' 'no waypoint carries a coordinate from the log' }
+
+# LOCKED is the mechanic working and must never be read as a hole.
+if ($gapText -notmatch '(?m)-1\.0.*1\.0.*1\.0') { Ok 'netsec: a LOCKED line is not mistaken for a gap' }
+else { Bad 'netsec: a LOCKED line is not mistaken for a gap' 'the LOCKED coordinate became a waypoint' }
+
+# Six hits within a metre of each other are one place, not six.
+$gapRows = ([regex]'name="NETSEC-GAP').Matches($gapText).Count
+if ($gapRows -eq 2) { Ok 'netsec: nearby hits collapse into one waypoint each, and singletons are dropped' }
+else { Bad 'netsec: nearby hits collapse into one waypoint each, and singletons are dropped' "expected 2 generated rows, got $gapRows" }
+
+# THE ONE THAT WOULD COST DATA.
+if ($gapText -match 'BL FT Big Rock' -and $gapText -match 'Someone Elses Spot') { Ok 'netsec: rows AMM owns survive the merge' }
+else { Bad 'netsec: rows AMM owns survive the merge' 'a pre-existing location was lost' }
+
+# Running twice must not stack duplicates.
+& $gapTool -GameRoot $gapGame -LocationsPath $gapLoc -Write 2>&1 | Out-Null
+$gapAgain = ([regex]'name="NETSEC-GAP').Matches((Get-Content -LiteralPath $gapLoc -Raw)).Count
+if ($gapAgain -eq 2) { Ok 'netsec: a second run replaces its own rows instead of stacking them' }
+else { Bad 'netsec: a second run replaces its own rows instead of stacking them' "expected 2 after re-run, got $gapAgain" }
+
+# Without -Write it is a report and nothing else.
+$gapBefore = Get-Content -LiteralPath $gapLoc -Raw
+& $gapTool -GameRoot $gapGame -LocationsPath $gapLoc 2>&1 | Out-Null
+if ((Get-Content -LiteralPath $gapLoc -Raw) -eq $gapBefore) { Ok 'netsec: without -Write nothing is written' }
+else { Bad 'netsec: without -Write nothing is written' 'the file changed without -Write' }
+
+
 # ========================================================== tool index ====
 #
 # The family ships 30 tools across 11 skills, and the failure that matters is

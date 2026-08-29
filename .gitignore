@@ -20,3 +20,7 @@ problem-report*.md
 # Per-machine agent settings. Not part of the family, and they name local paths.
 .claude/
 .inventory.json
+
+# Release packages are built from a tag, not committed. New-ReleasePackage.ps1
+# writes here, and so does the release workflow.
+build/

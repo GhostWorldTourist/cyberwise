@@ -1,0 +1,79 @@
+# Build the Nexus package when a version tag is pushed, and attach it to a
+# GitHub Release.
+#
+# The point is that the artefact somebody downloads is built by the same script
+# a maintainer runs locally - tools/New-ReleasePackage.ps1 - rather than by a
+# second, drifting copy of the packing rules living in YAML. If the package is
+# wrong, it is wrong in one place.
+#
+# Runs on windows-latest because every tool in this repo is PowerShell and the
+# test suite asserts things about Windows paths and the 5.1 encoding names. A
+# Linux runner would pass a subset and tell you less than nothing.
+
+name: release
+
+on:
+  push:
+    tags:
+      # CalVer: 2026.08.29, and 2026.08.29.1 for a second ship the same day.
+      - '[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]'
+      - '[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9].[0-9]*'
+  # So the packaging can be exercised without cutting a release.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # New-ReleasePackage.ps1 falls back to `git describe` for the version
+          # when none is passed, and that needs the tags.
+          fetch-depth: 0
+
+      # A package that fails its own suite should never reach a download button.
+      - name: Test
+        shell: pwsh
+        run: |
+          $failed = @()
+          foreach ($t in 'Test-Family.ps1', 'Test-Validator.ps1', 'Test-Tools.ps1') {
+            Write-Host "--- $t"
+            & ".\tests\$t" -Quick
+            if ($LASTEXITCODE -ne 0) { $failed += $t }
+          }
+          if ($failed) { throw "failing suite(s): $($failed -join ', ')" }
+
+      - name: Build package
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}"
+          if ($v -notmatch '^\d{4}\.') { $v = Get-Date -Format 'yyyy.MM.dd' }
+          .\tools\New-ReleasePackage.ps1 -Version $v
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cyberwise-package
+          path: build/*.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/*.zip
+          generate_release_notes: true
+          body: |
+            A set of skills that teach an AI coding agent - Claude Code, or
+            Codex - how to diagnose and repair a modded Cyberpunk 2077 install.
+
+            **This is not a game mod.** Nothing is installed with Vortex or MO2
+            and nothing goes into the game folder. Unzip, then in PowerShell:
+
+            ```
+            .\install.ps1
+            ```
+
+            `INSTALL.txt` in the zip says the same thing, for anyone who
+            downloaded it from Nexus and never saw this page.
