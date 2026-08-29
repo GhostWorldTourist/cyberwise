@@ -74,15 +74,29 @@ function Get-ToolPurpose {
         return $null
     }
 
-    if ($lines[0] -match '^#\s*[\w.-]+\.ps1\s+--\s+(.+)$') {
-        $text = $matches[1].Trim()
-        # A purpose that wraps continues on the next comment line. A line that is
-        # blank, or indented as a usage example, is not a continuation.
-        if ($text -notmatch '[.?!]$' -and $lines.Count -gt 1 -and
-            $lines[1] -match '^#\s{1,3}(\S.*)$') {
-            $text = "$text $($matches[1].Trim())"
+    # SCAN THE HEADER, NOT JUST ITS FIRST LINE.
+    #
+    # This read $lines[0] only, so a tool whose header opens with a "# ====="
+    # banner - and several do - indexed as "(no purpose line in header)" no
+    # matter how good the purpose line under it was. Test-Tools.ps1 checks the
+    # same thing across the first twelve lines, so the two disagreed about what
+    # a purpose line even IS: the test passed the tool, the generator filed it
+    # as missing, and the index drifted from what the test expected forever.
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^#\s*[\w.-]+\.ps1\s+--\s+(.+)$') {
+            $text = $matches[1].Trim()
+            # A purpose that wraps continues on the next comment line. A line
+            # that is blank, indented as a usage example, or a RULE OFF - the
+            # "# =====" that closes a banner header - is not a continuation.
+            # Missing that last one appended the banner to the description and
+            # produced an index entry with a row of equals signs in it.
+            if ($text -notmatch '[.?!]$' -and $i + 1 -lt $lines.Count -and
+                $lines[$i + 1] -notmatch '^#\s*[=-]{4,}\s*$' -and
+                $lines[$i + 1] -match '^#\s{1,3}(\S.*)$') {
+                $text = "$text $($matches[1].Trim())"
+            }
+            return $text
         }
-        return $text
     }
     return $null
 }

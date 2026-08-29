@@ -576,10 +576,10 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Find-QuestConflicts.ps1` | `cyberwise-conflicts` | which mods touch a quest, and which of them win. |
 | `Repair-LoadOrder.ps1` | `cyberwise-conflicts` | Check (and optionally repair) the Cyberpunk 2077 archive load order. |
 | `Resolve-ResourcePath.ps1` | `cyberwise-conflicts` | turn archive hashes into file paths, and back. |
-| `Compare-InputSnapshot.ps1` | `cyberwise-crashes` | (no purpose line in header) |
+| `Compare-InputSnapshot.ps1` | `cyberwise-crashes` | diff two input snapshots |
 | `Compare-InstallSnapshot.ps1` | `cyberwise-crashes` | answer "what changed?" |
 | `Invoke-BisectRound.ps1` | `cyberwise-crashes` | park a set of mods, record the round, launch the game. |
-| `New-InputSnapshot.ps1` | `cyberwise-crashes` | (no purpose line in header) |
+| `New-InputSnapshot.ps1` | `cyberwise-crashes` | record the input stack, so "is that normal?" has an answer |
 | `New-InstallSnapshot.ps1` | `cyberwise-crashes` | record what the install looks like right now. |
 | `Register-CrashWatch.ps1` | `cyberwise-crashes` | keep the crash watcher alive without a terminal. |
 | `Save-CrashSnapshot.ps1` | `cyberwise-crashes` | preserve what a relaunch destroys, then state the facts. |
