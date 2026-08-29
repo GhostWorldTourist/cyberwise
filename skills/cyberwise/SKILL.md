@@ -233,8 +233,10 @@ that record covers the moment the user actually ran the game:
 |---|---|---|
 | ArchiveXL | `red4ext\plugins\ArchiveXL\ArchiveXL-*.log` | every `.xl` loaded, `[WorldStreaming]` sector patches, and load failures |
 | TweakXL | `red4ext\plugins\TweakXL\TweakXL-*.log` | every YAML read, and records it refused |
-| RED4ext | `red4ext\logsed4ext-*.log` | every plugin loaded, with version |
-| redscript | `r6\logsedscript_rCURRENT.log` | compile result, and which mod failed |
+| RED4ext | `red4ext\logs
+ed4ext-*.log` | every plugin loaded, with version |
+| redscript | `r6\logs
+edscript_rCURRENT.log` | compile result, and which mod failed |
 | CET | `bind\plugins\cyber_engine_tweaks\scripting.log` | per-mod Lua output and errors |
 
 **A file listing describes this instant; a log describes the run.** A mod that
@@ -574,8 +576,10 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Find-QuestConflicts.ps1` | `cyberwise-conflicts` | which mods touch a quest, and which of them win. |
 | `Repair-LoadOrder.ps1` | `cyberwise-conflicts` | Check (and optionally repair) the Cyberpunk 2077 archive load order. |
 | `Resolve-ResourcePath.ps1` | `cyberwise-conflicts` | turn archive hashes into file paths, and back. |
+| `Compare-InputSnapshot.ps1` | `cyberwise-crashes` | (no purpose line in header) |
 | `Compare-InstallSnapshot.ps1` | `cyberwise-crashes` | answer "what changed?" |
 | `Invoke-BisectRound.ps1` | `cyberwise-crashes` | park a set of mods, record the round, launch the game. |
+| `New-InputSnapshot.ps1` | `cyberwise-crashes` | (no purpose line in header) |
 | `New-InstallSnapshot.ps1` | `cyberwise-crashes` | record what the install looks like right now. |
 | `Register-CrashWatch.ps1` | `cyberwise-crashes` | keep the crash watcher alive without a terminal. |
 | `Save-CrashSnapshot.ps1` | `cyberwise-crashes` | preserve what a relaunch destroys, then state the facts. |
@@ -589,6 +593,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `New-HotkeySheet.ps1` | `cyberwise-hotkeys` | build a self-contained hotkey cheatsheet from the bindings actually present in a Cyberpunk install. |
 | `Get-ModInventory.ps1` | `cyberwise-modbase` | every mod actually deployed, what layers it touches, and its Nexus id where one can be derived. |
 | `New-ModStubs.ps1` | `cyberwise-modbase` | one OKF article per deployed mod, built from the install. |
+| `New-GapWaypoints.ps1` | `cyberwise-netsec` | turn NetSec's GAP diagnostic into CETMonkey teleport waypoints, so the holes in the world can be visited instead of hunted for. |
 | `ModPreference.ps1` | `cyberwise-recommends` | what this user has already said about being recommended things. |
 | `Test-Capabilities.ps1` | `cyberwise-recommends` | what this install cannot do, and what is missing to do it. |
 | `Compare-Collection.ps1` | `cyberwise-reports` | what a curated Nexus collection has that you do not. |
@@ -623,6 +628,7 @@ not cost you anything when the question is about textures.
 | `cyberwise-hotkeys` | what a key is bound to, rebinding, generating a hotkey cheatsheet |
 | `cyberwise-reports` | inventory the mod list, profile the machine, or generate any HTML/markdown deliverable |
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua and console commands, finding game text |
+| `cyberwise-netsec` | NetSec logged coverage gaps; turning its diagnostic into places you can teleport to; planning where access points belong |
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
 | `cyberwise-backstory` | building a character - V's history, voice, roleplay decisions, a dossier |
 | `cyberwise-sitebuilder` | publish character documents, or anything else here, as a shareable website |

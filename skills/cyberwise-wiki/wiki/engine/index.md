@@ -14,3 +14,4 @@ appear here only as examples.
 - [The game's own option registry outranks any mod's account of an engine setting](/engine/option-registry-is-the-authority) - what `UserSettings.json` settles that no mod file can
 - [What a vendor will buy is decided by tag filters, and one record can be every vendor of a kind](/engine/vendor-buy-filters-and-shared-records) - the four tag arrays, and why one edit is inert on one record and city-wide on the next
 - [Looted gear arriving broken is two TweakDB flats, and the words on screen may belong to a different mod](/engine/looted-items-can-arrive-broken) - the chance, the relabelling, and a settings toggle inert because of its own code
+- [An access point answers "who is on this network" with two different functions](/engine/network-membership-has-two-functions) - GetPuppets does not route through GetImmediateSlaves, so a device-graph wrap is invisible to every NPC path, and vanilla's failed-breach response is a distraction stim
