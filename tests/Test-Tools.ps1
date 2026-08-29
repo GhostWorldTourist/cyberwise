@@ -1993,8 +1993,8 @@ $capJson = (Get-AllOutput { & $capTool -GameRoot $recGame -Json }) -join "`n"
 $known = 'bin\x64\plugins', 'red4ext\plugins', 'r6\scripts', 'archive\pc\mod', 'mods\', 'r6\tweaks'
 $badProbe = @()
 foreach ($m in [regex]::Matches($capJson, '"([A-Za-z0-9_\\ .-]+(?:\\[A-Za-z0-9_ .-]+)+)"')) {
-    $v = $m.Groups[1].Value -replace '\\', '\'
-    if ($v -match '^(bin|red4ext|r6|archive|mods)\') {
+    $v = $m.Groups[1].Value -replace '\\\\', '\'
+    if ($v -match '^(bin|red4ext|r6|archive|mods)\\') {
         if (-not ($known | Where-Object { $v.StartsWith($_) })) { $badProbe += $v }
     }
 }
@@ -2245,7 +2245,7 @@ $missCode = $LASTEXITCODE
 
 $pmProblems = @(
     if ($pmCode -ne 0)                        { 'installed mods were reported as missing' }
-    if ($pmOut -notmatch 'archive\pc\mod')  { 'it did not say WHERE the mod lives' }
+    if ($pmOut -notmatch ([regex]::Escape('archive\pc\mod')))  { 'it did not say WHERE the mod lives' }
     if ($missCode -eq 0)                      { 'an uninstalled mod passed the check' }
     if ($missOut -notmatch 'GhostMod')        { 'the absent mod was not named' }
     if ($missOut -notmatch '(?i)not installed|NOT FOUND') { 'the output does not say it is not installed' }
