@@ -43,16 +43,15 @@ jobs:
       - name: Test
         shell: pwsh
         run: |
-          $suites = @(
-            @{ name = 'Test-Family.ps1';    args = @() },
-            @{ name = 'Test-Validator.ps1'; args = @() },
-            @{ name = 'Test-Tools.ps1';     args = @('-Quick') }
-          )
           $failed = @()
-          foreach ($s in $suites) {
-            Write-Host "--- $($s.name)"
-            & ".\tests\$($s.name)" @($s.args)
-            if ($LASTEXITCODE -ne 0) { $failed += $s.name }
+          foreach ($t in 'Test-Family.ps1', 'Test-Validator.ps1', 'Test-Tools.ps1') {
+            Write-Host "--- $t"
+            # No splatting. @($x) is an ARRAY SUBEXPRESSION, not a splat -
+            # PowerShell only splats from a variable - so it went in as the first
+            # POSITIONAL argument and bound to Test-Family's $Root. Two failed
+            # runs, both from writing PowerShell into YAML and not running it.
+            if ($t -eq 'Test-Tools.ps1') { & ".\tests\$t" -Quick } else { & ".\tests\$t" }
+            if ($LASTEXITCODE -ne 0) { $failed += $t }
           }
           if ($failed) { throw "failing suite(s): $($failed -join ', ')" }
 
