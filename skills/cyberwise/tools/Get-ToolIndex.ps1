@@ -148,7 +148,16 @@ if ($si -lt 0 -or $ei -lt 0 -or $ei -lt $si) {
 $existing = $md.Substring($si + $startMark.Length, $ei - $si - $startMark.Length).Trim()
 
 if ($Check) {
-    if ($existing -eq $tableText) {
+    # COMPARE THE CONTENT, NOT THE LINE ENDINGS.
+    #
+    # $existing comes off disk - CRLF after a normal checkout - while $tableText
+    # is built here with LF. A raw -eq between them is a comparison of newline
+    # conventions wearing the costume of a drift check, and it can only pass on a
+    # machine where this tool wrote the file last, bypassing git. It reported
+    # "same tools, changed description(s)" for six CI runs while every row was
+    # byte-identical.
+    $norm = { param($t) ($t -replace "`r`n", "`n").TrimEnd() }
+    if ((& $norm $existing) -eq (& $norm $tableText)) {
         Write-Host "tool index is current ($($rows.Count) tools)" -ForegroundColor Green
         exit 0
     }
