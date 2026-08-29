@@ -1,0 +1,26 @@
+# Line endings, made deterministic.
+#
+# Without this the repo had none, core.autocrlf decided per machine, and
+# skills/cyberwise/SKILL.md sat at "i/lf w/mixed" - LF in the index, mixed in
+# one working tree, uniform CRLF in a fresh checkout. Get-ToolIndex regenerates
+# that table and compares it to the file, so the check passed on the machine
+# that wrote it and could not pass anywhere else. CI called it drift six times.
+#
+# It also matters beyond that one test: upstream.manifest hashes file CONTENTS,
+# so a repo whose bytes depend on who checked it out can never verify anywhere
+# but where it was generated.
+#
+# This is a Windows-only toolkit - every tool is PowerShell and the suite
+# asserts Windows paths - so CRLF in the working tree is the honest choice.
+* text=auto eol=crlf
+
+# Never touched.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.zip  binary
+*.exe  binary
+*.dll  binary
+*.archive binary
