@@ -45,7 +45,7 @@ Then decode what CET actually stored. `bindings.json` packs a chord into four
 16-bit slots, most significant first:
 
 ```powershell
-$v = (Get-Content '<game>ind\plugins\cyber_engine_tweaksindings.json' -Raw |
+$v = (Get-Content '<game>\bin\x64\plugins\cyber_engine_tweaks\bindings.json' -Raw |
       ConvertFrom-Json -AsHashtable).cet.overlay_key
 0..3 | ForEach-Object { [math]::Floor($v / [math]::Pow(2, 48 - 16*$_)) % 65536 }
 ```
@@ -58,7 +58,7 @@ without it.
 **3. Did CET's render layer ever start?**
 
 ```powershell
-Select-String '<game>ind\plugins\cyber_engine_tweaks\cyber_engine_tweaks.log' -Pattern 'D3D12::Initialize'
+Select-String '<game>\bin\x64\plugins\cyber_engine_tweaks\cyber_engine_tweaks.log' -Pattern 'D3D12::Initialize'
 ```
 
 A working session logs `D3D12::Initialize() - initialization successful!` about a

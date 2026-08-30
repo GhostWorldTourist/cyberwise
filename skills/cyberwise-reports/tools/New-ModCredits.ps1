@@ -149,8 +149,8 @@ if ($Md) {
     [void]$sb.AppendLine("$($mods.Count) mods. $($authors.Count) authors. $single of them made exactly one thing.")
     [void]$sb.AppendLine()
     if ($authors.Count -eq 0) {
-        [void]$mb.AppendLine('No authors on record yet - run `New-ModManifest.ps1` with a Nexus API key once and this fills in.')
-        [void]$mb.AppendLine()
+        [void]$sb.AppendLine('No authors on record yet - run `New-ModManifest.ps1` with a Nexus API key once and this fills in.')
+        [void]$sb.AppendLine()
     }
     foreach ($a in $authors) {
         $list = $byAuthor[$a]

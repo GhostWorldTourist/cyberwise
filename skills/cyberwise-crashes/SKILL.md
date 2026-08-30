@@ -31,7 +31,7 @@ skipped.
 **0. Preserve, before anything else - including thinking.**
 
 ```powershell
-.	ools\Save-CrashSnapshot.ps1 -GameRoot '<path>'
+.\tools\Save-CrashSnapshot.ps1 -GameRoot '<path>'
 ```
 
 A relaunch destroys the evidence. `redscript_rCURRENT.log` is replaced at every

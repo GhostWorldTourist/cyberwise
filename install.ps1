@@ -64,7 +64,7 @@ function Install-Family {
                 #
                 # A link pointing somewhere else belongs to another install and
                 # is none of our business.
-                $actual = try { [IO.Path]::GetFullPath([string]@($item.Target)[0], (Split-Path -Parent $link)) } catch { $null }
+                $actual = try { [IO.Path]::GetFullPath([IO.Path]::Combine((Split-Path -Parent $link), [string]@($item.Target)[0])) } catch { $null }
                 if ($actual -and $actual -ne [IO.Path]::GetFullPath($target)) {
                     Write-Host "  skipped $($skill.Name) - points at another copy ($actual)" -ForegroundColor DarkGray
                     continue
@@ -96,7 +96,7 @@ function Install-Family {
             # invisible to both agents and re-running this script said everything
             # was fine. A stale link and a good one look identical until you
             # resolve the target.
-            $actual = try { [IO.Path]::GetFullPath([string]@($item.Target)[0], (Split-Path -Parent $link)) } catch { $null }
+            $actual = try { [IO.Path]::GetFullPath([IO.Path]::Combine((Split-Path -Parent $link), [string]@($item.Target)[0])) } catch { $null }
             if ($actual -and $actual -eq [IO.Path]::GetFullPath($target)) {
                 Write-Host "  already linked: $($skill.Name)" -ForegroundColor DarkGray
                 continue

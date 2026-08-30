@@ -180,7 +180,7 @@ in the player's inventory, which status effects are applied, what a vendor reall
 stocks - is answerable only from inside the running game, and CETMonkey is how.
 
 ```
-bind\plugins\cyber_engine_tweaks\mods\cetmonkey\scripts\*.lua
+bin\x64\plugins\cyber_engine_tweaks\mods\cetmonkey\scripts\*.lua
 ```
 
 **List that folder before writing anything.** Each script's first two comment
@@ -233,11 +233,9 @@ that record covers the moment the user actually ran the game:
 |---|---|---|
 | ArchiveXL | `red4ext\plugins\ArchiveXL\ArchiveXL-*.log` | every `.xl` loaded, `[WorldStreaming]` sector patches, and load failures |
 | TweakXL | `red4ext\plugins\TweakXL\TweakXL-*.log` | every YAML read, and records it refused |
-| RED4ext | `red4ext\logs
-ed4ext-*.log` | every plugin loaded, with version |
-| redscript | `r6\logs
-edscript_rCURRENT.log` | compile result, and which mod failed |
-| CET | `bind\plugins\cyber_engine_tweaks\scripting.log` | per-mod Lua output and errors |
+| RED4ext | `red4ext\logs\red4ext-*.log` | every plugin loaded, with version |
+| redscript | `r6\logs\redscript_rCURRENT.log` | compile result, and which mod failed |
+| CET | `bin\x64\plugins\cyber_engine_tweaks\scripting.log` | per-mod Lua output and errors |
 
 **A file listing describes this instant; a log describes the run.** A mod that
 was installed, tested, found wanting and uninstalled leaves an empty folder and
@@ -262,10 +260,10 @@ The base game is a **file on disk**. Read it before saying what is in it.
 
 ```powershell
 # what shipped with the game        vs        what is live with mods loaded
-r6\cacheinal.redscripts                     r6\cacheinal.redscripts.modded
+r6\cache\final.redscripts                     r6\cache\final.redscripts.modded
 ```
 
-Check the mtimes and sizes first. `r6\cache\moddedinal.redscripts` is a
+Check the mtimes and sizes first. `r6\cache\modded\final.redscripts.modded` is a
 DIFFERENT and often **stale** file - on one install it was four days old and
 16 MB while the live modded bundle beside it was 40 MB and rewritten at every
 launch. Claims sourced from it were claims about a snapshot nobody was running.
@@ -355,7 +353,7 @@ as instruction, and only when it is actually true in general.
 One WMI query, before any software:
 
 ```powershell
-cyberwise-hotkeys	ools\Get-Hotkeys.ps1 -Devices
+cyberwise-hotkeys\tools\Get-Hotkeys.ps1 -Devices
 ```
 
 It names every keyboard the machine has, flags virtual endpoints, and says what

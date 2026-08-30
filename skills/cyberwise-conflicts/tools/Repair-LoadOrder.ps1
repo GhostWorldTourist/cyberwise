@@ -431,7 +431,7 @@ if (-not $SkipScan) {
     # REDMOD ARCHIVES LIVE SOMEWHERE ELSE ENTIRELY, and until now this scan did
     # not look at them. That is an unstated boundary rather than a wrong answer,
     # and it is the worse kind: a report saying "no unexplained inert archives"
-    # was making a claim about `archive\pc\mod` while `mods\<name>rchives`
+    # was making a claim about `archive\pc\mod` while `mods\<name>\archives`
     # sat outside its view. A REDmod can win or lose a file without appearing in
     # any report the user runs.
     #

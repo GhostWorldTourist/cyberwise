@@ -391,7 +391,7 @@ convincing wrong answers before being caught:
 
   It fails two ways, and the quiet one is worse: `Split-Path` and `Join-Path`
   reject the empty string loudly, so those at least stop - but
-  `"$PSScriptRoot	hemes"` silently becomes `"	hemes"`, the root of whatever
+  `"$PSScriptRoot\themes"` silently becomes `"\themes"`, the root of whatever
   drive is current. `$MyInvocation.MyCommand.Path` is **not** a workaround; it
   is null in the same position. Leave the parameter undefaulted and resolve it
   in the body:

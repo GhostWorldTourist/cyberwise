@@ -2708,7 +2708,7 @@ $dMdBad = @(
     if ($dMdText -notmatch '(?m)^# Spaced Name') { 'the markdown does not name the mod' }
     if ($dMdText -notmatch '(?m)^\| Layer \| State \| Detail \|') { 'the markdown has no layer table' }
     if ($dMdText -notmatch 'not in modlist\.txt') { 'the markdown drops the finding the HTML reports' }
-    if ($dMdText -match "(?i)\$([regex]::Escape($env:USERNAME))") { 'the Windows username is in the markdown' }
+    if ($dMdText -match "(?i)\\$([regex]::Escape($env:USERNAME))\b") { 'the Windows username is in the markdown' }
 )
 if ($dMdBad) { Bad 'dossier: the markdown variant carries the same facts, redacted' ($dMdBad -join "`n") }
 else         { Ok  'dossier: the markdown variant carries the same facts, redacted' }

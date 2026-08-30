@@ -354,6 +354,26 @@ Check 'any skill that advises writing into an install names the backup helper' {
 
 # ------------------------------------------------------------------- tools --
 
+# A C-style unescape once ran over these files: \t became a TAB, \b a backspace,
+# \f a form feed, \a a bell, \x64 the letter d - so `bin\x64\plugins` shipped as
+# `bind\plugins` and `\tools\` as a TAB. Agents follow those paths verbatim.
+# Nothing caught it, and worse, the corruption HID it: the tool-path check below
+# needs a literal `tools/`, which a TAB does not match, so the two broken
+# invocations were skipped by the very check meant to find them.
+Check 'no shipped file contains a control character' {
+    foreach ($f in (Get-ChildItem -LiteralPath $Root -Recurse -File -Include *.md, *.ps1, *.yaml, *.psd1)) {
+        if ($f.FullName -match '\\(build|\.git)\\') { continue }
+        $text = [IO.File]::ReadAllText($f.FullName)
+        # Tab is excluded: it is legitimate leading whitespace in some files.
+        # Everything else in C0 is an unescape artefact, not something anybody types.
+        $hit = [regex]::Match($text, "[\x00-\x08\x0b\x0c\x0e-\x1f]")
+        if ($hit.Success) {
+            $line = ($text.Substring(0, $hit.Index) -split "`n").Count
+            "{0}:{1}: control character 0x{2:X2} - an unescaped \b \f \a or \r" -f $f.Name, $line, [int]$hit.Value[0]
+        }
+    }
+}
+
 Check 'every shipped .ps1 parses' {
     foreach ($f in (Get-ChildItem -LiteralPath $Root -Filter *.ps1 -Recurse)) {
         $errs = $null
