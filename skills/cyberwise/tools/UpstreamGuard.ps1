@@ -512,7 +512,7 @@ function Register-CwChange {
         Register-CwChange -File 'skills\cyberwise\tools\Test-InstallReady.ps1' `
             -What 'raised the archive-count warning threshold from 200 to 600' `
             -Why  'this install runs 425 archives, so the warning fired every run and stopped being read' `
-            -ApprovedBy 'tohuw'
+            -ApprovedBy 'you'
     #>
     [CmdletBinding()]
     param(

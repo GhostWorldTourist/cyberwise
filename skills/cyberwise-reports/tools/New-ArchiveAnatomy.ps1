@@ -198,7 +198,7 @@ $archives = New-Object System.Collections.Generic.List[object]
 $sw.Restart()
 $k = 0
 foreach ($f in $files) {
-    $isRedmod = $f.FullName -notlike "$modDir\*"
+    $isRedmod = -not $f.FullName.StartsWith("$modDir\", [StringComparison]::OrdinalIgnoreCase)
     $name = if ($isRedmod) { 'redmod:' + $f.Directory.Parent.Name + '/' + $f.Name } else { $f.Name }
     $hs = Get-ArchiveHashes $f.FullName
     if ($null -eq $hs) { Write-Warning "unreadable (not RDAR): $name"; continue }

@@ -467,12 +467,12 @@ if (-not $NoMouseProfile) {
             # empty, accusatory "bound to nothing".
             if ($m.Kind -ne 'key remap') { $mouseOther += $m; continue }
             $canon = Get-KeyIdentity $m.Key
-            $hits  = @($binds | Where-Object { (Get-KeyIdentity $_.Key) -eq $canon })
+            $hits  = @($binds | Where-Object { (Get-KeyIdentitySet $_.Key) -contains $canon })
             # Kept apart from $hits so the sheet can say WHICH claims the key.
             # "the base game uses this" and "a mod uses this" are different
             # answers to the user's actual question, which is whether pressing
             # the button will do something.
-            $vhits = @($vanillaBinds | Where-Object { (Get-KeyIdentity $_.Key) -eq $canon })
+            $vhits = @($vanillaBinds | Where-Object { (Get-KeyIdentitySet $_.Key) -contains $canon })
             $mouseRows += [pscustomobject]@{
                 Button      = $m.Button
                 Label       = $m.Action     # what the USER called it in iCUE

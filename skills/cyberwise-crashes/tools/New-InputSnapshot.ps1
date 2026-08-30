@@ -157,7 +157,7 @@ foreach ($bp in $bindPathCandidates) {
         try {
             $b = Get-Content $bp -Raw | ConvertFrom-Json
             $v = [int64]$b.cet.overlay_key
-            $slots = @(($v -shr 48) -band 0xFFFF, ($v -shr 32) -band 0xFFFF, ($v -shr 16) -band 0xFFFF, $v -band 0xFFFF)
+            $slots = @((($v -shr 48) -band 0xFFFF), (($v -shr 32) -band 0xFFFF), (($v -shr 16) -band 0xFFFF), ($v -band 0xFFFF))
             $note = if ($slots[0] -eq 255) { 'POISONED: HID filler 255 in first slot' }
                     elseif ($v -eq 0)      { 'UNBOUND: CET will force first-time setup' }
                     else                   { 'ok' }

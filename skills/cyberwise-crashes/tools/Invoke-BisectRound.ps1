@@ -251,7 +251,7 @@ if (-not $Plan) { Assert-GameClosed "parking round $Round" }
 $names = @()
 foreach ($p in $Park) {
     if ((Test-Path -LiteralPath $p) -and -not (Get-Item -LiteralPath $p).PSIsContainer) {
-        $names += @(Get-Content -LiteralPath $p | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
+        $names += @(Get-Content -LiteralPath $p | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -notmatch '^#\s' })
     } else {
         $names += $p
     }

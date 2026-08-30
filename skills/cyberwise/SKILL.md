@@ -583,8 +583,8 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Save-CrashSnapshot.ps1` | `cyberwise-crashes` | preserve what a relaunch destroys, then state the facts. |
 | `Watch-CrashDump.ps1` | `cyberwise-crashes` | catch the exception the game swallows, and name the module. |
 | `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
-| `Get-InstallHistory.ps1` | `cyberwise-forensics` | reconstruct what changed on the install after the fact, with no snapshot taken beforehand. |
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
+| `Get-InstallHistory.ps1` | `cyberwise-forensics` | reconstruct what changed on a modded install, after the fact, from evidence that is already on disk. |
 | `DeviceGeometry.ps1` | `cyberwise-hotkeys` | where a device's buttons physically ARE, read from the user's own wiki bundle rather than from a table shipped inside the tool. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
 | `Get-MouseProfile.ps1` | `cyberwise-hotkeys` | read the key remaps a Corsair iCUE profile puts on a programmable mouse, so they can be joined to what the game does with them. |

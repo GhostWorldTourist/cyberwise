@@ -251,7 +251,7 @@ that this family needs nothing installed.
 - upstream: 41AB...      <- what the manifest said at the time
 - copy: changes/2026-08-25-cyberwise-tools-test-installready.mine
 - reapply: re-derive
-- approved-by: tohuw
+- approved-by: the install owner
 - recorded: 2026-08-25T09:14:00-04:00
 
 **What changed.** Raised the archive-count warning threshold from 200 to 600.
