@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cyberwise: Handover"
+  short_description: "The morning handover after a long unattended run"
+  default_prompt: "Use $cyberwise-handover to write up what happened during the run."

@@ -1,0 +1,170 @@
+<title>HANDOVER // CYBERPUNK 2077</title>
+<style>
+:root{
+  --yellow:#fcee0a; --cyan:#00f0ff; --red:#ff003c; --green:#39ff88; --amber:#ffa629;
+  --bg:#07070a; --panel:#101018; --panel2:#16161f; --line:#26263a;
+  --text:#d8d8e6; --dim:#7c7c92;
+  --mono:'Consolas','SF Mono','DejaVu Sans Mono',monospace;
+  --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:15px; line-height:1.55;
+  background-image:
+    linear-gradient(rgba(252,238,10,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(252,238,10,.022) 1px,transparent 1px);
+  background-size:44px 44px;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 22px 90px}
+
+/* masthead */
+header{padding:52px 0 20px;border-bottom:1px solid var(--line)}
+h1{
+  font-family:var(--mono); font-size:clamp(28px,5vw,54px); font-weight:700;
+  letter-spacing:.1em; margin:0; color:var(--yellow); text-transform:uppercase;
+  text-shadow:2px 0 var(--red),-2px 0 var(--cyan);
+}
+h1 span{color:var(--text);text-shadow:none}
+.sub{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--dim);margin-top:10px}
+.lede{max-width:66ch;margin:22px 0 0;color:var(--text)}
+
+/* nav */
+nav{
+  position:sticky; top:0; z-index:20; background:rgba(7,7,10,.94);
+  border-bottom:1px solid var(--line); margin-bottom:34px;
+  display:flex; flex-wrap:wrap; gap:2px; padding:9px 0;
+}
+nav a{
+  font-family:var(--mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase;
+  color:var(--dim); text-decoration:none; padding:6px 11px; border:1px solid transparent;
+}
+nav a:hover,nav a:focus-visible{color:var(--yellow);border-color:var(--line);outline:none}
+
+/* scoreboard */
+.scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:44px}
+.score{background:var(--panel);padding:16px 18px}
+.score b{display:block;font-family:var(--mono);font-size:30px;font-weight:700;color:var(--yellow);line-height:1;font-variant-numeric:tabular-nums}
+.score span{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin-top:7px}
+
+/* sections */
+section{margin-bottom:46px;scroll-margin-top:60px}
+.shead{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;border-left:3px solid var(--yellow);padding-left:13px;margin-bottom:14px}
+.snum{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.1em}
+h2{font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin:0;color:var(--text);flex:1 1 300px}
+.chip{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:4px 9px;border:1px solid currentColor;white-space:nowrap}
+.k-ship{color:var(--green)} .k-ans{color:var(--cyan)}
+.k-dec{color:var(--amber)}  .k-you{color:var(--red)} .k-open{color:var(--dim)}
+p{max-width:70ch;margin:0 0 14px}
+h3{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:24px 0 10px}
+strong{color:#fff}
+code{font-family:var(--mono);font-size:.86em;background:var(--panel2);border:1px solid var(--line);padding:.08em .32em;word-break:break-word}
+a{color:var(--cyan)}
+
+/* data */
+.scroll{overflow-x:auto;border:1px solid var(--line);background:var(--panel);margin-bottom:18px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:540px}
+th{font-family:var(--mono);text-align:left;font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);padding:9px 13px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.mono,th.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.6;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--cyan);padding:13px 15px;overflow-x:auto;margin:0 0 18px}
+.note{border:1px solid var(--line);border-left:3px solid var(--cyan);background:var(--panel);padding:13px 16px;margin:0 0 18px;max-width:74ch}
+.note.bad{border-left-color:var(--red)} .note.warn{border-left-color:var(--amber)}
+.note .lbl{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.note p:last-child{margin-bottom:0}
+ul{max-width:70ch;padding-left:19px;margin:0 0 14px}
+li{margin-bottom:6px}
+footer{border-top:1px solid var(--line);margin-top:50px;padding-top:18px;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em}
+@media (max-width:620px){.wrap{padding:0 14px 60px}header{padding-top:32px}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <h1>Hand<span>over</span></h1>
+  <div class="sub">&lt;DATE RANGE&gt; // &lt;N&gt; TASKS // &lt;N&gt; AGENTS DISPATCHED</div>
+  <p class="lede">One paragraph: what the run was for, and which section they should
+  read first. Name it explicitly - do not make them find the important one.</p>
+</header>
+
+<nav aria-label="Sections">
+  <a href="#s1">01 First task</a>
+  <a href="#s2">02 Second task</a>
+  <a href="#s3">03 Third task</a>
+  <a href="#errors">Errors</a>
+  <a href="#open">What's open</a>
+</nav>
+
+<div class="scores">
+  <div class="score"><b>0</b><span>packages shipped</span></div>
+  <div class="score"><b>0</b><span>commits pushed</span></div>
+  <div class="score"><b>0</b><span>tests green</span></div>
+  <div class="score"><b>0</b><span>findings</span></div>
+  <div class="score"><b>0</b><span>needs you</span></div>
+</div>
+
+<section id="s1">
+  <div class="shead"><span class="snum">01</span><h2>A task that finished</h2><span class="chip k-ship">shipped</span></div>
+  <p>What was done, then the evidence it was done. A claim and its proof belong in
+  the same breath.</p>
+  <pre>Test-Family     22 passed, 0 failed
+Test-Tools     169 passed, 0 failed</pre>
+  <div class="scroll"><table>
+    <thead><tr><th>Mod</th><th>What was wrong</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Example Mod</strong><br><span class="mono">12345</span></td>
+          <td>The specific line, quoted</td>
+          <td>What it broke, and whether it is fixed</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn"><span class="lbl">Bounds on this</span>
+  <p>What the check could <em>not</em> see. A scan that covered 77 of 140 sectors
+  did not clear the other 63, and saying so here is worth more than the finding.</p></div>
+</section>
+
+<section id="s2">
+  <div class="shead"><span class="snum">02</span><h2>A task needing their call</h2><span class="chip k-dec">needs a decision</span></div>
+  <p>Do the work, then present the choice. Two routes with an honest trade beats a
+  recommendation with the trade hidden - but still say which you would take.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Route</th><th>You get</th><th>You lose</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Route A</strong></td><td>The upside</td><td>The real cost</td></tr>
+      <tr><td><strong>Route B</strong></td><td>The upside</td><td>The real cost</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="s3">
+  <div class="shead"><span class="snum">03</span><h2>A question that was asked</h2><span class="chip k-ans">answered</span></div>
+  <p>The answer first, the reasoning second, the caveat third.</p>
+  <div class="note"><span class="lbl">The finding</span>
+  <p>State it plainly enough to be quoted back at you.</p></div>
+</section>
+
+<section id="errors">
+  <div class="shead"><span class="snum">✱</span><h2>What I got wrong</h2><span class="chip k-open">corrected</span></div>
+  <p>Every mistake made during the run, with what the truth turned out to be. This
+  section is what makes the rest of the page worth trusting; a handover with only
+  wins has to be independently checked, which defeats the point of writing it.</p>
+  <ul>
+    <li><strong>The claim</strong> — what was actually true, and how it was found out.</li>
+  </ul>
+</section>
+
+<section id="open">
+  <div class="shead"><span class="snum">✱</span><h2>What's open</h2><span class="chip k-you">needs you</span></div>
+  <p>The short list. Nothing here can move without them. Every item re-checked
+  immediately before this page was written.</p>
+  <ul>
+    <li><strong>The thing</strong> — why it is blocked, and the single next action.</li>
+  </ul>
+</section>
+
+<footer>
+  &lt;PROJECT&gt; // &lt;DATE&gt; // &lt;N&gt; commits // &lt;N&gt; tests green // nothing written into the game install
+</footer>
+
+</div>

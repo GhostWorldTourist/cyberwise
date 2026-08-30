@@ -671,6 +671,7 @@ not cost you anything when the question is about textures.
 | `cyberwise-recommends` | a task needs a tool this install lacks; before mentioning any mod nobody asked about |
 | `cyberwise-hotkeys` | what a key is bound to, rebinding, generating a hotkey cheatsheet |
 | `cyberwise-reports` | inventory the mod list, profile the machine, or generate any HTML/markdown deliverable |
+| `cyberwise-handover` | signing off from a long unattended run; "what got done overnight"; turning a batch of findings into one page someone can triage |
 | `cyberwise-tweaks` | TweakXL/TweakDB edits, CET Lua and console commands, finding game text |
 | `cyberwise-netsec` | NetSec logged coverage gaps; turning its diagnostic into places you can teleport to; planning where access points belong |
 | `cyberwise-reshade` | ReShade add-on builds, shader pack collisions |
