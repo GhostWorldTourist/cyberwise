@@ -445,7 +445,7 @@ Assert-Detects 'an all-pairs pattern obeyed instead of refused' $repairRel `
 # that always passes turns it back into a hand-kept list: right the day it was
 # written, quietly wrong after, and trusted the whole time.
 Assert-Detects 'a tool index check that always passes' $indexRel `
-    'if ($existing -eq $tableText) {' `
+    'if ((& $norm $existing) -eq (& $norm $tableText)) {' `
     'if ($true) {' `
     'a tool missing from the index is named'
 
