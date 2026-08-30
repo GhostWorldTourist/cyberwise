@@ -585,6 +585,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Save-CrashSnapshot.ps1` | `cyberwise-crashes` | preserve what a relaunch destroys, then state the facts. |
 | `Watch-CrashDump.ps1` | `cyberwise-crashes` | catch the exception the game swallows, and name the module. |
 | `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
+| `Get-InstallHistory.ps1` | `cyberwise-forensics` | reconstruct what changed on the install after the fact, with no snapshot taken beforehand. |
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
 | `DeviceGeometry.ps1` | `cyberwise-hotkeys` | where a device's buttons physically ARE, read from the user's own wiki bundle rather than from a table shipped inside the tool. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
@@ -623,6 +624,7 @@ not cost you anything when the question is about textures.
 |---|---|
 | `cyberwise-conflicts` | a mod is installed but does nothing; textures or body parts look wrong; load order, override direction, inert archives, `.archive` internals |
 | `cyberwise-crashes` | the game crashes, hangs or fails to launch; reading logs; finding which mod is responsible |
+| `cyberwise-forensics` | it worked before and does not now; what changed on the install between two dates; which mod ships a given file; every version of a mod ever downloaded |
 | `cyberwise-saves` | reading a save, character appearance data, ACU appearance presets |
 | `cyberwise-recommends` | a task needs a tool this install lacks; before mentioning any mod nobody asked about |
 | `cyberwise-hotkeys` | what a key is bound to, rebinding, generating a hotkey cheatsheet |

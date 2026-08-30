@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cyberwise: Forensics"
+  short_description: "Reconstruct what changed on the install, without a snapshot"
+  default_prompt: "Use $cyberwise-forensics to work out what changed on my install since it last worked."
