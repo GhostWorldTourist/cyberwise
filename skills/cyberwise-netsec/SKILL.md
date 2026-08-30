@@ -112,6 +112,20 @@ Not parsed by this tool, but worth knowing when reading a log by hand:
 entrance in the data that does not exist in the world. If someone asks for
 placement candidates and the GAP list is thin, those are the next thing to read.
 
+## When an access point looks wrong for the scene
+
+`references/jack-in-objects.md` catalogues every world object that carries a
+jack-in slot, with verified depot paths - vending machines, forklifts, the
+antenna pole, terminals, arcade cabinets - and, more usefully, the ones that
+merely *look* like they should and do not (the big satellite dish, electrical
+poles, the netrunner chair).
+
+Read it before substituting a prop, because a jack-in slot is not a way in. Only
+`AccessPointControllerPS` opens a network on its own; everything else needs
+`hasNetworkBackdoor` set **and** a connection to an access point that already
+exists. Placing a vending machine where you meant to place an access point
+produces something V can jack into that breaches nothing.
+
 ## Related
 
 - The mod: `~/repos/cp2077-netsec`
