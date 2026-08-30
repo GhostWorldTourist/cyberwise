@@ -27,10 +27,51 @@ It is not, quite. The install remembers in four independent places:
 | **downloads file NAME** | when Nexus published it |
 | deployed file mtime | when it last reached the game folder |
 
-The third is the one people miss. **Vortex never deletes an archive you have
-downloaded**, so the downloads folder is a version history you did not know you
-were keeping. Two archives for one mod six months apart means that mod changed
-under you, and the second date is when.
+The third is useful **when the archive is still there**, and that is the
+limitation to state before anything else.
+
+> **Downloads are not a reliable history.** An earlier version of this skill
+> claimed Vortex never deletes a downloaded archive, so the downloads folder was
+> a free version history. That is false. People delete downloads deliberately -
+> a hoard of mods you will never reinstall is clutter - and this user does. A
+> forensic tool built on that assumption returns *less* history the tidier its
+> owner is, which is exactly backwards.
+
+So do not infer history. **Record it.** `Write-InstallLedger.ps1` appends what
+the install looks like to a compressed, permanent ledger, and the downloads
+folder becomes a bonus source rather than the foundation.
+
+## The ledger
+
+```powershell
+tools\Write-InstallLedger.ps1            # append if anything changed
+tools\Write-InstallLedger.ps1 -Stat      # what it costs and how far back it goes
+tools\Write-InstallLedger.ps1 -WhatIfOnly
+```
+
+Call it from whatever already runs at game launch - the crash watcher registered
+by `cyberwise-crashes` is the natural host. It is safe to call as often as you
+like: **an unchanged install appends nothing at all.**
+
+It tracks deployed archives and `.xl` files, RED4ext DLLs, script/tweak/CET
+folder contents, and Vortex staging folder names - name, size, mtime, not
+contents. The question is "what was present and when did it change", and hashing
+700 archives every launch is not free.
+
+| | measured on a 707-archive install |
+|---|---|
+| items tracked | 2,584 |
+| first entry (full baseline) | 48 KB compressed, 152 KB raw |
+| an unchanged launch | 0 bytes - nothing is written |
+| a launch where you changed nothing but played | 0 bytes |
+
+Only the first entry is a full snapshot; everything after is a delta of what was
+added, changed and removed. Growth is set by how often you actually change mods,
+not by how often you launch, so keeping it forever is the cheap option.
+
+**The staging folder name is the part worth preserving.** It carries the mod's
+Nexus id and, through its mtime, when it was installed - and it is the only
+place that survives after the download is deleted.
 
 ## This skill never writes
 
@@ -52,7 +93,7 @@ skills\cyberwise-forensics\tools\Get-InstallHistory.ps1 -Mod 'Longer Lockdown'
 | `-WorkingOn <date>` | it worked then; everything since is a suspect, newest first |
 | `-From` / `-To` | an explicit window instead |
 | `-Owns <filename>` | which staged mod ships this file, with its Nexus link |
-| `-Mod <name>` | one mod: layers, install time, and every version ever downloaded |
+| `-Mod <name>` | one mod: layers, install time, and every version still in downloads |
 | `-Touching <text>` | **the one that actually narrows things** - see below |
 | `-BehaviourOnly` | drop pure art; scripts, tweaks, xl, quests and CET only |
 | `-Top <n>` | cap the ranked lists (default 20) |
@@ -97,6 +138,10 @@ removing it and looking.
 **A folder name is not a version.** Stated three times in this file because it
 has cost real afternoons. Every version the tool prints comes from a downloads
 *filename*; staging entries are reported by mtime alone.
+
+**An empty version history means the downloads were deleted, not that the mod
+never changed.** Say which of those you are looking at. The ledger is the source
+that does not have this problem - prefer it, and treat downloads as corroboration.
 
 **`-Touching` uses `.Contains()`, deliberately.** A needle like `[NetSec]` is a
 character class to `-like`, which silently matches nothing. This is the single

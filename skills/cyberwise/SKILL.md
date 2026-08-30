@@ -427,6 +427,49 @@ included. The page must degrade on its own: if `/health` does not answer it
 falls back to a copy button, because the endpoint is an accelerator and must
 never become a dependency.
 
+## Backslashes: the corruption that rewrites paths and hides itself
+
+Every path here is a Windows path, so every path is full of `\b`, `\t`, `\f`,
+`\a`, `\r` and `\x64`. Any tool that runs a C-style unescape over these files -
+a Python `unicode_escape`, a careless `-replace`, an agent writing through a
+layer that unescapes twice - silently turns them into control characters:
+
+| written | becomes | why |
+|---|---|---|
+| `bin\x64\plugins` | `bind\plugins` | `\x64` is a hex escape for `d` |
+| `\tools\` | TAB + `ools\` | |
+| `r6\logs\redscript...` | `r6\logs` + a line break + `edscript...` | `\r` |
+| `mods\<name>\archives` | `mods\<name>` + BEL + `rchives` | `\a` |
+
+**This shipped here and went unnoticed for weeks.** It is worse than it looks,
+for three reasons:
+
+1. **The result is still a plausible path.** `bind\plugins` reads fine. An agent
+   follows it, finds nothing, and concludes the mod is not installed.
+2. **It hides from the checks.** A check that resolves tool paths needs a literal
+   `tools/`, which a TAB does not match - so corrupted lines are *skipped* by the
+   check written to catch them. The corruption removes itself from the search.
+3. **It corrupted the documentation of itself.** The line in `environment.md`
+   explaining how `"$PSScriptRoot\themes"` silently becomes `"\themes"` had been
+   turned into exactly that.
+
+**Rules.**
+
+- **Never round-trip a Windows path through a language-level unescape.** Escape
+  and unescape symmetrically, or do not escape at all.
+- **In PowerShell `-replace`, a literal backslash is four of them** in the
+  pattern. `-replace '\\', '\'` is a no-op that looks like a fix; it has been
+  written wrong here three separate times.
+- **Never put a bare backslash inside a `.TrimStart()` argument.** It does not
+  survive the next edit, and `TrimStart('')` throws rather than no-opping. Build
+  separators from code points - `Get-InstallHistory.ps1` shows the pattern.
+- **`-like` treats `[...]` as a character class.** `'[NetSec]'`, `'D:\Games
+  [SSD]'` and `'[NoPsychosis]'` all match things you did not mean. Use
+  `.Contains()` or `.StartsWith(..., OrdinalIgnoreCase)` for a literal.
+- **`Test-Family.ps1` fails on any C0 control character** in a shipped file (tab
+  excluded - it is legitimate indentation). When it fires, do not delete the
+  character: work out which escape it was and restore the whole path.
+
 ## Know where each kind of mod lives
 
 Not everything deploys to `archive\pc\mod`. A mod "missing" from there may simply
@@ -585,6 +628,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Watch-Crashes.ps1` | `cyberwise-crashes` | sample the game while it runs, and capture its own post-mortem when it dies. |
 | `New-ProblemReport.ps1` | `cyberwise-feedback` | assemble a report the author can act on. |
 | `Get-InstallHistory.ps1` | `cyberwise-forensics` | reconstruct what changed on a modded install, after the fact, from evidence that is already on disk. |
+| `Write-InstallLedger.ps1` | `cyberwise-forensics` | append what the install looks like right now to a permanent, compressed ledger, so "what changed since it worked" has an answer |
 | `DeviceGeometry.ps1` | `cyberwise-hotkeys` | where a device's buttons physically ARE, read from the user's own wiki bundle rather than from a table shipped inside the tool. |
 | `Get-Hotkeys.ps1` | `cyberwise-hotkeys` | harvest the ACTUAL key bindings from a Cyberpunk install. |
 | `Get-MouseProfile.ps1` | `cyberwise-hotkeys` | read the key remaps a Corsair iCUE profile puts on a programmable mouse, so they can be joined to what the game does with them. |
