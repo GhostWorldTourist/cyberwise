@@ -427,6 +427,46 @@ included. The page must degrade on its own: if `/health` does not answer it
 falls back to a copy button, because the endpoint is an accelerator and must
 never become a dependency.
 
+## NEVER read a game archive whole
+
+`archive\pc\content` is **61 GB** on a real install, and single archives are
+enormous: `basegame_5_video.archive` is 12.9 GB, `basegame_3_nightcity_gi` 11.1,
+`basegame_3_nightcity` 8.4. Searching them by hash or byte pattern is a
+reasonable thing to want. Doing it like this is not:
+
+```python
+for f in glob.glob(os.path.join(root, "*.archive")):
+    with open(f, 'rb') as fh:
+        if needle in fh.read():        # <-- 12.9 GB in one allocation
+```
+
+That was run on this machine on 2026-08-30 and reached **32 GB resident** before
+the user killed it. Consecutive multi-gigabyte `bytes` objects do not hand their
+pages back between iterations fast enough to matter.
+
+**Read in chunks, and carry the boundary**, so a needle spanning two chunks is
+still found:
+
+```python
+CH = 32 * 1024 * 1024
+prev = b''
+with open(f, 'rb') as fh:
+    while True:
+        chunk = fh.read(CH)
+        if not chunk:
+            break
+        buf = prev + chunk
+        if needle in buf:
+            ...
+        prev = buf[-(len(needle) - 1):]   # keep needle-1 bytes, not a guess
+```
+
+Peak stays at one chunk. The scan is still 61 GB of disk I/O and takes minutes -
+that part is unavoidable and worth saying out loud before starting one.
+
+**Better still, do not read the bytes at all.** `WolvenKit.CLI unbundle -r
+<regex>` answers "is this path in this archive" from the index, without the
+payload. Reach for the byte scan only when the question is not about paths.
 ## Backslashes: the corruption that rewrites paths and hides itself
 
 Every path here is a Windows path, so every path is full of `\b`, `\t`, `\f`,
