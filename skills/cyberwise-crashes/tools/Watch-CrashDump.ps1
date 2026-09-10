@@ -213,10 +213,25 @@ Write-Host "  log   $log" -ForegroundColor DarkGray
 Write-Host "  dump  $dump (written only if an access violation occurs)" -ForegroundColor DarkGray
 Write-Host "  the game is handed every fault back untouched - it will still crash exactly as it would have" -ForegroundColor DarkGray
 
-# -g   do not break on the initial attach breakpoint
-# -G   do not break on process exit
-# -o   also debug child processes - off, we want this process only
-& $cdb -p $gamePid -g -G -logo $log -cf $cmdFile
+# NO -g, AND THAT IS THE WHOLE POINT.
+#
+# `-g` skips the initial attach breakpoint, and `-cf` only executes AT a break.
+# Together they mean the command file never runs on a healthy attach: cdb sits
+# there logging module loads with nothing armed, and when the fault finally
+# arrives there is no handler to catch it. Measured 2026-09-10 - a 5 MB log with
+# zero `0:` prompts and not one `==CW==` marker, on a session that ended in the
+# crash it was attached to catch.
+#
+# It looked like it worked before only by accident: if something faults BEFORE
+# the arming would have happened, that fault breaks cdb in, the command file
+# runs at that break, and the handler is armed in time for the next one. So the
+# capture path appeared to work in exactly the case where it was needed least.
+#
+# Without -g, cdb breaks on attach, runs the file, and the file's trailing `g`
+# resumes the process. The pause is momentary and the arming is guaranteed.
+#
+# -G   still set: do not break on process exit, so a clean quit is not a stop.
+& $cdb -p $gamePid -G -logo $log -cf $cmdFile
 
 Write-Host ''
 if ($Loop) {

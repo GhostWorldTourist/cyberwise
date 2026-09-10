@@ -4552,6 +4552,25 @@ class F { static int Main() { Thread.Sleep(6000); Marshal.ReadInt32(new IntPtr(0
         } else {
             Bad 'catcher: the state at attach is recorded before arming' 'no attach-context capture in the log'
         }
+
+        # THE ORDERING TEST, and the reason the three above are not enough.
+        #
+        # The helper faults on purpose, and a fault breaks cdb in - which runs
+        # the command file. So a catcher that arms ONLY when something has
+        # already broken in still passes every assertion above. That is exactly
+        # the bug that shipped in 2026.09.10: `-g` suppressed the initial break,
+        # `-cf` never ran on a healthy attach, and the real crash it was watching
+        # for went uncaught with a 5 MB log and no markers at all.
+        #
+        # Arming must happen BEFORE the first fault, so assert the order.
+        $armAt   = $cdTxt.IndexOf('==CW== armed, running')
+        $faultAt = $cdTxt.IndexOf('Access violation')
+        if ($armAt -ge 0 -and $faultAt -ge 0 -and $armAt -lt $faultAt) {
+            Ok 'catcher: it arms on attach, not only once something has faulted'
+        } else {
+            Bad 'catcher: it arms on attach, not only once something has faulted' `
+                "armed at $armAt, first fault at $faultAt - a catcher that needs a fault to arm cannot catch the first one"
+        }
     }
 }
 

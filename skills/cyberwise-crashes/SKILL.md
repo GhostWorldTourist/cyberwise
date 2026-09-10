@@ -229,6 +229,14 @@ Three things that are easy to get wrong here:
 - **`gn`, never `gh`.** "Go, not handled" passes the fault back to the game.
   `gh` would swallow it and change what the game does, which is lying to the
   thing you are measuring.
+- **Do not pass `-g`.** It skips the initial attach breakpoint, and `-cf` only
+  executes AT a break - so together they mean the command file never runs on a
+  healthy attach and nothing is ever armed. It fails invisibly and it fails in
+  precisely the case that matters: measured 2026-09-10, a 5 MB log with zero
+  `0:` prompts and not one marker, on the session it was attached to catch. It
+  had appeared to work only because a fault arriving BEFORE the arming breaks
+  cdb in itself, which runs the file - so the capture path looked healthy in
+  every case except the one it existed for.
 - **Arm second chance too, and record the state at attach.** First-chance-only
   arming looks correct and silently loses the captures that matter most. On
   2026-09-10 the game faulted *while cdb was still attaching* - the log shows the
@@ -240,9 +248,13 @@ Three things that are easy to get wrong here:
   tool now passes `-c2` as well, and dumps `.lastevent` + registers + a short
   stack before arming, so a fault already in flight is still recorded.
 
-**The capture path is tested against a real fault.** `Test-Tools.ps1` compiles a
-program that access-violates on purpose, attaches the catcher to it, and asserts
-a minidump and a stack come out - because a capture path that has never been
+**The capture path is tested against a real fault, and the test asserts the
+ORDER.** `Test-Tools.ps1` compiles a program that access-violates on purpose,
+attaches the catcher to it, and asserts a minidump and a stack come out - plus
+that arming happened BEFORE the first fault. That last assertion is not padding:
+the helper faults, a fault breaks cdb in, and a break runs the command file, so
+a catcher that arms only after something has already faulted passes every other
+check. That is exactly the bug 2026.09.10 shipped - because a capture path that has never been
 shown to catch anything is a capture path nobody should trust, and this one was
 broken for exactly that reason.
 
