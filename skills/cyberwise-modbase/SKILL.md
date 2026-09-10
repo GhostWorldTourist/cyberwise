@@ -64,11 +64,54 @@ A description is what the author says it does. These are what it does:
 A settings table built from `Config.reds` defaults plus `user.ini` overrides is
 checkable and dated. One built from a mod page is a paraphrase of marketing.
 
+## Who needs whom - measure it, do not rank it by reputation
+
+"Frameworks first" below is only useful if you know which mods actually ARE
+frameworks on THIS install. Reputation is a bad proxy: a mod everyone calls a
+library may have no deployed consumers here, and a mod nobody thinks of that way
+may carry twenty.
+
+```powershell
+tools\Get-ModDependencies.ps1                  # summary, most-depended-on, orphan candidates
+tools\Get-ModDependencies.ps1 -Mod 'Codeware'  # both directions for one mod
+tools\Get-ModDependencies.ps1 -Json            # the graph, for a report
+```
+
+It builds the graph from `vortex.deployment.json`, so it describes what is
+deployed rather than what is staged - see the deployment-manifest rule above.
+
+**Hard and soft are not degrees of the same thing.** A hard edge is
+`import Some.Module`: remove the provider and the WHOLE redscript compile fails,
+taking every unrelated mod down with it. A soft edge - `@if(ModuleExists(...))`,
+CET's `GetMod(...)` - is a mod being polite, and breaks only itself. When someone
+asks "can I remove this", the answer is a different sentence for each.
+
+**An orphan candidate is a question, not a verdict.** The list means: it provides
+modules, nothing deployed imports them, and it does nothing on its own. All three
+have to hold, and the tool still prints the three ways it can be wrong. Read them.
+
+**Two bugs this has already had, both of which made it lie quietly:**
+
+- **`import Foo.Bar.*` was capturing `Foo.Bar.`**, trailing dot included, which
+  matches no declared module. 943 of 1637 imports on the reference install are
+  that shape, so the graph showed **5 hard edges instead of 97** - and listed
+  RedFileSystem as an orphan when three mods import it. A dependency tool that
+  under-reports is worse than none: its output is read as permission to delete.
+  Fixed 2026-09-09.
+- **A mod can act on its own with no annotation at all.** A class extending
+  `ScriptableService`/`ScriptableSystem` registers itself and runs `cb func On...`
+  callbacks with nothing to grep for. Missing that filled the orphan list with
+  mods that were working fine.
+
+Both were caught by disbelieving a suspiciously clean number. Do that.
+
 ## Order to document in
 
 Depth is not free, so spend it where it is repaid:
 
-1. **Frameworks** - anything other mods depend on. Wrong here poisons everything.
+1. **Frameworks** - anything other mods depend on. Wrong here poisons
+   everything. `Get-ModDependencies.ps1` names them in dependent order, so this
+   step is a reading rather than a guess.
 2. **Settings-bearing mods** - a `Config.reds` or a Mod Settings category means
    there are decisions to record, and decisions are what a user comes back for.
 3. **Mods already implicated in a finding** - the investigation is already done.
@@ -87,3 +130,4 @@ overstates coverage is how a documentation pass quietly stops being trusted.
 |---|---|
 | `tools/Get-ModInventory.ps1` | every deployed mod, its layers, its files, and its derived Nexus id with the pattern that produced it |
 | `tools/New-ModStubs.ps1` | one OKF article per deployed mod in the USER bundle, recording only what is true from disk |
+| `tools/Get-ModDependencies.ps1` | who needs whom across the deployed load order, hard vs soft, and which mods are carrying nobody |

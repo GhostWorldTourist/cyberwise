@@ -168,11 +168,38 @@ $dump  = Join-Path $Dir "av-$stamp.dmp"
 # default one does, "Saved Games" - is still passed as a single argument.
 $dumpCdb = '\"' + $dump.Replace([char]92, [char]47) + '\"'
 
+# FIRST CHANCE IS NOT ENOUGH, and assuming it was cost a real capture.
+#
+# On 2026-09-10 the game faulted while cdb was still attaching: the log shows the
+# access violation reported BEFORE this command file had run at all. By the time
+# `sxe ... av` armed, the exception was past its first chance, so `g` resumed
+# straight into the second chance and the process died with the handler never
+# firing. Fifteen megabytes of log and no stack, no !analyze, no minidump - the
+# only surviving evidence was the single disassembly line cdb prints by default.
+#
+# Two fixes, both cheap, and neither clever enough to be fragile:
+#
+#   -c2  gives the same capture block a SECOND-CHANCE handler. A fault already
+#        in flight when we attach is then still recorded on its way out.
+#
+#   The attach-context block below runs unconditionally, before arming. If we
+#        attached into a fault it captures it right there; if we attached into a
+#        healthy process it costs a few KB of registers and a short stack. That
+#        asymmetry is the whole argument for doing it always rather than trying
+#        to detect the case - detection here needs cdb scripting that is easy to
+#        get subtly wrong and impossible to test without a live fault.
+$capture = '.echo ==CW_AV==; .time; .echo --- faulting module ---; lmv a @rip; .echo --- stack ---; k 60; .echo --- registers ---; r; .echo --- analyze ---; !analyze -v; .echo --- writing minidump ---; .dump /m ' + $dumpCdb + '; .echo ==CW_AV_END=='
+
 $cmds = @"
 .echo ==CW== attached $stamp
 .sympath srv*$SymbolCache*https://msdl.microsoft.com/download/symbols
 .reload
-sxe -c ".echo ==CW_AV==; .time; .echo --- faulting module ---; lmv a @rip; .echo --- stack ---; k 60; .echo --- registers ---; r; .echo --- analyze ---; !analyze -v; .echo --- writing minidump ---; .dump /m $dumpCdb; .echo ==CW_AV_END==; gn" av
+.echo ==CW== attach context
+.lastevent
+r
+k 20
+.echo ==CW== attach context end
+sxe -c "$capture; gn" -c2 "$capture; gn" av
 .echo ==CW== armed, running
 g
 q

@@ -29,7 +29,7 @@ else here:
 
 Read off the screen. These are `stable` except where the line says otherwise.
 
-- [The corpo prologue is an assassination and a firing, and V and Jackie are already friends](/canon/the-corpo-prologue) - the employee ID on the bathroom mirror, Jenkins' failed hit on Abernathy, and Lizzie's Bar as the moment V loses the job rather than the moment they meet
+- [The corpo prologue is an assassination and a firing, and V and Jackie are already friends](/canon/the-corpo-prologue) - the employee ID on the bathroom mirror, Jenkins' failed hit on Abernathy, Lizzie's Bar as the moment V loses the job rather than the moment they meet, and the fullDisplayName records naming the whole prologue cast
 - [The streetkid and nomad prologues give you furniture, not a biography](/canon/streetkid-and-nomad-anchors) - Padre, the car job and Jackie; a family situation that has already collapsed and a solo ride into the city
 - [Jackie dies before Johnny exists for V, and the two never overlap](/canon/jackie-dies-before-johnny-exists) - the most common ordering error in any retelling from memory
 - [The only firm dates near the heist are April and May 2077](/canon/the-dates-the-game-puts-on-the-board) - three anchors, and everything else around the prologue is arithmetic run backwards from them
@@ -82,6 +82,16 @@ an example in a canon area gets quoted as canon within a year.
 
 Where a canon character's first name was never established in game, the
 formulation used here is: **the surname is canon and the first name is not.**
+
+**But establish that before saying it.** A great many characters the game
+"leaves surnamed" are not left surnamed at all - they carry a
+`fullDisplayName` record in the localization, and the short `displayName` is
+merely what the nameplate prints. That is a one-command lookup, and this area
+got it wrong in exactly that way: the corpo prologue entry spent two weeks
+instructing readers that Jenkins' and Abernathy's first names were unestablished
+when the base game ships **Arthur Jenkins** and **Susan Abernathy**. See
+[the corpo prologue](/canon/the-corpo-prologue) for the lookup. Absence in your
+memory is not absence in the game's data.
 
 The document *shapes* a backstory can take are one area over, in
 [the character-document formats](/formats/character-document-formats). This area

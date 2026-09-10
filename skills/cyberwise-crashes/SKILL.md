@@ -229,6 +229,22 @@ Three things that are easy to get wrong here:
 - **`gn`, never `gh`.** "Go, not handled" passes the fault back to the game.
   `gh` would swallow it and change what the game does, which is lying to the
   thing you are measuring.
+- **Arm second chance too, and record the state at attach.** First-chance-only
+  arming looks correct and silently loses the captures that matter most. On
+  2026-09-10 the game faulted *while cdb was still attaching* - the log shows the
+  access violation reported before the setup commands had run at all - so by the
+  time `sxe ... av` armed, the exception was past its first chance. Resuming
+  walked straight into the second chance and the process died with the handler
+  never firing: 15 MB of log, no stack, no `!analyze`, no minidump, and the only
+  surviving evidence was the single disassembly line cdb prints by default. The
+  tool now passes `-c2` as well, and dumps `.lastevent` + registers + a short
+  stack before arming, so a fault already in flight is still recorded.
+
+**The capture path is tested against a real fault.** `Test-Tools.ps1` compiles a
+program that access-violates on purpose, attaches the catcher to it, and asserts
+a minidump and a stack come out - because a capture path that has never been
+shown to catch anything is a capture path nobody should trust, and this one was
+broken for exactly that reason.
 
 **Limits, and say them out loud:** it catches access violations only - a
 fail-fast or an abort will not trip it, and the log saying "no access violation"

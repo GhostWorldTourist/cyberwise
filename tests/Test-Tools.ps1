@@ -518,6 +518,105 @@ $s = (Test-ModPatches -Quiet | Where-Object Name -eq 'T').State
 if ($s -eq 'GONE') { Ok 'patchwatch: an uninstalled upstream mod is reported' }
 else { Bad 'patchwatch: an uninstalled upstream mod is reported' "reported $s" }
 
+# --- the index, and the reconciliation -------------------------------------
+# Both exist because of one incident: an override was built, never registered,
+# and ten days later had broken the player's arms with nothing able to connect
+# the symptom to the intervention. So there are two claims to hold: an override
+# on disk that nobody registered gets FOUND, and a registered one can be found
+# by what it AFFECTS rather than by its name.
+
+$rcRoot = Join-Path $pwDir 'staging'
+New-Item -ItemType Directory -Path (Join-Path $rcRoot 'TheirMod-99\archive\pc\mod') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $rcRoot 'MyFix-1.0\archive\pc\mod')   -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $rcRoot 'MyAddition\r6\tweaks\zzz_x') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $rcRoot 'TheirMod-99\archive\pc\mod\thing.xl') 'author'  -NoNewline
+# The author's mod ships more than the file you overrode - the realistic shape.
+# Without this the pair is symmetric and neither can be called the override.
+Set-Content -LiteralPath (Join-Path $rcRoot 'TheirMod-99\archive\pc\mod\thing.archive') 'data' -NoNewline
+Set-Content -LiteralPath (Join-Path $rcRoot 'MyFix-1.0\archive\pc\mod\thing.xl')   'fixed'   -NoNewline
+Set-Content -LiteralPath (Join-Path $rcRoot 'MyAddition\r6\tweaks\zzz_x\new.yaml') 'records' -NoNewline
+
+$found = @(Find-UnregisteredOverride -SearchPath $rcRoot)
+if ($found.Count -eq 1 -and $found[0].Mod -eq 'MyFix-1.0') {
+    Ok 'patchwatch: an override nobody registered is found on disk'
+} else {
+    Bad 'patchwatch: an override nobody registered is found on disk' "found $($found.Count): $(($found | ForEach-Object Mod) -join ', ')"
+}
+
+# A mod that ADDS files is not an override, and flagging it would train people
+# to ignore the report - which is worse than not having one.
+if (@($found | Where-Object Mod -eq 'MyAddition').Count -eq 0) {
+    Ok 'patchwatch: a mod that only adds files is not called an override'
+} else {
+    Bad 'patchwatch: a mod that only adds files is not called an override' 'additive mod flagged'
+}
+
+# Once registered, it must drop out of the report.
+Register-ModPatch -Name 'MyFix-1.0' `
+    -UpstreamPath (Join-Path $rcRoot 'TheirMod-99\archive\pc\mod\thing.xl') `
+    -OverridePath (Join-Path $rcRoot 'MyFix-1.0\archive\pc\mod\thing.xl') -Note 'registered now' 6>$null | Out-Null
+if (@(Find-UnregisteredOverride -SearchPath $rcRoot).Count -eq 0) {
+    Ok 'patchwatch: registering an override clears it from the reconcile report'
+} else {
+    Bad 'patchwatch: registering an override clears it from the reconcile report' 'still reported after registration'
+}
+
+# Two mods shipping ONLY the same file are symmetric: nothing on disk says which
+# is the override. Reporting both is the honest answer; picking one would be a
+# guess presented as a finding.
+$symRoot = Join-Path $pwDir 'symmetric'
+New-Item -ItemType Directory -Path (Join-Path $symRoot 'A-1\archive\pc\mod') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $symRoot 'B-1\archive\pc\mod') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $symRoot 'A-1\archive\pc\mod\same.xl') 'a' -NoNewline
+Set-Content -LiteralPath (Join-Path $symRoot 'B-1\archive\pc\mod\same.xl') 'b' -NoNewline
+$sym = @(Find-UnregisteredOverride -SearchPath $symRoot)
+if ($sym.Count -eq 2) {
+    Ok 'patchwatch: a symmetric pair is reported as a pair, not guessed between'
+} else {
+    Bad 'patchwatch: a symmetric pair is reported as a pair, not guessed between' "reported $($sym.Count)"
+}
+
+# An .xl redirects resources that appear nowhere in its own filename. Indexing
+# those targets is the difference between "have we touched arms?" answering and
+# not - so the parser has to read them.
+$xlPath = Join-Path $pwDir 'targets.xl'
+@'
+resource:
+    patch:
+        donor\arms_hq\arm_l.mesh:
+            - base\characters\common\player_base_bodies\player_female_average\arms_hq\a0_000_pwa_base_hq__l.mesh
+            - base\characters\cyberware\player\a0_005__strongarms\entities\meshes\a0_005_wa__strongarms_l.mesh
+'@ | Set-Content -LiteralPath $xlPath
+$targets = @(Get-XlPatchTarget $xlPath)
+if (@($targets | Where-Object { $_ -match 'strongarms' }).Count -eq 1 -and
+    @($targets | Where-Object { $_ -match 'arms_hq' }).Count -ge 2) {
+    Ok 'patchwatch: an .xl patch target is indexed, not just the .xl filename'
+} else {
+    Bad 'patchwatch: an .xl patch target is indexed, not just the .xl filename' "got $($targets.Count): $($targets -join ', ')"
+}
+
+Register-ModPatch -Name 'XlEntry' -UpstreamPath $xlPath -OverridePath $xlPath -Note 'x' 6>$null | Out-Null
+$hit = @(Test-ModPatches -Affects 'strongarms' -Quiet)
+if (@($hit | Where-Object Name -eq 'XlEntry').Count -eq 1) {
+    Ok 'patchwatch: -Affects finds an entry by a resource it redirects'
+} else {
+    Bad 'patchwatch: -Affects finds an entry by a resource it redirects' 'symptom-to-intervention lookup missed it'
+}
+
+# @($null).Count is 1, so a naive emptiness test skips exactly the entries that
+# need backfilling. This shipped that way for one run and reported 'backfilled 0'
+# on a registry where every entry needed it.
+$all = @(Get-ModPatch)
+foreach ($e in $all) { $e.PSObject.Properties.Remove('Affects') }
+Save-ModPatchStore $all
+Update-ModPatchAffects 6>$null
+$idx = @(Get-ModPatch | Where-Object { @($_.Affects | Where-Object { $_ }).Count })
+if ($idx.Count -eq $all.Count) {
+    Ok 'patchwatch: backfill fills every entry that has no index'
+} else {
+    Bad 'patchwatch: backfill fills every entry that has no index' "$($idx.Count) of $($all.Count) indexed"
+}
+
 $script:PatchStore = Join-Path $env:LOCALAPPDATA 'cyberwise\patches.json'   # restore
 
 # =============================================================== manifest ====
@@ -4378,6 +4477,84 @@ if (-not (Test-Path -LiteralPath $epTool)) {
 # =================================================================== report ==
 
 Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+
+# --- the crash-dump catcher, proven against a real fault ----------------------
+# A capture path that has never been shown to catch anything is a capture path
+# nobody should trust - and on 2026-09-10 that bill came due. The catcher armed
+# only a FIRST-chance handler, the game faulted while cdb was still attaching,
+# and the fault came back as second chance with the handler never firing: 15 MB
+# of log, no stack, no !analyze, no minidump.
+#
+# So this compiles a program that faults ON PURPOSE and asserts the whole path
+# end to end. It is slower than the rest of the suite and worth every second.
+
+$cdbExe = @(
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\cdbX64.exe')
+    (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Debuggers\x64\cdb.exe')
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+
+$cscExe = @(
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe')
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $cdbExe) {
+    Skip 'catcher: an access violation is captured with a stack and a minidump' 'cdb not installed (winget install Microsoft.WinDbg)'
+} elseif (-not $cscExe) {
+    Skip 'catcher: an access violation is captured with a stack and a minidump' 'no csc.exe to build the faulting helper'
+} else {
+    $cdDir = Join-Path $sandbox 'catcher'
+    New-Item -ItemType Directory -Path $cdDir -Force | Out-Null
+    $faultSrc = Join-Path $cdDir 'fault.cs'
+    # The sleep is the point: the debugger must be attached and armed BEFORE the
+    # fault, which is the ordering the tool gets wrong when it is wrong.
+    @'
+using System;
+using System.Runtime.InteropServices;
+using System.Threading;
+class F { static int Main() { Thread.Sleep(6000); Marshal.ReadInt32(new IntPtr(0x10)); return 0; } }
+'@ | Set-Content -LiteralPath $faultSrc -Encoding UTF8
+
+    $faultExe = Join-Path $cdDir 'cwfault.exe'
+    & $cscExe /nologo /target:exe /platform:x64 "/out:$faultExe" $faultSrc 2>&1 | Out-Null
+
+    if (-not (Test-Path $faultExe)) {
+        Skip 'catcher: an access violation is captured with a stack and a minidump' 'faulting helper did not build'
+    } else {
+        $fp = Start-Process -FilePath $faultExe -PassThru
+        Start-Sleep -Seconds 1
+        & (Join-Path $Root 'skills\cyberwise-crashes\tools\Watch-CrashDump.ps1') `
+            -ProcessName 'cwfault' -AttachNow -Dir $cdDir -WaitMinutes 1 2>&1 | Out-Null
+        try { if (-not $fp.HasExited) { $fp.Kill() } } catch { }
+
+        $cdLog  = Get-ChildItem $cdDir -Filter 'cdb-*.log' -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $cdDump = @(Get-ChildItem $cdDir -Filter '*.dmp' -ErrorAction SilentlyContinue)
+        $cdTxt  = if ($cdLog) { Get-Content -LiteralPath $cdLog.FullName -Raw } else { '' }
+
+        if ($cdTxt -match '==CW_AV==' -and $cdDump.Count -ge 1) {
+            Ok 'catcher: an access violation is captured with a stack and a minidump'
+        } else {
+            Bad 'catcher: an access violation is captured with a stack and a minidump' `
+                "marker=$($cdTxt -match '==CW_AV==') dumps=$($cdDump.Count)"
+        }
+
+        # The regression that produced all this: first-chance-only arming.
+        if ($cdTxt -match '-c2 "') {
+            Ok 'catcher: a second-chance handler is armed, not first chance alone'
+        } else {
+            Bad 'catcher: a second-chance handler is armed, not first chance alone' 'no -c2 in the arming command'
+        }
+
+        # And the block that survives a fault already in flight at attach time.
+        if ($cdTxt -match '==CW== attach context' -and $cdTxt -match 'Last event:') {
+            Ok 'catcher: the state at attach is recorded before arming'
+        } else {
+            Bad 'catcher: the state at attach is recorded before arming' 'no attach-context capture in the log'
+        }
+    }
+}
+
 
 Write-Host ''
 if ($script:fail) { Write-Host "$($script:pass) passed, $($script:fail) FAILED" -ForegroundColor Red; exit 1 }

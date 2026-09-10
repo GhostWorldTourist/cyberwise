@@ -613,6 +613,28 @@ silently keeps winning over every fix the author ships afterwards - which is the
 one failure mode that makes overriding a whole file risky at all. See
 `references/environment.md`.
 
+**And registering is a step somebody has to remember, so check the disk too.**
+
+```powershell
+Test-ModPatches -Reconcile          # override-shaped mods the registry has never seen
+Test-ModPatches -Affects 'arms'     # which interventions touch a symptom
+```
+
+Both exist because of one incident. An override was built, missed in the
+registration pass, and ten days later had broken the player's arms - and the
+mod responsible was listed on screen within ten minutes of the investigation
+starting, with nothing connecting it to the symptom. `-Reconcile` finds
+overrides structurally (a small mod every one of whose files another mod also
+ships), so no naming convention is assumed. `-Affects` searches the resource
+paths each entry touches, including the targets an `.xl` redirects - a one-line
+`.xl` can move fifty-five meshes, and none of those paths is guessable from its
+filename.
+
+**When a fix reports CHANGED, ask what STARTS happening, not only whether your
+edit still applies.** Repairing somebody's broken file is a behaviour change:
+that arms fault was caused by fixing a malformed `.xl` into working, which
+activated a conflict its own brokenness had been masking.
+
 Dot-source it (`. tools\ModFileBackup.ps1`) and use `Set-ModFileContent` instead
 of `Set-Content` for anything inside a user's install. It prints the diff, takes
 a timestamped snapshot, then writes - and tells you the exact `Restore-ModFile`
@@ -674,6 +696,7 @@ tools\Get-ToolIndex.ps1 -Write     # after adding or renaming a tool
 | `Get-MouseProfile.ps1` | `cyberwise-hotkeys` | read the key remaps a Corsair iCUE profile puts on a programmable mouse, so they can be joined to what the game does with them. |
 | `KeyIdentity.ps1` | `cyberwise-hotkeys` | one key, one identity, whatever vocabulary named it. |
 | `New-HotkeySheet.ps1` | `cyberwise-hotkeys` | build a self-contained hotkey cheatsheet from the bindings actually present in a Cyberpunk install. |
+| `Get-ModDependencies.ps1` | `cyberwise-modbase` | who needs whom, across a deployed load order, and which mods are carrying nobody. |
 | `Get-ModInventory.ps1` | `cyberwise-modbase` | every mod actually deployed, what layers it touches, and its Nexus id where one can be derived. |
 | `New-ModStubs.ps1` | `cyberwise-modbase` | one OKF article per deployed mod, built from the install. |
 | `New-GapWaypoints.ps1` | `cyberwise-netsec` | turn NetSec's GAP diagnostic into CETMonkey teleport waypoints, so the holes in the world can be visited instead of hunted for. |
@@ -719,7 +742,7 @@ not cost you anything when the question is about textures.
 | `cyberwise-sitebuilder` | publish character documents, or anything else here, as a shareable website |
 | `cyberwise-feedback` | Cyberwise itself is wrong, a tool errors, or the user wants to reach the author |
 | `cyberwise-wiki` | writing down anything a later session would look up; a skill file has grown a section that is really reference material |
-| `cyberwise-modbase` | what does this mod do; auditing a large load order; running a documentation pass over the install |
+| `cyberwise-modbase` | what does this mod do; auditing a large load order; which mods are frameworks and what would break if one were removed; running a documentation pass over the install |
 
 Two references stay here rather than in one of those, because they bear on all of
 them: `references/environment.md` (manager behaviour, the settings store,

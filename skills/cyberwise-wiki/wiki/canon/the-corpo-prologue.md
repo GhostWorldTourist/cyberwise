@@ -1,7 +1,7 @@
 ---
 type: Game Canon
 title: The corpo prologue is an assassination and a firing, and V and Jackie are already friends
-description: What the corpo intro actually puts on screen - the employee ID on the bathroom mirror, Jenkins' failed hit on Abernathy, the call to Jackie, and Lizzie's Bar as the moment V loses the job rather than the moment they meet.
+description: What the corpo intro actually puts on screen - the employee ID on the bathroom mirror, Jenkins' failed hit on Abernathy, the call to Jackie, Lizzie's Bar as the moment V loses the job rather than the moment they meet, and the fullDisplayName records that give every named prologue NPC a first and last name.
 tags: [canon, lifepath, corpo, prologue, arasaka, jackie]
 status: stable
 generated: { by: "claude", at: "2026-08-24T20:05:00-04:00" }
@@ -63,29 +63,95 @@ Two consequences worth stating plainly, because both come up:
   contradicting a visible on-screen fact**, which is a fine thing to do
   deliberately and an embarrassing thing to do by accident.
 
-## Jenkins and Abernathy: surnames are canon, first names are not
+## The prologue cast has full names, and the game ships them
 
-The game gives both as surnames. **Treat any first name you have seen attached to
-either as unverified** unless you can point at an in-game source that carries it -
-a shard, a spoken line, a screen. Wikis and community documents routinely supply
-first names for minor corporate characters, and some of those trace to nothing.
+**Every named prologue NPC carries a `fullDisplayName` in the game's own
+localization.** Read it there. It is one lookup, it is authoritative, and it
+settles first names that community sources argue about.
 
-Where a character's first name has never been established in game, the honest
-formulation is: *the surname is canon and the first name is not.* Say that
-instead of picking one.
+```
+archive\pc\content\lang_en_text.archive
+  -> base\localization\en-us\onscreens\onscreens_final.json
+     Story-base-gameplay-static_data-database-characters-npcs-records-quest-quests-q000-
+       q000_corpo_<who>_displayName       # what the nameplate shows
+       q000_corpo_<who>_fullDisplayName   # first AND last name
+```
 
-**The dispute is live, and it can surface inside a single conversation.** One
-session recorded a user correcting an assistant with one first name for a named
-Arasaka director, while the same session elsewhere used a different one - two
-candidates in circulation in one exchange, with nobody noticing the collision.
-That is the practical shape of an unestablished first name: not that the answer
-is hard to find, but that several answers are in circulation and each of them
-sounds sourced. Naming either candidate here - even to say which is more common -
-would settle by repetition a thing the game never settled, so neither is written
-down. Before concluding that a name traces to nothing, though,
-[search the mail and the shards](/canon/search-the-mail-and-the-shards-first): a
-minor corporate character's first name is exactly the sort of detail that exists
-in one readable and nowhere else.
+`displayName` is the short label (`Jenkins`, `Carter`, `Arasaka Agent`);
+`fullDisplayName` is the full name shown when V targets them. Read as of
+patch 2.31:
+
+| record | displayName | fullDisplayName |
+|---|---|---|
+| `q000_corpo_jenkins` | Jenkins | **Arthur Jenkins** |
+| `q000_corpo_abernathy` | Abernathy | **Susan Abernathy** |
+| `q000_corpo_assistant` | Carter | **Carter Smith** |
+| `q000_corpo_friend` | - | **Frank Nostra** |
+| `q000_corpo_arasaka_m_receptionist` | Receptionist | **Stanley Judith** |
+| `q000_corpo_coach` | Life Coach | **Brian Gustav** |
+| `q000_corpo_netrunner` | Netrunner | **>>Slice543<<** |
+
+**Carter Smith is V's assistant**, and he is the one who brings the late
+reports in `q000_corpo_03a_office_chats` - the exchange where V can answer
+*"They were supposed to be ready yesterday"* and *"Send them to my inbox. And
+you and I will have a word about this later."* **Frank Nostra is a different
+NPC** - the peer whose scene is captioned *"V's coworker is glad she's here, he
+asks for his input about a work matter"*, which is the Biotechnica-agent
+conversation. Community answers to "who is the reports guy" return Frank; that
+is the wrong one of the two.
+
+### Proving an NPC speaks a line, rather than inferring it
+
+Matching a line to a character by *role* ("an assistant would bring reports") is
+a guess that reads like a finding. The scene files carry the real binding, and
+it is four hops:
+
+```
+WolvenKit.CLI convert serialize <scene>.scene
+  screenplayStore.lines[].speaker.id    -> an actorId
+  actors[].actorId.id -> actorName      -> e.g. "assistant"
+  actors[].communityParams.entryName    -> the community + entry name
+  <community>.community                 -> Character.<record>
+  onscreens: <record>_fullDisplayName   -> the name
+```
+
+Worked, for the reports exchange: lines 40-45 alternate speaker `13` and the
+player actor `19`; actor 13 is `assistant`, acquired from entry `assistant` in
+`q000_corpo_com_arasaka_office`; that entry resolves to
+`Character.q000_corpo_assistant`; whose `fullDisplayName` is **Carter Smith**.
+The Biotechnica conversation is actor `10`, `arasaka_coworker`, a different
+actor entirely.
+
+**Do not stop at the subtitle file.** `lang_en_text.archive` gives the dialogue
+but carries no speaker tags, so it can tell you a line exists and never who says
+it. The `.scene` is the only thing that binds the two.
+
+### This entry previously said the opposite, and was wrong
+
+Until 2026-09-09 this article carried a section headed *"Jenkins and Abernathy:
+surnames are canon, first names are not"*, instructing readers to treat any
+first name as unverified and declining to name either candidate on the grounds
+that naming one "would settle by repetition a thing the game never settled."
+
+**The game settles it.** The `fullDisplayName` records above shipped in the base
+game. The reasoning that produced the wrong note was sound in shape - community
+sources really do invent first names for minor corporate characters - but it was
+applied without opening the file that had the answer, and it hardened a lookup
+that takes a minute into a standing refusal to answer. A rule that forbids
+answering is far more expensive than a missing note, because it suppresses the
+search as well as the answer.
+
+The general lesson, which is why this is written up rather than quietly deleted:
+**"the game never established this" is a claim about the game's data, and it
+needs the data open before it can be made.** Absence in your memory is not
+absence in the archive. Two independent routes agreed here - the localization
+records, and a 2026-08-20 session that reached Carter Smith through the Fandom
+wiki - but only the first is checkable.
+
+One claim still uncorroborated: that Fandom page also says Carter dislikes
+Arasaka's methods and later informs on V. **Nothing in the prologue's own
+strings supports either**, so treat both as wiki-sourced until an in-game
+readable or line turns up. The name is solid; the characterisation is not.
 
 ## What the prologue does NOT establish
 
@@ -103,6 +169,10 @@ document it lands in.
 
 ## Scope
 
-Read off the corpo intro sequence. Nothing here depends on a game patch, but a
-lifepath-expanding mod can move any of it - if a player's account of the prologue
-does not match this, assume a mod before assuming the player is wrong.
+Read off the corpo intro sequence. The narrative facts do not depend on a game
+patch; the `fullDisplayName` table was read out of `lang_en_text.archive` at
+**patch 2.31** and should be re-read if CDPR ships another localization pass.
+A lifepath-expanding mod can move any of it - if a player's account of the
+prologue does not match this, assume a mod before assuming the player is wrong.
+
+**Re-check after a patch:** the `q000_corpo_*_fullDisplayName` rows.
