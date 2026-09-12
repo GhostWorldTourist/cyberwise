@@ -306,7 +306,7 @@ and why Windows Error Reporting never fires for it.
 
 ### The tray app is optional, and you build it for them
 
-There is a tray icon in `app/` that runs the watcher and shows its state. **Build
+There is a tray icon in `app/` that hosts **both** background processes and shows their state. **Build
 it for the user - do not hand them build instructions.** It compiles with the C#
 compiler already present in Windows, so nothing needs installing:
 
@@ -317,6 +317,35 @@ cd app; .\build.ps1 -Run
 **Say it is optional, because it is.** Everything works from the scripts alone.
 The tray exists so somebody who never opens a terminal can see whether recording
 is happening, and start or stop it.
+
+**It hosts the watcher AND the crash catcher, and that is deliberate.** They
+answer different questions - the watcher samples the process and preserves
+`CrashInfo.json`, the catcher attaches a debugger and records the faulting
+module and stack - so each gets its own status line and its own toggle:
+
+```
+Watcher: running          Stop watching
+Catcher: armed            Disarm crash catcher
+```
+
+The catcher was a bare script started by hand before this. Over a single evening
+it needed restarting three times and was not running for the two crashes that
+mattered most - the same "nothing was recording" failure the tray already existed
+to prevent, happening in a second place nobody was watching. It now starts with
+the tray, and because the tray starts at logon it survives a reboot.
+
+Two things it does that a hand-start did not. It launches the catcher with
+`-Loop` and **not** `-AttachNow` - the latter exits when no game is present,
+which is exactly how it came to be unarmed when a startup crash arrived. And
+when `cdb` is absent the menu says `cdb not installed` and greys the toggle out,
+rather than offering a switch that silently does nothing.
+
+**Check that the installed copy is not stale.** The tray resolves its scripts
+from the `skills` tree beside its exe, and on one machine that snapshot was six
+weeks old: it contained no `Watch-CrashDump.ps1` at all, so the catcher could
+never be found however the config was set, and the watcher it *did* run was six
+weeks behind the repo. `--selftest` prints both resolved paths - read them rather
+than assuming the installed copy matches what you just changed.
 
 Expect questions, and answer them plainly rather than technically:
 

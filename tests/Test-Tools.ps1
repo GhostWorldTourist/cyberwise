@@ -3112,6 +3112,18 @@ if ($Quick) {
         if ($problems) { Bad 'tray: --selftest reports the fields support needs' ($problems -join "`n") }
         else           { Ok  'tray: --selftest reports the fields support needs' }
 
+        # The catcher is a second hosted process and the tray is now its host.
+        # If --selftest cannot see it, nobody can: an unarmed catcher is
+        # invisible otherwise, and over one evening that cost the two captures
+        # that mattered while everything else reported healthy.
+        $catcherProblems = @(
+            if ($st -notmatch '(?m)^\s*catcher script\s*:') { 'self-test does not report the catcher script' }
+            if ($st -notmatch '(?m)^\s*cdb\s*:')            { 'self-test does not report whether cdb is present' }
+            if ($st -notmatch '(?m)^\s*catcher\s*:')        { 'self-test does not report whether the catcher is armed' }
+        )
+        if ($catcherProblems) { Bad 'tray: --selftest reports the crash catcher it now hosts' ($catcherProblems -join "`n") }
+        else                  { Ok  'tray: --selftest reports the crash catcher it now hosts' }
+
         # A Run entry holds an absolute path, and a moved folder breaks logon
         # startup with no error anywhere. The app has to notice that itself, or
         # it is one more thing failing quietly.

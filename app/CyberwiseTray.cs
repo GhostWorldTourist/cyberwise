@@ -167,6 +167,20 @@ namespace Cyberwise
         // there recording nothing until you find the right menu item is a trap.
         public bool AutoStartWatcher = true;
 
+        // The exception catcher is a SECOND hosted process, not a mode of the
+        // first. They answer different questions: the watcher samples the
+        // process and preserves CrashInfo.json, the catcher attaches a debugger
+        // and records the faulting module and stack. Losing either one loses a
+        // different half of the evidence, so each gets its own toggle and its
+        // own status line.
+        //
+        // It was a bare script before this, started by hand. Over one evening it
+        // needed restarting three times and was not running for the two crashes
+        // that mattered most - which is the same "nothing was recording" failure
+        // the tray already exists to prevent, in a second place.
+        public string Catcher = "";
+        public bool AutoStartCatcher = true;
+
         public static string Path
         {
             get
@@ -194,6 +208,9 @@ namespace Cyberwise
                     else if (k.Equals("Watcher", StringComparison.OrdinalIgnoreCase)) c.Watcher = v;
                     else if (k.Equals("AutoStartWatcher", StringComparison.OrdinalIgnoreCase))
                         c.AutoStartWatcher = !(v.Equals("false", StringComparison.OrdinalIgnoreCase) || v == "0");
+                    else if (k.Equals("Catcher", StringComparison.OrdinalIgnoreCase)) c.Catcher = v;
+                    else if (k.Equals("AutoStartCatcher", StringComparison.OrdinalIgnoreCase))
+                        c.AutoStartCatcher = !(v.Equals("false", StringComparison.OrdinalIgnoreCase) || v == "0");
                 }
             }
             c.FillDefaults();
@@ -212,6 +229,10 @@ namespace Cyberwise
             sb.AppendLine("Watcher=" + Watcher);
             sb.AppendLine("# AutoStartWatcher: begin watching as soon as Cyberwise starts.");
             sb.AppendLine("AutoStartWatcher=" + (AutoStartWatcher ? "true" : "false"));
+            sb.AppendLine("# Catcher: full path to Watch-CrashDump.ps1 (attaches a debugger).");
+            sb.AppendLine("Catcher=" + Catcher);
+            sb.AppendLine("# AutoStartCatcher: arm the debugger catcher as soon as Cyberwise starts.");
+            sb.AppendLine("AutoStartCatcher=" + (AutoStartCatcher ? "true" : "false"));
             File.WriteAllText(Path, sb.ToString());
         }
 
@@ -312,6 +333,25 @@ namespace Cyberwise
                     if (File.Exists(candidate)) { Watcher = System.IO.Path.GetFullPath(candidate); break; }
                 }
             }
+
+            // Same walk for the catcher, and for the same reason: it resolves
+            // UpstreamGuard.ps1 relative to its own location, so a flat copy
+            // beside the exe is the last resort rather than the first guess.
+            if (!string.IsNullOrWhiteSpace(Catcher) && !File.Exists(Catcher)) Catcher = "";
+            if (string.IsNullOrWhiteSpace(Catcher))
+            {
+                var exeDir2 = AppDomain.CurrentDomain.BaseDirectory;
+                foreach (var candidate in new[]
+                {
+                    System.IO.Path.Combine(exeDir2, @"skills\cyberwise-crashes\tools\Watch-CrashDump.ps1"),
+                    System.IO.Path.Combine(exeDir2, @"..\skills\cyberwise-crashes\tools\Watch-CrashDump.ps1"),
+                    System.IO.Path.Combine(exeDir2, @"..\..\skills\cyberwise-crashes\tools\Watch-CrashDump.ps1"),
+                    System.IO.Path.Combine(exeDir2, "Watch-CrashDump.ps1"),
+                })
+                {
+                    if (File.Exists(candidate)) { Catcher = System.IO.Path.GetFullPath(candidate); break; }
+                }
+            }
         }
 
         /// <summary>
@@ -371,6 +411,7 @@ namespace Cyberwise
 
         private readonly ToolStripMenuItem _miStatus, _miGame, _miCrashes;
         private readonly ToolStripMenuItem _miStartStop, _miAtLogon;
+        private readonly ToolStripMenuItem _miCatcher, _miCatcherStartStop;
 
         private Config _cfg;
         private int _lastCrashCount = -1;
@@ -389,7 +430,9 @@ namespace Cyberwise
             _miGame    = new ToolStripMenuItem("Game: …")      { Enabled = false };
             _miCrashes = new ToolStripMenuItem("Crashes: …")   { Enabled = false };
 
+            _miCatcher   = new ToolStripMenuItem("Catcher: \u2026")  { Enabled = false };
             _miStartStop = new ToolStripMenuItem("Start watching", null, OnStartStop);
+            _miCatcherStartStop = new ToolStripMenuItem("Arm crash catcher", null, OnStartStopCatcher);
             _miAtLogon   = new ToolStripMenuItem("Start Cyberwise when I log in", null, OnToggleAtLogon)
                            { CheckOnClick = false };
 
@@ -398,10 +441,12 @@ namespace Cyberwise
             _menu.Items.Add(_miStatus);
             _menu.Items.Add(_miGame);
             _menu.Items.Add(_miCrashes);
+            _menu.Items.Add(_miCatcher);
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(_miStartStop);
             _menu.Items.Add(_miAtLogon);
             _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add(_miCatcherStartStop);
             _menu.Items.Add(new ToolStripMenuItem("Copy crash summary", null, OnCopySummary));
             _menu.Items.Add(new ToolStripMenuItem("Open crash folder", null, OnOpenFolder));
             _menu.Items.Add(new ToolStripSeparator());
@@ -433,6 +478,12 @@ namespace Cyberwise
             // mean something: after a reboot the icon returns AND the recording
             // resumes, rather than the icon returning and quietly recording
             // nothing until someone notices.
+            if (_cfg.AutoStartCatcher && !CatcherRunning() && CdbPath() != null
+                && !string.IsNullOrWhiteSpace(_cfg.Catcher) && File.Exists(_cfg.Catcher))
+            {
+                try { StartCatcher(silent: true); } catch { }
+            }
+
             if (_cfg.AutoStartWatcher && !WatcherRunning())
             {
                 if (File.Exists(_cfg.Watcher)) { try { StartWatcher(silent: true); } catch { } }
@@ -479,7 +530,13 @@ namespace Cyberwise
         /// substring: a bare match also matches the process doing the asking,
         /// which cheerfully reports a watcher that is not running.
         /// </summary>
-        private static bool WatcherRunning()
+        private static bool WatcherRunning() { return ScriptRunning("Watch-Crashes.ps1"); }
+
+        /// <summary>Is a hosted script running? Matched on -File plus the script
+        /// name, never a bare name substring - that also matches the WMI query
+        /// asking the question, which cheerfully reports a process that is not
+        /// there.</summary>
+        private static bool ScriptRunning(string scriptName)
         {
             try
             {
@@ -489,12 +546,34 @@ namespace Cyberwise
                 {
                     var cl = o["CommandLine"] as string;
                     if (cl != null && cl.IndexOf("-File", StringComparison.OrdinalIgnoreCase) >= 0
-                                   && cl.IndexOf("Watch-Crashes.ps1", StringComparison.OrdinalIgnoreCase) >= 0)
+                                   && cl.IndexOf(scriptName, StringComparison.OrdinalIgnoreCase) >= 0)
                         return true;
                 }
             }
             catch { }
             return false;
+        }
+
+        private static bool CatcherRunning() { return ScriptRunning("Watch-CrashDump.ps1"); }
+
+        /// <summary>The catcher needs cdb, which ships with WinDbg and is not
+        /// present by default. Absent, the menu says so rather than offering a
+        /// toggle that silently does nothing.</summary>
+        private static string CdbPath()
+        {
+            try
+            {
+                foreach (var c in new[]
+                {
+                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                           @"Microsoft\WindowsApps\cdbX64.exe"),
+                    @"C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe",
+                    @"C:\Program Files\Windows Kits\10\Debuggers\x64\cdb.exe",
+                })
+                    if (File.Exists(c)) return c;
+            }
+            catch { }
+            return null;
         }
 
         private int CrashCount()
@@ -536,6 +615,13 @@ namespace Cyberwise
             _miGame.Text      = "Game: "    + (game ? "running" : "not running");
             _miCrashes.Text   = "Crashes recorded: " + crashes;
             _miStartStop.Text = watching ? "Stop watching" : "Start watching";
+
+            bool catching = CatcherRunning();
+            bool haveCdb  = CdbPath() != null;
+            _miCatcher.Text = "Catcher: " + (!haveCdb ? "cdb not installed"
+                                           : catching ? "armed" : "not armed");
+            _miCatcherStartStop.Text    = catching ? "Disarm crash catcher" : "Arm crash catcher";
+            _miCatcherStartStop.Enabled = haveCdb;
             _miAtLogon.Checked = AutoStartEnabled();
 
             _icon.Text = Truncate("Cyberwise - " + (watching ? "watching" : "not watching")
@@ -606,7 +692,10 @@ namespace Cyberwise
             }
         }
 
-        private void StopWatcher()
+        private void StopWatcher() { StopScript("Watch-Crashes.ps1", "watcher"); }
+        private void StopCatcher() { StopScript("Watch-CrashDump.ps1", "catcher"); }
+
+        private void StopScript(string scriptName, string label)
         {
             try
             {
@@ -617,13 +706,70 @@ namespace Cyberwise
                     var cl = o["CommandLine"] as string;
                     if (cl == null) continue;
                     if (cl.IndexOf("-File", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    if (cl.IndexOf("Watch-Crashes.ps1", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (cl.IndexOf(scriptName, StringComparison.OrdinalIgnoreCase) < 0) continue;
                     try { Process.GetProcessById(Convert.ToInt32(o["ProcessId"])).Kill(); } catch { }
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Could not stop the watcher:\n\n" + ex.Message,
+                MessageBox.Show("Could not stop the " + label + ":\n\n" + ex.Message,
+                                "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void OnStartStopCatcher(object sender, EventArgs e)
+        {
+            if (CatcherRunning()) { StopCatcher(); }
+            else                  { StartCatcher(); }
+            Refresh();
+        }
+
+        /// <summary>Arm the debugger catcher. -Loop and NOT -AttachNow: the
+        /// catcher waits for the next launch, whereas -AttachNow exits when no
+        /// game is present, which is exactly how it came to be un-armed at the
+        /// moment a startup crash arrived.</summary>
+        private void StartCatcher(bool silent = false)
+        {
+            if (string.IsNullOrWhiteSpace(_cfg.Catcher) || !File.Exists(_cfg.Catcher))
+            {
+                if (silent) return;
+                MessageBox.Show("Cannot find Watch-CrashDump.ps1.\n\nExpected at:\n" + _cfg.Catcher +
+                                "\n\nOpen Settings and set the Catcher path.",
+                                "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            if (CdbPath() == null)
+            {
+                if (silent) return;
+                MessageBox.Show("The catcher needs cdb, which comes with WinDbg.\n\n" +
+                                "Install it with:\n    winget install --id Microsoft.WinDbg\n\n" +
+                                "The watcher keeps recording crashes meanwhile; only the stack is missing.",
+                                "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden"
+                              + " -File \"" + _cfg.Catcher + "\""
+                              + (string.IsNullOrWhiteSpace(_cfg.GameRoot) ? "" : " -GameRoot \"" + _cfg.GameRoot + "\"")
+                              + " -Loop -WaitMinutes 600",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                Process.Start(psi);
+                Thread.Sleep(1200);
+                if (!CatcherRunning() && !silent)
+                    MessageBox.Show("The catcher was launched but is not running.\n\n" +
+                                    "Check the paths in Settings.",
+                                    "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                if (silent) return;
+                MessageBox.Show("Could not start the catcher:\n\n" + ex.Message,
                                 "Cyberwise", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -862,6 +1008,11 @@ namespace Cyberwise
             sb.AppendLine("  watcher script: " + (string.IsNullOrWhiteSpace(cfg.Watcher) ? "NOT FOUND"
                 : cfg.Watcher + (File.Exists(cfg.Watcher) ? "" : "  (MISSING)")));
             sb.AppendLine("  watcher       : " + (WatcherRunning() ? "running" : "not running"));
+            sb.AppendLine("  catcher script: " + (string.IsNullOrWhiteSpace(cfg.Catcher) ? "NOT FOUND"
+                : cfg.Catcher + (File.Exists(cfg.Catcher) ? "" : "  (MISSING)")));
+            var cdb = CdbPath();
+            sb.AppendLine("  cdb           : " + (cdb ?? "NOT INSTALLED (winget install --id Microsoft.WinDbg)"));
+            sb.AppendLine("  catcher       : " + (CatcherRunning() ? "armed" : "not armed"));
             sb.AppendLine("  game          : " + (GameRunning() ? "running" : "not running"));
             var target = AutoStartTarget();
             sb.AppendLine("  start at logon: " + (target == null ? "no" : "yes -> " + target));
