@@ -94,15 +94,40 @@ function Save-PostMortem {
     if (-not (Test-Path -LiteralPath $ciPath)) { return 'clean exit - no post-mortem file' }
     if (-not (Test-Path -LiteralPath $crashDir)) { New-Item -ItemType Directory -Path $crashDir -Force | Out-Null }
 
-    try {
-        $pm = (Get-Content -LiteralPath $ciPath -Raw | ConvertFrom-Json).Data.postMortem
-    } catch {
-        return "post-mortem unreadable: $($_.Exception.Message)"
+    # WE ARE RACING THE GAME'S OWN WRITE, SO READ WITH RETRIES.
+    #
+    # The game writes CrashInfo.json and exits immediately after. The watcher
+    # notices the process is gone and reads the file - which can land between
+    # create and flush, giving zero bytes or a truncated object. Measured: two
+    # 0-byte CrashInfo-noid-*.json captures on 2026-09-13, saved because an
+    # empty read parsed to nothing, produced no crashVisitId, and fell into the
+    # "keep it rather than lose evidence" branch below. An empty file is not
+    # evidence; it is a crash we now have no record of, filed as though we did.
+    #
+    # A second or so of retries costs nothing on the normal path, because the
+    # first read succeeds.
+    $pm = $null
+    $readErr = $null
+    foreach ($attempt in 1..8) {
+        try {
+            $raw = Get-Content -LiteralPath $ciPath -Raw -ErrorAction Stop
+            if (-not [string]::IsNullOrWhiteSpace($raw)) {
+                $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+                if ($obj -and $obj.Data -and $obj.Data.postMortem) { $pm = $obj.Data.postMortem; break }
+            }
+            $readErr = 'file was empty or incomplete'
+        } catch {
+            $readErr = $_.Exception.Message
+        }
+        Start-Sleep -Milliseconds 250
     }
+    if (-not $pm) { return "post-mortem unreadable after retries: $readErr" }
 
     $id = [string]$pm.crashVisitId
     if (-not $id) {
-        # No id to dedupe on: keep it rather than lose evidence, but say so.
+        # A real post-mortem with no id: keep it rather than lose evidence. This
+        # branch is now reachable only for a PARSED object, so it can no longer
+        # save an empty file.
         Copy-Item -LiteralPath $ciPath -Destination (Join-Path $crashDir ("CrashInfo-noid-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".json")) -Force
         return 'post-mortem has no crashVisitId - captured unconditionally'
     }

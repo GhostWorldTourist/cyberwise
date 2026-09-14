@@ -3062,6 +3062,73 @@ if ($Quick) {
 
 # ================================================================== tray =====
 #
+# --- the post-mortem capture races the game's own write ----------------------
+# The game writes CrashInfo.json and exits; the watcher notices the process is
+# gone and reads it, which can land between create and flush. Two 0-byte
+# captures were saved that way on 2026-09-13 - filed as crashes, containing
+# nothing, and counted in the corpus as though they were evidence.
+#
+# Save-PostMortem is script-scoped inside the watcher loop, so it is lifted out
+# by name and run against a sandbox. That is a real invocation, not a text match.
+
+$wcSrc  = Get-Content -LiteralPath (Join-Path $Root 'skills\cyberwise-crashes\tools\Watch-Crashes.ps1') -Raw
+$wcFunc = [regex]::Match($wcSrc, '(?s)function\s+Save-PostMortem\s*\{.*?\n\}').Value
+
+if (-not $wcFunc) {
+    Skip 'watcher: an empty post-mortem is refused, not filed as a crash' 'could not isolate Save-PostMortem'
+} else {
+    $pmDir  = Join-Path $sandbox 'postmortem'
+    New-Item -ItemType Directory -Path $pmDir -Force | Out-Null
+
+    $runPm = {
+        param($SrcFile, $Func, $Dir)
+        $ciPath   = $SrcFile
+        $crashDir = Join-Path $Dir 'crashinfo'
+        $seenFile = Join-Path $Dir 'seen.txt'
+        . ([scriptblock]::Create($Func))
+        Save-PostMortem
+    }
+
+    # 1. empty file - the observed failure
+    $empty = Join-Path $pmDir 'empty.json'
+    New-Item -ItemType File -Path $empty -Force | Out-Null
+    $d1 = Join-Path $pmDir 'run1'; New-Item -ItemType Directory -Path $d1 -Force | Out-Null
+    $r1 = & $runPm $empty $wcFunc $d1
+    $saved1 = @(Get-ChildItem (Join-Path $d1 'crashinfo') -Filter *.json -ErrorAction SilentlyContinue)
+    if ($saved1.Count -eq 0 -and "$r1" -match 'unreadable') {
+        Ok 'watcher: an empty post-mortem is refused, not filed as a crash'
+    } else {
+        Bad 'watcher: an empty post-mortem is refused, not filed as a crash' `
+            "saved $($saved1.Count) file(s); returned '$r1'"
+    }
+
+    # 2. a REAL post-mortem still captures - the fix must not close the door
+    $good = Join-Path $pmDir 'good.json'
+    @'
+{"RootType":"gameTelemetryPostMortemContainer","Data":{"postMortem":{
+"crashVisitId":"abcdef12-0000-0000-0000-000000000000","timeCrash":"2026-09-14T01:02:03Z",
+"district":"Kabuki","isOom":false,"sessionLength":123.0,"location":{"X":1.0,"Y":2.0,"Z":3.0}}}}
+'@ | Set-Content -LiteralPath $good -Encoding UTF8
+    $d2 = Join-Path $pmDir 'run2'; New-Item -ItemType Directory -Path $d2 -Force | Out-Null
+    $r2 = & $runPm $good $wcFunc $d2
+    $saved2 = @(Get-ChildItem (Join-Path $d2 'crashinfo') -Filter *.json -ErrorAction SilentlyContinue)
+    if ($saved2.Count -eq 1 -and "$r2" -match 'CRASH') {
+        Ok 'watcher: a valid post-mortem is still captured and summarised'
+    } else {
+        Bad 'watcher: a valid post-mortem is still captured and summarised' `
+            "saved $($saved2.Count) file(s); returned '$r2'"
+    }
+
+    # 3. and the dedupe still holds, so a clean quit does not re-file it
+    $r3 = & $runPm $good $wcFunc $d2
+    $saved3 = @(Get-ChildItem (Join-Path $d2 'crashinfo') -Filter *.json -ErrorAction SilentlyContinue)
+    if ($saved3.Count -eq 1 -and "$r3" -match 'already on file') {
+        Ok 'watcher: the same post-mortem is not filed twice'
+    } else {
+        Bad 'watcher: the same post-mortem is not filed twice' "now $($saved3.Count) file(s); returned '$r3'"
+    }
+}
+
 # The tray app is the only compiled thing here, and it is what a non-technical
 # user actually touches. Building it in the suite catches a C# break that no
 # PowerShell test would, and --selftest exercises the detection paths end to end
