@@ -3112,17 +3112,32 @@ if ($Quick) {
         if ($problems) { Bad 'tray: --selftest reports the fields support needs' ($problems -join "`n") }
         else           { Ok  'tray: --selftest reports the fields support needs' }
 
-        # The catcher is a second hosted process and the tray is now its host.
-        # If --selftest cannot see it, nobody can: an unarmed catcher is
-        # invisible otherwise, and over one evening that cost the two captures
-        # that mattered while everything else reported healthy.
+        # Recording is ONE thing to the user, and the self-test has to say which
+        # of its three states it is in. "off" and "full" are easy; "partial" is
+        # the one that used to hide - recording happily with no debugger, so
+        # every crash lands with no stack and nothing says why.
         $catcherProblems = @(
             if ($st -notmatch '(?m)^\s*catcher script\s*:') { 'self-test does not report the catcher script' }
             if ($st -notmatch '(?m)^\s*cdb\s*:')            { 'self-test does not report whether cdb is present' }
-            if ($st -notmatch '(?m)^\s*catcher\s*:')        { 'self-test does not report whether the catcher is armed' }
+            if ($st -notmatch '(?m)^\s*catcher host\s*:')   { 'self-test does not report the catcher host process' }
+            if ($st -notmatch '(?m)^\s*game debugged\s*:')  { 'self-test does not report whether a debugger is attached' }
+            if ($st -notmatch '(?m)^\s*recording\s*:\s*(off|full|partial)') { 'self-test does not report a recording state of off/full/partial' }
         )
-        if ($catcherProblems) { Bad 'tray: --selftest reports the crash catcher it now hosts' ($catcherProblems -join "`n") }
-        else                  { Ok  'tray: --selftest reports the crash catcher it now hosts' }
+        if ($catcherProblems) { Bad 'tray: --selftest reports one recording state, and both halves behind it' ($catcherProblems -join "`n") }
+        else                  { Ok  'tray: --selftest reports one recording state, and both halves behind it' }
+
+        # LIVENESS MUST BE MEASURED ON THE DEBUGGEE, NOT A HOST PROCESS.
+        #
+        # The PowerShell host and cdb die independently. Measured 2026-09-14:
+        # the host was gone while cdb stayed attached and recording, and the
+        # tray reported "not armed" over a fully instrumented game. The inverse
+        # also happened - a host-shaped string in an unrelated command line read
+        # as armed. Both are answered by asking the OS about the game.
+        if ($st -match '(?m)^\s*game debugged\s*:\s*(yes|no)\s*$') {
+            Ok 'tray: debugger presence is read from the game, not inferred from a host'
+        } else {
+            Bad 'tray: debugger presence is read from the game, not inferred from a host' 'no game-debugged line in the self-test'
+        }
 
         # A Run entry holds an absolute path, and a moved folder breaks logon
         # startup with no error anywhere. The app has to notice that itself, or

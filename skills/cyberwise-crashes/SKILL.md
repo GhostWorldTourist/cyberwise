@@ -318,15 +318,29 @@ cd app; .\build.ps1 -Run
 The tray exists so somebody who never opens a terminal can see whether recording
 is happening, and start or stop it.
 
-**It hosts the watcher AND the crash catcher, and that is deliberate.** They
-answer different questions - the watcher samples the process and preserves
+**It hosts the watcher AND the crash catcher, behind ONE control.** They are
+different mechanisms - the watcher samples the process and preserves
 `CrashInfo.json`, the catcher attaches a debugger and records the faulting
-module and stack - so each gets its own status line and its own toggle:
+module and stack - but that is an implementation fact, and promoting it into
+the UI as two switches was a mistake that cost real evidence:
 
 ```
-Watcher: running          Stop watching
-Catcher: armed            Disarm crash catcher
+Recording: full                 Stop recording
+   crash report, trace and stack
 ```
+
+Three states, and the middle one is why this is one control and not two:
+
+| state | means |
+|---|---|
+| `off` | nothing is being captured |
+| `partial` | recording, but this crash will have **no stack** - cdb missing, or not attached |
+| `full` | crash report, session trace and a faulting module |
+
+A second toggle can sit quietly off while the first reads healthy, which is
+exactly what happened here: dozens of crashes recorded, not one with a stack,
+and a tray that looked fine throughout. If a component cannot run, recording
+degrades and **says so on the status line** rather than silently doing less.
 
 The catcher was a bare script started by hand before this. Over a single evening
 it needed restarting three times and was not running for the two crashes that
@@ -334,11 +348,31 @@ mattered most - the same "nothing was recording" failure the tray already existe
 to prevent, happening in a second place nobody was watching. It now starts with
 the tray, and because the tray starts at logon it survives a reboot.
 
-Two things it does that a hand-start did not. It launches the catcher with
-`-Loop` and **not** `-AttachNow` - the latter exits when no game is present,
-which is exactly how it came to be unarmed when a startup crash arrived. And
-when `cdb` is absent the menu says `cdb not installed` and greys the toggle out,
-rather than offering a switch that silently does nothing.
+**Measure liveness on the debuggee, never on a host process.** The PowerShell
+wrapper and `cdb` die independently, and both directions were observed in one
+day: the wrapper gone while cdb stayed attached and recording (tray said "not
+armed" over an instrumented game), and an unrelated shell whose command line
+merely mentioned the script reading as armed (tray said "armed" over nothing).
+`CheckRemoteDebuggerPresent` on the game answers the real question - *will this
+crash produce a stack* - in one call with nothing inferred. A process-name match
+is a proxy for that question and a bad one; if you must use one, anchor it so
+the script is the argument of `-File`, because `-File` also matches inside
+`Out-File`.
+
+It launches the catcher with **both** `-AttachNow` and `-Loop`, and that detail
+is load-bearing. `Watch-CrashDump.ps1` refuses to attach to a session already
+underway unless `-AttachNow` says so - a guard aimed at a person, who should
+know they are missing everything before now. A host has nothing to declare, so
+it always passes the flag; without it the tray cannot arm while the game is up
+at all, and the autostart path swallows the failure and reports "not armed".
+
+**`-AttachNow` does not skip the wait when no game is running.** This file
+previously claimed it did, and the tray was written around that claim, which is
+how the catcher spent two days unable to arm in the one state people actually
+notice. Read the guard, not the flag name: the wait loop runs either way.
+
+And when `cdb` is absent the menu says `cdb not installed` and greys the toggle
+out, rather than offering a switch that silently does nothing.
 
 **Check that the installed copy is not stale.** The tray resolves its scripts
 from the `skills` tree beside its exe, and on one machine that snapshot was six

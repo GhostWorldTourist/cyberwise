@@ -129,6 +129,17 @@ function Get-GamePid {
     return $null
 }
 
+# THIS GUARD IS FOR A PERSON, AND AN AUTOMATED HOST MUST PASS -AttachNow.
+#
+# Attaching to a session already underway misses everything that happened
+# before now, so a human is made to say they meant it. A host has nothing to
+# declare and no way to answer, so the tray always passes -AttachNow - and
+# without it, arming while the game is up is impossible. That combination went
+# unnoticed for two days: the tray launched without the flag, hit this exit,
+# and reported "not armed" with no reason given.
+#
+# Note what -AttachNow does NOT do: it does not skip the wait below. With no
+# game running it is a no-op, which is why a host can pass it unconditionally.
 $gamePid = Get-GamePid
 if ($gamePid -and -not $AttachNow) {
     Write-Warning "$ProcessName is already running (pid $gamePid)."

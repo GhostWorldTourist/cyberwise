@@ -411,13 +411,55 @@ namespace Cyberwise
 
         private readonly ToolStripMenuItem _miStatus, _miGame, _miCrashes;
         private readonly ToolStripMenuItem _miStartStop, _miAtLogon;
-        private readonly ToolStripMenuItem _miCatcher, _miCatcherStartStop;
+        private readonly ToolStripMenuItem _miDetail;
 
         private Config _cfg;
         private int _lastCrashCount = -1;
         private State _state = State.Unknown;
 
-        private enum State { Unknown, Idle, Watching, Losing }
+        // Partial is its own state on purpose. Recording with no debugger still
+        // captures CrashInfo and the session trace, but never a faulting module
+        // or a stack - so it is neither healthy nor off, and colouring it as
+        // either hides the thing somebody needs to know.
+        private enum State { Unknown, Idle, Watching, Partial, Losing }
+
+        /// <summary>Ask the OS whether the game has a debugger, rather than
+        /// inferring it from a host process.
+        ///
+        /// The host is a PowerShell wrapper around cdb, and the two die
+        /// independently: measured 2026-09-14, the wrapper was gone while cdb
+        /// stayed attached and recording, and the tray reported "not armed" over
+        /// a fully instrumented game. Checking the debuggee answers the actual
+        /// question - is this crash going to produce a stack - in one call, with
+        /// nothing to infer.</summary>
+        private static bool GameIsDebugged()
+        {
+            try
+            {
+                var p = Process.GetProcessesByName("Cyberpunk2077");
+                if (p.Length == 0) return false;
+                bool present = false;
+                if (CheckRemoteDebuggerPresent(p[0].Handle, ref present)) return present;
+            }
+            catch { }
+            return false;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CheckRemoteDebuggerPresent(IntPtr hProcess, ref bool pbDebuggerPresent);
+
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        /// <summary>Is crash recording actually happening, and how completely?
+        ///
+        /// Full needs both halves. The catcher counts as live if the game is
+        /// being debugged (it is attached and working) OR its host is up (it is
+        /// waiting for a launch) - those are the two legitimate shapes, and
+        /// neither alone covers both.</summary>
+        private static bool CatcherLive()
+        {
+            return GameIsDebugged() || ScriptRunning("Watch-CrashDump.ps1");
+        }
 
         public TrayApp()
         {
@@ -426,27 +468,32 @@ namespace Cyberwise
             _menu = new ContextMenuStrip();
 
             var title = new ToolStripMenuItem("Cyberwise") { Enabled = false };
-            _miStatus  = new ToolStripMenuItem("Watcher: …")   { Enabled = false };
+            // ONE user-facing control, not two.
+            //
+            // The split into "watching" and "catching" was an internal
+            // distinction - two mechanisms, one of which needs cdb - promoted
+            // into the UI, where it bought the user nothing and cost them the
+            // thing the tray exists for: a second switch that can sit quietly
+            // off while the first one reads healthy. That is what happened, for
+            // days, across dozens of crashes with no stack.
+            _miStatus  = new ToolStripMenuItem("Recording: …") { Enabled = false };
+            _miDetail  = new ToolStripMenuItem("")             { Enabled = false };
             _miGame    = new ToolStripMenuItem("Game: …")      { Enabled = false };
             _miCrashes = new ToolStripMenuItem("Crashes: …")   { Enabled = false };
-
-            _miCatcher   = new ToolStripMenuItem("Catcher: \u2026")  { Enabled = false };
-            _miStartStop = new ToolStripMenuItem("Start watching", null, OnStartStop);
-            _miCatcherStartStop = new ToolStripMenuItem("Arm crash catcher", null, OnStartStopCatcher);
+            _miStartStop = new ToolStripMenuItem("Start recording", null, OnStartStop);
             _miAtLogon   = new ToolStripMenuItem("Start Cyberwise when I log in", null, OnToggleAtLogon)
                            { CheckOnClick = false };
 
             _menu.Items.Add(title);
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(_miStatus);
+            _menu.Items.Add(_miDetail);
             _menu.Items.Add(_miGame);
             _menu.Items.Add(_miCrashes);
-            _menu.Items.Add(_miCatcher);
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(_miStartStop);
             _menu.Items.Add(_miAtLogon);
             _menu.Items.Add(new ToolStripSeparator());
-            _menu.Items.Add(_miCatcherStartStop);
             _menu.Items.Add(new ToolStripMenuItem("Copy crash summary", null, OnCopySummary));
             _menu.Items.Add(new ToolStripMenuItem("Open crash folder", null, OnOpenFolder));
             _menu.Items.Add(new ToolStripSeparator());
@@ -455,12 +502,36 @@ namespace Cyberwise
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(new ToolStripMenuItem("Exit", null, OnExit));
 
+            // THE MENU IS SHOWN BY HAND, AND THE SetForegroundWindow IS THE POINT.
+            //
+            // This process runs Application.Run() with no form, so the tray icon
+            // has no owner window. Assigning ContextMenuStrip to a NotifyIcon in
+            // that state shows a dropdown that never becomes foreground, and an
+            // unfocused ToolStripDropDown loses its mouse tracking: items stop
+            // highlighting once the pointer leaves the menu and comes back, and
+            // the menu will not dismiss on an outside click. Reported as "menus
+            // dont select when you hover over them again".
+            //
+            // Taking foreground before showing is the long-standing fix for a
+            // menu with no owning window. Refresh() first, so what opens is what
+            // is true now rather than up to five seconds stale.
             _icon = new NotifyIcon
             {
                 Icon = MakeIcon(Color.Gray),
                 Text = "Cyberwise",
-                Visible = true,
-                ContextMenuStrip = _menu
+                Visible = true
+            };
+            _icon.MouseUp += (s, e) =>
+            {
+                if (e.Button != MouseButtons.Right) return;
+                try
+                {
+                    Refresh();
+                    SetForegroundWindow(_menu.Handle);
+                    _menu.Show(Cursor.Position);
+                    _menu.Focus();
+                }
+                catch { }
             };
             _icon.DoubleClick += (s, e) => OnOpenFolder(s, e);
 
@@ -478,7 +549,7 @@ namespace Cyberwise
             // mean something: after a reboot the icon returns AND the recording
             // resumes, rather than the icon returning and quietly recording
             // nothing until someone notices.
-            if (_cfg.AutoStartCatcher && !CatcherRunning() && CdbPath() != null
+            if (_cfg.AutoStartCatcher && !CatcherLive() && CdbPath() != null
                 && !string.IsNullOrWhiteSpace(_cfg.Catcher) && File.Exists(_cfg.Catcher))
             {
                 try { StartCatcher(silent: true); } catch { }
@@ -532,12 +603,29 @@ namespace Cyberwise
         /// </summary>
         private static bool WatcherRunning() { return ScriptRunning("Watch-Crashes.ps1"); }
 
-        /// <summary>Is a hosted script running? Matched on -File plus the script
-        /// name, never a bare name substring - that also matches the WMI query
-        /// asking the question, which cheerfully reports a process that is not
-        /// there.</summary>
+        /// <summary>Is a hosted script running?
+        ///
+        /// THE SCRIPT NAME MUST BE THE ARGUMENT OF -File, and nothing weaker.
+        ///
+        /// "contains -File AND contains the name" is not enough, and reported a
+        /// catcher that did not exist. Two ways it goes wrong, both observed:
+        ///
+        ///   "-File" matches INSIDE other words. `Out-File:Encoding` in a
+        ///   PowerShell prelude contains it, so any shell whose command line
+        ///   happens to mention the script - a diagnostic, an editor, this very
+        ///   query - satisfied both halves at once.
+        ///
+        ///   A false "running" is worse than a false "stopped". Stopped is
+        ///   visible and someone fixes it; running is a green light over an
+        ///   empty road, which is the precise failure this tray exists to stop.
+        ///
+        /// So: anchor -File on a word boundary and require the script to be what
+        /// follows it, optional quotes and leading path included.</summary>
         private static bool ScriptRunning(string scriptName)
         {
+            var rx = new System.Text.RegularExpressions.Regex(
+                @"(^|\s)-File\s+""?[^""]*" + System.Text.RegularExpressions.Regex.Escape(scriptName),
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             try
             {
                 using (var s = new System.Management.ManagementObjectSearcher(
@@ -545,15 +633,15 @@ namespace Cyberwise
                 foreach (var o in s.Get())
                 {
                     var cl = o["CommandLine"] as string;
-                    if (cl != null && cl.IndexOf("-File", StringComparison.OrdinalIgnoreCase) >= 0
-                                   && cl.IndexOf(scriptName, StringComparison.OrdinalIgnoreCase) >= 0)
-                        return true;
+                    if (cl != null && rx.IsMatch(cl)) return true;
                 }
             }
             catch { }
             return false;
         }
 
+        // Host-process check only. Prefer CatcherLive() everywhere: this alone
+        // says nothing about whether a debugger is actually attached.
         private static bool CatcherRunning() { return ScriptRunning("Watch-CrashDump.ps1"); }
 
         /// <summary>The catcher needs cdb, which ships with WinDbg and is not
@@ -588,18 +676,24 @@ namespace Cyberwise
         private void Refresh()
         {
             bool watching = WatcherRunning();
+            bool haveCdb  = CdbPath() != null;
+            bool full     = watching && CatcherLive();
             bool game     = GameRunning();
             int  crashes  = CrashCount();
 
-            // The one combination that is actively losing evidence gets its own
-            // colour, because it is the only one the user must act on.
-            State next = !watching ? (game ? State.Losing : State.Idle) : State.Watching;
+            // Three things worth distinguishing, and partial is the one that used
+            // to hide. Losing = the game is running and nothing is recording at
+            // all. Partial = recording, but this crash will have no stack.
+            State next = !watching ? (game ? State.Losing : State.Idle)
+                       : full      ? State.Watching
+                                   : State.Partial;
 
             if (next != _state)
             {
                 _state = next;
                 Color c = next == State.Watching ? Color.FromArgb(0x35, 0xC7, 0x59)
                         : next == State.Losing   ? Color.FromArgb(0xE0, 0x3B, 0x3B)
+                        : next == State.Partial  ? Color.FromArgb(0x3B, 0x8F, 0xE0)
                         : Color.FromArgb(0xC9, 0x9A, 0x2E);
                 var old = _icon.Icon;
                 _icon.Icon = MakeIcon(c);
@@ -611,20 +705,17 @@ namespace Cyberwise
                         ToolTipIcon.Warning);
             }
 
-            _miStatus.Text    = "Watcher: " + (watching ? "running" : "stopped");
+            _miStatus.Text    = "Recording: " + (!watching ? "off" : full ? "full" : "partial");
+            _miDetail.Text    = !watching  ? "   (nothing is being captured)"
+                              : full       ? "   crash report, trace and stack"
+                              : !haveCdb   ? "   no stack - install WinDbg for cdb"
+                                           : "   no stack - debugger not attached";
             _miGame.Text      = "Game: "    + (game ? "running" : "not running");
             _miCrashes.Text   = "Crashes recorded: " + crashes;
-            _miStartStop.Text = watching ? "Stop watching" : "Start watching";
-
-            bool catching = CatcherRunning();
-            bool haveCdb  = CdbPath() != null;
-            _miCatcher.Text = "Catcher: " + (!haveCdb ? "cdb not installed"
-                                           : catching ? "armed" : "not armed");
-            _miCatcherStartStop.Text    = catching ? "Disarm crash catcher" : "Arm crash catcher";
-            _miCatcherStartStop.Enabled = haveCdb;
+            _miStartStop.Text = watching ? "Stop recording" : "Start recording";
             _miAtLogon.Checked = AutoStartEnabled();
 
-            _icon.Text = Truncate("Cyberwise - " + (watching ? "watching" : "not watching")
+            _icon.Text = Truncate("Cyberwise - " + (!watching ? "not recording" : full ? "recording" : "recording, no stack")
                                   + (game ? ", game running" : "") + " - " + crashes + " crash(es)");
 
             if (_lastCrashCount >= 0 && crashes > _lastCrashCount)
@@ -638,10 +729,21 @@ namespace Cyberwise
 
         // ------------------------------------------------------------ actions --
 
+        /// <summary>One control starts and stops BOTH halves. The catcher is a
+        /// component of recording, not a separate feature - if cdb is missing it
+        /// quietly does not start and the status line says why.</summary>
         private void OnStartStop(object sender, EventArgs e)
         {
-            if (WatcherRunning()) { StopWatcher(); }
-            else                  { StartWatcher(); }
+            if (WatcherRunning())
+            {
+                StopWatcher();
+                StopCatcher();
+            }
+            else
+            {
+                StartWatcher();
+                if (CdbPath() != null && !CatcherLive()) StartCatcher(silent: true);
+            }
             Refresh();
         }
 
@@ -697,16 +799,21 @@ namespace Cyberwise
 
         private void StopScript(string scriptName, string label)
         {
+            var rx = new System.Text.RegularExpressions.Regex(
+                @"(^|\s)-File\s+""?[^""]*" + System.Text.RegularExpressions.Regex.Escape(scriptName),
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             try
             {
                 using (var s = new System.Management.ManagementObjectSearcher(
                     "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='powershell.exe' OR Name='pwsh.exe'"))
                 foreach (var o in s.Get())
                 {
+                    // Same anchored match as ScriptRunning, and here it matters
+                    // more: the weak test would kill any shell whose command
+                    // line merely mentioned the script - including the one
+                    // asking the question.
                     var cl = o["CommandLine"] as string;
-                    if (cl == null) continue;
-                    if (cl.IndexOf("-File", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    if (cl.IndexOf(scriptName, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (cl == null || !rx.IsMatch(cl)) continue;
                     try { Process.GetProcessById(Convert.ToInt32(o["ProcessId"])).Kill(); } catch { }
                 }
             }
@@ -717,17 +824,24 @@ namespace Cyberwise
             }
         }
 
-        private void OnStartStopCatcher(object sender, EventArgs e)
-        {
-            if (CatcherRunning()) { StopCatcher(); }
-            else                  { StartCatcher(); }
-            Refresh();
-        }
-
-        /// <summary>Arm the debugger catcher. -Loop and NOT -AttachNow: the
-        /// catcher waits for the next launch, whereas -AttachNow exits when no
-        /// game is present, which is exactly how it came to be un-armed at the
-        /// moment a startup crash arrived.</summary>
+        /// <summary>Arm the debugger catcher, in whichever state the game is.
+        ///
+        /// -AttachNow AND -Loop. Both flags, and getting this wrong made the
+        /// catcher unarmable for two days:
+        ///
+        ///   Watch-CrashDump.ps1 exits 2 when the game is ALREADY running and
+        ///   -AttachNow is absent - a guard so a person types something that
+        ///   says "yes, attach mid-session". Launched without it from here, the
+        ///   tray could never arm while the game was up, and the autostart path
+        ///   swallowed the failure, so the menu just read "not armed".
+        ///
+        ///   -AttachNow does NOT skip waiting when the game is absent. That was
+        ///   the claim this code was written on and it is simply untrue: the
+        ///   wait loop below the guard runs either way. So -AttachNow costs
+        ///   nothing when no game is running, and is required when one is.
+        ///
+        /// A host is not a person and has nothing to declare, so it always
+        /// passes it.</summary>
         private void StartCatcher(bool silent = false)
         {
             if (string.IsNullOrWhiteSpace(_cfg.Catcher) || !File.Exists(_cfg.Catcher))
@@ -755,7 +869,7 @@ namespace Cyberwise
                     Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden"
                               + " -File \"" + _cfg.Catcher + "\""
                               + (string.IsNullOrWhiteSpace(_cfg.GameRoot) ? "" : " -GameRoot \"" + _cfg.GameRoot + "\"")
-                              + " -Loop -WaitMinutes 600",
+                              + " -AttachNow -Loop -WaitMinutes 600",
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
@@ -1012,7 +1126,11 @@ namespace Cyberwise
                 : cfg.Catcher + (File.Exists(cfg.Catcher) ? "" : "  (MISSING)")));
             var cdb = CdbPath();
             sb.AppendLine("  cdb           : " + (cdb ?? "NOT INSTALLED (winget install --id Microsoft.WinDbg)"));
-            sb.AppendLine("  catcher       : " + (CatcherRunning() ? "armed" : "not armed"));
+            sb.AppendLine("  catcher host  : " + (CatcherRunning() ? "running" : "not running"));
+            sb.AppendLine("  game debugged : " + (GameIsDebugged() ? "yes" : "no"));
+            sb.AppendLine("  recording     : " + (!WatcherRunning() ? "off"
+                                                : CatcherLive()    ? "full (report, trace and stack)"
+                                                                   : "partial (no stack)"));
             sb.AppendLine("  game          : " + (GameRunning() ? "running" : "not running"));
             var target = AutoStartTarget();
             sb.AppendLine("  start at logon: " + (target == null ? "no" : "yes -> " + target));
